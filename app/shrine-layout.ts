@@ -55,6 +55,19 @@ export function createLayout() {
   rect(-22,-21,-11,-21);rect(11,-21,22,-21);
   for(const x of [-12,-6,6,12])rect(x,-39,x,-29);
   for(const r of rooms)rect(r.x1,r.z1,r.x2,r.z2,r.h,r.style==='stone'?'stone':'hall');
+  // Broad cloister courts with solid central sanctuaries: four routes around each.
+  const courts=[{x:0,z:-34,rx:4,rz:5,h:8.4},{x:-17,z:-14,rx:3,rz:3,h:6.2},{x:17,z:-14,rx:3,rz:3,h:6.2}];
+  for(const c of courts){
+    rect(c.x-c.rx,c.z-c.rz,c.x+c.rx,c.z+c.rz,c.h,'stone');
+    for(let x=c.x-1;x<=c.x+1;x++)for(let z=c.z-1;z<=c.z+1;z++)grid.delete(key(x,z));
+  }
+  // Fold the long outer galleries into alcoved doglegs instead of endless straight tubes.
+  for(const side of [-1,1]){
+    for(let z=-36;z<=-32;z++)grid.delete(key(side*22,z));
+    rect(Math.min(side*20,side*22),-37,Math.max(side*20,side*22),-37);
+    rect(side*20,-37,side*20,-31);
+    rect(Math.min(side*20,side*22),-31,Math.max(side*20,side*22),-31);
+  }
   // Clip only single-cell stubs; circulation and all rooms remain connected.
   let removed=true;
   while(removed){removed=false;for(const [k,c] of grid){
@@ -95,5 +108,5 @@ export function createLayout() {
       ?{minX:x-2,maxX:x+2,minZ:z+sign*1.68-.32,maxZ:z+sign*1.68+.32}
       :{minX:x+sign*1.68-.32,maxX:x+sign*1.68+.32,minZ:z-2,maxZ:z+2});
   }
-  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors};
+  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors,courts};
 }

@@ -5,6 +5,7 @@ import {createLayout,CELL,SPAWN} from './shrine-layout';
 import type {Preferences} from './preferences';
 import {Doors,Enemies} from './shrine-gameplay';
 import {createDoorMeshes,createEnemyMeshes} from './shrine-actors';
+import {enemyDirection} from './enemy-direction';
 export function createWorld(canvas:HTMLCanvasElement) {
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);
@@ -149,6 +150,21 @@ export function createWorld(canvas:HTMLCanvasElement) {
       for(const dx of [-6,6])for(const dz of [-6,6]){lantern(cx+dx,2.1,cz+dz,true);cylinder(cx+dx,.7,cz+dz,.18,1.4,'stone');}
     }
   }
+  // Colonnaded cloisters, high lantern canopies and stone inlays distinguish each court.
+  for(const court of layout.courts){
+    const cx=court.x*4,cz=court.z*4;
+    for(const side of [-1,1]){
+      for(let z=cz-court.rz*4+2;z<=cz+court.rz*4-2;z+=8){
+        const x=cx+side*(court.rx*4-1.7);
+        cylinder(x,court.h/2,z,.25,court.h,'red');cylinder(x,.15,z,.36,.3,'stone');block(x,z,.75,.75);
+        lantern(x-side*.8,3.4,z,true);
+      }
+      box(cx+side*7,.02,cz,.12,.02,(court.rz*2+1)*4,'gold');
+      box(cx,.02,cz+side*7,(court.rx*2+1)*4,.02,.12,'gold');
+      gate(cx,cz+side*(court.rz*4-1),5.8,4.8);
+    }
+    for(const side of [-1,1])for(let j=-1;j<=1;j++)lantern(cx+side*9,court.h-1.3,cz+j*5,true);
+  }
   for(const [m,geometries] of batches){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);}geometries.forEach(g=>g.dispose());}
   const enemies=new Enemies(layout.cells,obstacles),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
   let collision=[...obstacles,...doors.blockers()];
@@ -157,7 +173,7 @@ export function createWorld(canvas:HTMLCanvasElement) {
   for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
   dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
   const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ff9b49',23,14,2);scene.add(p);return p;});
-  const flashlight=new THREE.SpotLight('#e6efff',50,32,.48,.6,1.5);flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
+  const flashlight=new THREE.SpotLight('#e6efff',65,36,.52,.65,1.5);flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
   renderer.shadowMap.type=THREE.PCFSoftShadowMap;flashlight.castShadow=true;flashlight.shadow.mapSize.set(1024,1024);flashlight.shadow.bias=-.00015;flashlight.shadow.normalBias=.03;flashlight.shadow.camera.near=.1;flashlight.shadow.camera.far=32;
   const glowCanvas=document.createElement('canvas');glowCanvas.width=64;glowCanvas.height=64;const ctx=glowCanvas.getContext('2d')!;
   const grad=ctx.createRadialGradient(32,32,0,32,32,32);grad.addColorStop(0,'rgba(255,178,78,.36)');grad.addColorStop(.3,'rgba(255,112,31,.10)');grad.addColorStop(1,'rgba(255,100,20,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,64,64);
@@ -166,6 +182,7 @@ export function createWorld(canvas:HTMLCanvasElement) {
   let lastLight=0,disposed=false;const direction=new THREE.Vector3();
   new THREE.TextureLoader().load('/cedar.png',texture=>{if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());mats.wood.map=texture;mats.wood.color.set('#b7a596');mats.wood.needsUpdate=true;mats.red.map=texture;mats.red.needsUpdate=true;});
   return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
+    enemyDirections(){return enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned'}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,obstacles);},
     interact(){return doors.interact(camera.position,camera.rotation.y,obstacles);},
     burst(){return enemies.burst(camera.position,collision);},
