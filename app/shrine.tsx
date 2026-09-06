@@ -11,6 +11,7 @@ import {movePlayer} from './movement';
 import {GamepadSession,PadCalibration,mappingKey,validMapping,type Pad} from './gamepad-input';
 import {ButtonEdges,TouchInput,allowMouseLook} from './input-actions';
 import {DEFAULTS,sanitizePreferences,type Preferences} from './preferences';
+import {adjustRange,viewDelta,hidePlayCursor,type RangeKey} from './view-controls';
 
 const pollPads=()=>{try{return Array.from(navigator.getGamepads?.()??[]).filter((p):p is Gamepad=>!!p);}catch{return [];}};
 const clampPitch=(p:number)=>Math.max(-1.3,Math.min(1.3,p));
@@ -34,7 +35,7 @@ export default function Shrine(){
     if(open){relockOnClose.current=!!document.pointerLockElement;document.exitPointerLock?.();document.documentElement.classList.remove('controller-cursor-hidden');}
     else{
       calibration.current=null;setCalStep(-1);
-      document.documentElement.classList.toggle('controller-cursor-hidden',session.current.mode==='gamepad');
+      document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(false));
       if(relockOnClose.current){try{const result=canvas.current?.requestPointerLock?.();if(result)void result.catch(()=>{});}catch{} }
       canvas.current?.focus({preventScroll:true});
     }
@@ -75,8 +76,8 @@ export default function Shrine(){
       // Ignore both physical and controller-emulated mouse movement in controller mode.
       session.current.poll(pollPads());
       if(!allowMouseLook(session.current.mode,state.current.paused,document.pointerLockElement===canvas.current))return;
-      const p=prefRef.current;state.current.yaw-=e.movementX*.002*p.mouseSensitivity;
-      state.current.pitch=clampPitch(state.current.pitch-e.movementY*.002*p.mouseSensitivity*(p.invertY?-1:1));
+      const delta=viewDelta('mouse',e.movementX,e.movementY,0,prefRef.current);
+      state.current.yaw+=delta.yaw;state.current.pitch=clampPitch(state.current.pitch+delta.pitch);
     };
     const lockChanged=()=>setLocked(document.pointerLockElement===canvas.current);
     const focusGuard=(e:FocusEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&e.target instanceof HTMLElement&&e.target!==canvas.current){e.target.blur();canvas.current?.focus({preventScroll:true});}};
@@ -90,7 +91,11 @@ export default function Shrine(){
       const unique=[...new Set(items)];let index=unique.indexOf(document.activeElement as HTMLElement);
       if(buttons.up||buttons.down){index=(index+(buttons.up?-1:1)+unique.length)%unique.length;unique[index]?.focus({preventScroll:true});}
       const active=document.activeElement as HTMLElement|null;
-      if(buttons.left||buttons.right){const key=buttons.left?'ArrowLeft':'ArrowRight';active?.dispatchEvent(new KeyboardEvent('keydown',{key,code:key,bubbles:true}));active?.dispatchEvent(new KeyboardEvent('keyup',{key,code:key,bubbles:true}));}
+      if(buttons.left||buttons.right){
+        const setting=active?.closest<HTMLElement>('[data-setting]')?.dataset.setting as RangeKey|undefined;
+        if(setting){applyPreferences(adjustRange(prefRef.current,setting,buttons.left?-1:1));}
+        else {const key=buttons.left?'ArrowLeft':'ArrowRight';active?.dispatchEvent(new KeyboardEvent('keydown',{key,code:key,bubbles:true}));active?.dispatchEvent(new KeyboardEvent('keyup',{key,code:key,bubbles:true}));}
+      }
       if(buttons.confirm&&active&&dialog.current?.contains(active)&&active.getAttribute('role')!=='slider')active.click();
     };
     const tick=(time:number)=>{
@@ -117,8 +122,9 @@ export default function Shrine(){
         const x=game?poll.input.move.x:t.x+Number(k.has('KeyD'))-Number(k.has('KeyA'));
         const z=game?poll.input.move.z:t.z+Number(k.has('KeyS'))-Number(k.has('KeyW'));
         const sprint=game?poll.input.sprint:t.sprint||k.has('ShiftLeft')||k.has('ShiftRight');
-        s.yaw-=(poll.input.look.x*1.65*p.stickSensitivity+(!game?(Number(k.has('ArrowRight'))-Number(k.has('ArrowLeft')))*1.4:0))*dt;
-        s.pitch=clampPitch(s.pitch-(poll.input.look.z*1.3*p.stickSensitivity+(!game?(Number(k.has('ArrowDown'))-Number(k.has('ArrowUp')))*1.2:0))*dt*(p.invertY?-1:1));
+        const delta=viewDelta('gamepad',poll.input.look.x,poll.input.look.z,dt,prefRef.current);
+        s.yaw+=delta.yaw-(!game?(Number(k.has('ArrowRight'))-Number(k.has('ArrowLeft')))*1.4*p.stickSensitivity*dt:0);
+        s.pitch=clampPitch(s.pitch+delta.pitch-(!game?(Number(k.has('ArrowDown'))-Number(k.has('ArrowUp')))*1.2*p.stickSensitivity*dt*(p.invertY?-1:1):0));
         const pos=movePlayer(world.camera.position,x,z,s.yaw,sprint,dt,world.obstacles);
         const moving=Math.hypot(pos.x-world.camera.position.x,pos.z-world.camera.position.z)>.0001;
         world.camera.position.set(pos.x,1.68+(p.motion&&moving?Math.sin(time*(sprint?.016:.01))*(sprint?.03:.018):0),pos.z);
@@ -127,7 +133,7 @@ export default function Shrine(){
         if(Math.abs(world.camera.fov-fov)>.02){world.camera.fov+=(fov-world.camera.fov)*Math.min(1,dt*8);world.camera.updateProjectionMatrix();}
       }
       // A held stick never restores cursor/touch UI, even if emulated pointer events arrive.
-      document.documentElement.classList.toggle('controller-cursor-hidden',poll.mode==='gamepad'&&!s.paused);
+      document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(s.paused));
       if(!document.hidden)world.render(time);
       frame=requestAnimationFrame(tick);
     };
@@ -140,7 +146,7 @@ export default function Shrine(){
     const lost=(e:Event)=>{e.preventDefault();setError('3D描画が中断されました。ページを再読み込みしてください。');clearInput();};
     canvas.current?.addEventListener('webglcontextlost',lost);const element=canvas.current;
     return()=>{cancelAnimationFrame(frame);worldRef.current=null;world.dispose();window.removeEventListener('keydown',down,true);window.removeEventListener('keyup',up);window.removeEventListener('blur',clearInput);window.removeEventListener('gamepadconnected',gamepadConnected);document.removeEventListener('focusin',focusGuard);document.removeEventListener('mousemove',mouse);document.removeEventListener('pointerlockchange',lockChanged);document.removeEventListener('visibilitychange',hidden);window.removeEventListener('resize',world.resize);document.removeEventListener('wheel',wheel);document.removeEventListener('touchmove',touchMove);element?.removeEventListener('webglcontextlost',lost);document.documentElement.classList.remove('controller-cursor-hidden');};
-  },[clearInput,setMenuOpen,toggleLight]);
+  },[clearInput,setMenuOpen,toggleLight,applyPreferences]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),6000);return()=>clearTimeout(timer);},[notice]);
   useEffect(()=>{
     const context=(document as Document&{modelContext?:{registerTool:(tool:ModelTool,options:{signal:AbortSignal})=>void|Promise<void>}}).modelContext;
@@ -155,14 +161,14 @@ export default function Shrine(){
   },[applyPreferences,setFlashlight]);
   const pointerEvents=(kind:'move'|'look'|'sprint')=>({
     onPointerDown:(e:React.PointerEvent<HTMLElement>)=>{if(state.current.paused||!touchMode(e))return;e.preventDefault();if(touch.current.start(e.pointerId,kind,e.clientX,e.clientY))e.currentTarget.setPointerCapture(e.pointerId);},
-    onPointerMove:(e:React.PointerEvent<HTMLElement>)=>{if(session.current.mode==='gamepad'||state.current.paused)return;const d=touch.current.move(e.pointerId,e.clientX,e.clientY);const p=prefRef.current;state.current.yaw-=d.yaw*.003*p.touchSensitivity;state.current.pitch=clampPitch(state.current.pitch-d.pitch*.003*p.touchSensitivity*(p.invertY?-1:1));if(kind==='move')setStickPosition({x:touch.current.x,z:touch.current.z});},
+    onPointerMove:(e:React.PointerEvent<HTMLElement>)=>{if(session.current.mode==='gamepad'||state.current.paused)return;const d=touch.current.move(e.pointerId,e.clientX,e.clientY);const delta=viewDelta('touch',d.yaw,d.pitch,0,prefRef.current);state.current.yaw+=delta.yaw;state.current.pitch=clampPitch(state.current.pitch+delta.pitch);if(kind==='move')setStickPosition({x:touch.current.x,z:touch.current.z});},
     onPointerUp:(e:React.PointerEvent<HTMLElement>)=>{touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
     onPointerCancel:(e:React.PointerEvent<HTMLElement>)=>{touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
     onLostPointerCapture:(e:React.PointerEvent<HTMLElement>)=>{touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
   });
   const change=(key:keyof Preferences,value:number|boolean|string)=>applyPreferences({...prefRef.current,[key]:value});
-  const range=(key:'stickSensitivity'|'touchSensitivity'|'mouseSensitivity'|'fov'|'brightness',label:string,min:number,max:number,step:number,suffix:string)=><div className="setting"><label id={'label-'+key}>{label}<output>{prefs[key].toFixed(key==='fov'?0:2)}{suffix}</output></label><Slider aria-labelledby={'label-'+key} min={min} max={max} step={step} value={[prefs[key]]} onValueChange={v=>change(key,Array.isArray(v)?v[0]:v)}/></div>;
-  return <main className="experience" onContextMenu={e=>e.preventDefault()}>
+  const range=(key:RangeKey,label:string,min:number,max:number,step:number,suffix:string)=><div className="setting" data-setting={key}><label id={'label-'+key}>{label}<output aria-live="polite">{prefs[key].toFixed(key==='fov'?0:2)}{suffix}</output></label><div className="range-controls"><button type="button" aria-label={label+'を下げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,-1))}>−</button><Slider aria-labelledby={'label-'+key} min={min} max={max} step={step} value={[prefs[key]]} onValueChange={v=>change(key,Array.isArray(v)?v[0]:v)}/><button type="button" aria-label={label+'を上げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,1))}>＋</button></div></div>;
+  return <main className="experience" data-playing={!menu} onContextMenu={e=>e.preventDefault()}>
     <canvas ref={canvas} tabIndex={-1} inputMode="none" aria-label="祭殿の一人称回廊" onPointerDown={e=>{if(e.pointerType==='mouse'&&session.current.mode==='gamepad'){void requestLock();return;}touchMode(e);}} onClick={e=>{if(e.detail===2&&session.current.mode!=='gamepad')void requestLock();}}/>
     <div className="vignette"/><div className="reticle" aria-hidden="true"/>
     <nav className="toolbar" aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
