@@ -9,7 +9,7 @@ import {RadioGroup,RadioGroupItem} from '@/components/ui/radio-group';
 import {createWorld} from './shrine-world';
 import {movePlayer} from './movement';
 import {GamepadSession,PadCalibration,mappingKey,validMapping,type Pad} from './gamepad-input';
-import {ButtonEdges,TouchInput,allowMouseLook} from './input-actions';
+import {ButtonEdges,TouchInput,allowMouseLook,allowExploration} from './input-actions';
 import {DEFAULTS,sanitizePreferences,type Preferences} from './preferences';
 import {adjustRange,viewDelta,hidePlayCursor,type RangeKey} from './view-controls';
 
@@ -31,7 +31,7 @@ export default function Shrine(){
   const lockPending=useRef(false);
   const requestLock=useCallback(()=>{
     if(state.current.paused||lockPending.current||document.pointerLockElement===document.documentElement)return;
-    if(!document.documentElement.requestPointerLock)return;
+    if(!document.documentElement.requestPointerLock){setLockRequired(true);setNotice('このブラウザではカーソルを固定できません。固定対応のデスクトップ版ブラウザで開いてください。');return;}
     lockPending.current=true;
     const failed=()=>{lockPending.current=false;if(!state.current.paused)setLockRequired(true);};
     try{const result=document.documentElement.requestPointerLock();if(result)void result.catch(failed);}catch{failed();}
@@ -76,7 +76,7 @@ export default function Shrine(){
     prefRef.current=restored;setPrefs(restored);
     let world:ReturnType<typeof createWorld>;
     try{world=createWorld(canvas.current!);world.configure(restored);worldRef.current=world;}catch{setError('3D表示を開始できませんでした。WebGL対応のChromeまたはSafariで開いてください。');return;}
-    setReady(true);let frame=0,last=performance.now(),lastHud=0,oldMode='touch';
+    setReady(true);let frame=0,last=performance.now(),lastHud=0,oldMode='touch',controllerBlocked=false;
     const loaded=new Set<string>(),edges=new ButtonEdges();
     const down=(e:KeyboardEvent)=>{
       if(e.code==='Escape'){if(state.current.paused)setMenuOpen(false);return;}
@@ -127,9 +127,12 @@ export default function Shrine(){
       const wasPaused=state.current.paused;
       if(focused&&buttons.menu&&!calibration.current)setMenuOpen(!state.current.paused);
       if(focused&&state.current.paused&&!calibration.current)menuNavigation(buttons);
-      if(focused&&!state.current.paused&&buttons.flashlight)toggleLight();
-      if(focused&&!wasPaused&&!state.current.paused&&buttons.back)interact();
-      if(focused&&!wasPaused&&!state.current.paused&&buttons.burst)burst();
+      const canExplore=allowExploration(poll.mode,state.current.paused,focused,document.pointerLockElement===document.documentElement);
+      const blocked=poll.mode==='gamepad'&&!state.current.paused&&!canExplore;
+      if(blocked!==controllerBlocked){controllerBlocked=blocked;clearInput();setLockRequired(blocked);}
+      if(canExplore&&buttons.flashlight)toggleLight();
+      if(canExplore&&!wasPaused&&buttons.back)interact();
+      if(canExplore&&!wasPaused&&buttons.burst)burst();
       if(calibration.current&&poll.pad){
         if(mappingKey(poll.pad)!==calibration.current.padKey){calibration.current=null;setCalStep(-1);setNotice('接続が変わりました。もう一度調整を開始してください。');}
         else {const mapping=calibration.current.update(poll.pad);setCalStep(calibration.current.step);
@@ -138,7 +141,7 @@ export default function Shrine(){
       } else if(calibration.current&&!poll.pad){calibration.current=null;setCalStep(-1);setNotice('コントローラーの接続が切れました。');}
       if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setEnemyMarkers(world.enemyDirections());lastHud=time;}
       const s=state.current,p=prefRef.current;
-      if(focused&&!s.paused){
+      if(canExplore){
         const k=keys.current,t=touch.current,game=poll.mode==='gamepad';
         const x=game?poll.input.move.x:t.x+Number(k.has('KeyD'))-Number(k.has('KeyA'));
         const z=game?poll.input.move.z:t.z+Number(k.has('KeyS'))-Number(k.has('KeyW'));
@@ -190,7 +193,8 @@ export default function Shrine(){
   });
   const change=(key:keyof Preferences,value:number|boolean|string)=>applyPreferences({...prefRef.current,[key]:value});
   const range=(key:RangeKey,label:string,min:number,max:number,step:number,suffix:string)=><div className="setting" data-setting={key}><label id={'label-'+key}>{label}<output aria-live="polite">{prefs[key].toFixed(key==='fov'?0:2)}{suffix}</output></label><div className="range-controls"><button type="button" aria-label={label+'を下げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,-1))}>−</button><Slider aria-labelledby={'label-'+key} min={min} max={max} step={step} value={[prefs[key]]} onValueChange={v=>change(key,Array.isArray(v)?v[0]:v)}/><button type="button" aria-label={label+'を上げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,1))}>＋</button></div></div>;
-  return <main className="experience" data-playing={!menu} onContextMenu={e=>e.preventDefault()}>
+  const blockControllerClick=(e:React.SyntheticEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&document.pointerLockElement===document.documentElement){e.preventDefault();e.stopPropagation();}};
+  return <main className="experience" data-playing={!menu} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
     <canvas ref={canvas} tabIndex={-1} inputMode="none" aria-label="祭殿の一人称回廊" onPointerDown={e=>{if(e.pointerType==='mouse'&&session.current.mode==='gamepad'){void requestLock();return;}touchMode(e);}} onClick={e=>{if(e.detail===2&&session.current.mode!=='gamepad')void requestLock();}}/>
     <div className="vignette"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%) rotate('+e.angle+'rad)',color:e.stunned?'#b8ffff':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id],opacity:Math.max(.4,1-e.distance/160)}}>⌃</span>)}</div>}<div className="reticle" aria-hidden="true"/>
     {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
@@ -205,7 +209,7 @@ export default function Shrine(){
     </nav>
     {!ready&&!error&&<div className="loading"><span/>灯りをともしています</div>}
     {error&&<div className="notice" role="alert">{error}<button className="text-button" onClick={()=>location.reload()}>再読み込み</button></div>}
-    {lockRequired&&!menu&&<button className="lock-resume" onClick={requestLock}>クリックしてカーソルを固定</button>}
+    {lockRequired&&!menu&&<div className="lock-gate"><button className="lock-resume" onClick={requestLock}>クリックしてカーソルを固定・再開</button><p>固定が完了するまで探索を一時停止しています</p></div>}
     {notice&&<div className="toast" role="status">{notice}</div>}
     <div className="touch-controls" hidden={pad||menu}>
       <div className="touch-pad" role="group" aria-label="移動タッチパッド" {...pointerEvents('move')}><span className="thumb" style={{transform:'translate('+stickPosition.x*32+'px,'+stickPosition.z*32+'px)'}}><Move size={22}/></span></div>
