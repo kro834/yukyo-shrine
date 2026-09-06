@@ -1,5 +1,6 @@
 import {movePlayer,SPRINT_SPEED,RADIUS,type Position,type Obstacle} from './movement.ts';
 import type {Cell,DoorSpec} from './shrine-layout.ts';
+import {STAIRS,UPPER_HEIGHT,floorHeightAt,upperPartitions,upperBarriers,stairRails,upperDoors} from './annex.ts';
 export function segmentBlocked(a:Position,b:Position,obstacles:Obstacle[]){
   const dx=b.x-a.x,dz=b.z-a.z;
   return obstacles.some(o=>{
@@ -26,7 +27,7 @@ export class Doors {
     return this.states.filter(d=>Math.abs((d.spec.floor??0)-floor)<.5).map(d=>{
       const p={x:d.spec.alongX?Math.max(d.spec.x-1.25,Math.min(d.spec.x+1.25,player.x)):d.spec.x,z:d.spec.alongX?d.spec.z:Math.max(d.spec.z-1.25,Math.min(d.spec.z+1.25,player.z))};
       return {d,p,dx:p.x-player.x,dz:p.z-player.z,dist:Math.hypot(p.x-player.x,p.z-player.z)};
-    }).filter(v=>v.dist<3.6&&(v.dist<1.1||(-Math.sin(yaw)*v.dx-Math.cos(yaw)*v.dz)/v.dist>.15)&&!segmentBlocked(player,v.p,walls))
+    }).filter(v=>v.dist<5.5&&(v.dist<1.5||(-Math.sin(yaw)*v.dx-Math.cos(yaw)*v.dz)/v.dist>.15)&&!segmentBlocked(player,v.p,walls))
       .sort((a,b)=>a.dist-b.dist)[0]?.d??null;
   }
   interact(player:Position,yaw:number,walls:Obstacle[],floor=0){const d=this.nearest(player,yaw,walls,floor);if(!d)return false;d.open=!d.open;return true;}
@@ -59,45 +60,98 @@ export class EnemyBrain {
     }
   }
 }
-export const ENEMY_PROFILES={normal:{sight:14,nearSight:3,cone:.2,chase:4.3,patrol:1.35},danger:{sight:32,nearSight:6,cone:-.25,chase:8,patrol:2.6}};
-export type Enemy={id:number;kind:'normal'|'danger';position:Position;home:Position;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number};
+export const ENEMY_PROFILES={normal:{sight:18,nearSight:3.5,cone:.1,chase:5.2,patrol:1.8,hearing:70},danger:{sight:40,nearSight:6,cone:-.25,chase:8,patrol:2.6,hearing:120}};
+export type Enemy={id:number;kind:'normal'|'danger';position:Position;home:Position;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number};
+export function openPursuedDoor(doors:Doors,e:Enemy,walls:Obstacle[],dt:number){
+  const d=(e.brain.mode==='chase'||e.investigate)&&e.brain.mode!=='stunned'?doors.nearest(e.position,e.facing+Math.PI,walls,e.floor>4.5?UPPER_HEIGHT:0):null;
+  const close=d&&!d.open&&Math.hypot(d.spec.x-e.position.x,d.spec.z-e.position.z)<1.65;
+  e.doorWait=close?e.doorWait+dt:0;
+  if(close&&e.doorWait>.8){d.open=true;e.doorWait=0;return true;}return false;
+}
 export class Enemies {
   nodes=new Map<string,Position>();
   graph=new Map<string,string[]>();
   actors:Enemy[];
   private walls:Obstacle[];
+  private upperWalls=[...upperPartitions,...upperBarriers,...stairRails,...new Doors(upperDoors).framesFor(UPPER_HEIGHT)];
+  private upperNodes=new Map<string,Position>();
+  private upperGraph=new Map<string,string[]>();
   constructor(cells:Cell[],walls:Obstacle[]){
     this.walls=walls;
     const free=(p:Position)=>!walls.some(o=>p.x>o.minX-RADIUS&&p.x<o.maxX+RADIUS&&p.z>o.minZ-RADIUS&&p.z<o.maxZ+RADIUS);
     for(const c of cells){const p={x:c.x*4,z:c.z*4};if(free(p))this.nodes.set(c.x+','+c.z,p);}
     for(const [key,p] of this.nodes){const [x,z]=key.split(',').map(Number);this.graph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.nodes.has(k)&&!segmentBlocked(p,this.nodes.get(k)!,walls)));}
-    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:0,z:-128},{x:128,z:-116}].map((p,id)=>{const home=this.closest(p)!.point;return {id,kind:id===4?'danger':'normal',home:{...home},position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0};});
+    for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
+      const p={x:x*4,z:z*4};if(STAIRS.some(s=>p.x>=s.minX&&p.x<=s.maxX&&p.z>=s.minZ&&p.z<=s.maxZ)||this.upperWalls.some(o=>p.x>o.minX-RADIUS&&p.x<o.maxX+RADIUS&&p.z>o.minZ-RADIUS&&p.z<o.maxZ+RADIUS))continue;
+      this.upperNodes.set(x+','+z,p);
+    }
+    for(const [key,p] of this.upperNodes){const [x,z]=key.split(',').map(Number);this.upperGraph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.upperNodes.has(k)&&!segmentBlocked(p,this.upperNodes.get(k)!,this.upperWalls)));}
+    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:0,z:-128},{x:128,z:-116},{x:64,z:20},{x:-64,z:-84},{x:144,z:-100},{x:-144,z:-100},{x:0,z:-212},{x:72,z:-236},{x:-72,z:-236}].map((p,id)=>{const home=this.closest(p)!.point;return {id,kind:id===4?'danger':'normal',home:{...home},position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map<string,number>(),doorWait:0,floor:0,destinationFloor:0,lastSeenFloor:0};});
   }
-  private closest(p:Position){let result:{key:string;point:Position;distance:number}|null=null;for(const [key,point] of this.nodes){const distance=Math.hypot(point.x-p.x,point.z-p.z);if((!result||distance<result.distance)&&!segmentBlocked(p,point,this.walls))result={key,point,distance};}return result;}
-  burst(player:Position,blockers:Obstacle[]){let count=0;for(const e of this.actors)if(Math.hypot(e.position.x-player.x,e.position.z-player.z)<=10&&!segmentBlocked(player,e.position,blockers)){e.brain.stun();count++;}return count;}
-  reset(){for(const e of this.actors){e.position={...e.home};e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;}}
-  update(dt:number,player:Position,blockers:Obstacle[],playerFloor=0){
+  private closest(p:Position,upper=false){let result:{key:string;point:Position;distance:number}|null=null;for(const [key,point] of upper?this.upperNodes:this.nodes){const distance=Math.hypot(point.x-p.x,point.z-p.z);if((!result||distance<result.distance)&&!segmentBlocked(p,point,upper?this.upperWalls:this.walls))result={key,point,distance};}return result;}
+  private path(start:Position,target:Position,upper=false):Position[]{
+    const a=this.closest(start,upper),b=this.closest(target,upper);if(!a||!b)return [];
+    const queue=[a.key],parent=new Map<string,string|null>([[a.key,null]]);
+    for(let i=0;i<queue.length&&!parent.has(b.key);i++)for(const n of (upper?this.upperGraph:this.graph).get(queue[i])??[])if(!parent.has(n)){parent.set(n,queue[i]);queue.push(n);}
+    if(!parent.has(b.key))return [];
+    const result:Position[]=[];let k:string|null=b.key;
+    while(k&&k!==a.key){result.push((upper?this.upperNodes:this.nodes).get(k)!);k=parent.get(k)??null;}
+    result.reverse();if(a.distance>.3)result.unshift(a.point);return result;
+  }
+  hear(position:Position,floor=0){
+    let count=0;for(const e of this.actors){
+      if(e.brain.mode==='stunned'||Math.hypot(e.position.x-position.x,e.position.z-position.z)>ENEMY_PROFILES[e.kind].hearing)continue;
+      e.investigate={...position};e.destinationFloor=floor>2.4?UPPER_HEIGHT:0;e.searchTime=45;e.planIn=0;e.route=[];count++;
+    }return count;
+  }
+  burst(player:Position,blockers:Obstacle[],floor=0){let count=0;for(const e of this.actors)if(Math.abs(e.floor-floor)<1&&Math.hypot(e.position.x-player.x,e.position.z-player.z)<=10&&!segmentBlocked(player,e.position,blockers)){e.brain.stun();e.route=[];e.investigate=null;e.searchTime=0;count++;}return count;}
+  reset(){for(const e of this.actors){e.position={...e.home};e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;e.route=[];e.investigate=null;e.searchTime=0;e.doorWait=0;e.floor=0;e.destinationFloor=0;}}
+  update(dt:number,player:Position,groundBlockers:Obstacle[],playerFloor=0,upperBlockers:Obstacle[]=this.upperWalls){
     let caught=false;
     for(const e of this.actors){
+      const upstairs=e.floor>4.5,blockers=upstairs?upperBlockers:groundBlockers;
       const dx=player.x-e.position.x,dz=player.z-e.position.z,distance=Math.hypot(dx,dz);
       const facing=(dx*Math.sin(e.facing)+dz*Math.cos(e.facing))/Math.max(.01,distance);
       const profile=ENEMY_PROFILES[e.kind];
-      const sees=playerFloor<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!segmentBlocked(e.position,player,blockers);
-      const previousMode=e.brain.mode;e.brain.update(dt,sees,player);
-      if(previousMode!==e.brain.mode&&e.brain.mode==='patrol'){e.waypoint=null;e.planIn=0;}
+      const sees=Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!segmentBlocked(e.position,player,blockers);
+      const previousMode=e.brain.mode,lastSeen=e.brain.lastSeen?{...e.brain.lastSeen}:null;e.brain.update(dt,sees,player);
+      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.searchTime=5;e.waypoint=null;e.route=[];e.planIn=0;}
+      if(sees){e.investigate=null;e.searchTime=0;e.lastSeenFloor=playerFloor>2.4?UPPER_HEIGHT:0;e.destinationFloor=e.lastSeenFloor;}
       if(e.brain.mode==='stunned')continue;
       if(e.brain.mode==='chase'&&distance<.8&&sees){caught=true;continue;}
-      let goal=e.brain.mode==='chase'?e.brain.lastSeen:null;
+      e.searchTime=Math.max(0,e.searchTime-dt);if(e.searchTime===0)e.investigate=null;
+      let goal=e.brain.mode==='chase'?e.brain.lastSeen:e.investigate;
+      const onStair=e.floor>.01&&e.floor<UPPER_HEIGHT-.01;
+      let stairTravel=false;
+      if(goal&&(onStair||(e.destinationFloor>2.4)!==upstairs)){
+        const ascending=e.destinationFloor>2.4;
+        const stair=STAIRS.slice().sort((a,b)=>Math.hypot((a.minX+a.maxX)/2-e.position.x,(ascending?a.minZ:a.maxZ)-e.position.z)-Math.hypot((b.minX+b.maxX)/2-e.position.x,(ascending?b.minZ:b.maxZ)-e.position.z))[0];
+        const x=(stair.minX+stair.maxX)/2,entry={x,z:ascending?stair.minZ-1:stair.maxZ+1};
+        stairTravel=onStair||(Math.hypot(e.position.x-entry.x,e.position.z-entry.z)<1.4&&Math.abs(e.position.x-x)<.6);
+        goal=stairTravel?{x,z:ascending?stair.maxZ+1:stair.minZ-1}:entry;
+      }
+      if(goal){
+        e.planIn-=dt;
+        if(!stairTravel&&segmentBlocked(e.position,goal,blockers)){
+          if(e.planIn<=0||!e.route.length){e.route=this.path(e.position,goal,upstairs);e.planIn=.9;}
+          while(e.route[0]&&Math.hypot(e.route[0].x-e.position.x,e.route[0].z-e.position.z)<.22)e.route.shift();
+          goal=e.route[0]??null;
+        }else e.route=[];
+        if(e.investigate&&Math.abs(e.floor-e.destinationFloor)<.3&&Math.hypot(e.investigate.x-e.position.x,e.investigate.z-e.position.z)<.4){e.investigate=null;goal=null;}
+      }
       if(!goal){
         e.planIn-=dt;
         if(!e.waypoint||Math.hypot(e.waypoint.x-e.position.x,e.waypoint.z-e.position.z)<.15||e.planIn<=0){
-          const current=this.closest(e.position);e.planIn=3;
+          const current=this.closest(e.position,upstairs);e.planIn=3;
           if(current){
             if(current.distance>.35)e.waypoint=current.point;
             else {
-              const choices=(this.graph.get(current.key)??[]).filter(k=>!segmentBlocked(e.position,this.nodes.get(k)!,blockers));
-              e.step++;const next=choices[(e.step*13+e.id*7)%Math.max(1,choices.length)];
-              e.waypoint=next?this.nodes.get(next)!:null;
+              const nodes=upstairs?this.upperNodes:this.nodes;
+              const choices=((upstairs?this.upperGraph:this.graph).get(current.key)??[]).filter(k=>!segmentBlocked(e.position,nodes.get(k)!,blockers));
+              e.step++;e.visits.set(current.key,(e.visits.get(current.key)??0)+1);
+              choices.sort((a,b)=>((e.visits.get(a)??0)+(a===e.lastNode?4:0))-((e.visits.get(b)??0)+(b===e.lastNode?4:0))||((a.charCodeAt(0)+e.id+e.step)%7)-((b.charCodeAt(0)+e.id+e.step)%7));
+              const next=choices[0];e.lastNode=current.key;
+              e.waypoint=next?nodes.get(next)!:null;
             }
           }
         }
@@ -105,11 +159,14 @@ export class Enemies {
       }
       if(goal){
         const gx=goal.x-e.position.x,gz=goal.z-e.position.z,len=Math.hypot(gx,gz);
-        const speed=e.brain.mode==='chase'?profile.chase:profile.patrol;
-        if(len>.03){e.facing=Math.atan2(gx,gz);e.position=movePlayer(e.position,gx/len,gz/len,0,true,Math.min(dt,len/speed)*speed/SPRINT_SPEED,blockers);}
+        const speed=e.brain.mode==='chase'?profile.chase:e.investigate?3.3:profile.patrol;
+        if(len>.03){e.facing=Math.atan2(gx,gz);const movementWalls=stairTravel?blockers.filter(o=>!STAIRS.includes(o)):blockers;e.position=movePlayer(e.position,gx/len,gz/len,0,true,Math.min(dt,len/speed)*speed/SPRINT_SPEED,movementWalls);e.floor=floorHeightAt(e.position,e.floor);}
       }
     }
     return caught;
   }
 }
+
+
+
 

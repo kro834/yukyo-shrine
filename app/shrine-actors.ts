@@ -29,9 +29,9 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const colors=['#ff386a','#5fffe0','#bb78ff','#ffbc40','#ff201e'];
   const actors=enemies.actors.map((enemy,index)=>{
     const root=new THREE.Group();scene.add(root);if(enemy.kind==='danger')root.scale.set(1.14,1.1,1.14);
-    const glow=make(new THREE.MeshBasicMaterial({color:colors[index],toneMapped:false}));
-    const mask=make(new THREE.MeshStandardMaterial({color:'#fff2d0',metalness:.25,roughness:.3,emissive:colors[index],emissiveIntensity:.18}));
-    const aura=make(new THREE.MeshBasicMaterial({color:colors[index],transparent:true,opacity:.13,depthWrite:false,depthTest:false,fog:false,toneMapped:false}));
+    const glow=make(new THREE.MeshBasicMaterial({color:(enemy.kind==='danger'?colors[4]:colors[index%4]),toneMapped:false}));
+    const mask=make(new THREE.MeshStandardMaterial({color:'#fff2d0',metalness:.25,roughness:.3,emissive:(enemy.kind==='danger'?colors[4]:colors[index%4]),emissiveIntensity:.18}));
+    const aura=make(new THREE.MeshBasicMaterial({color:(enemy.kind==='danger'?colors[4]:colors[index%4]),transparent:true,opacity:.13,depthWrite:false,depthTest:false,fog:false,toneMapped:false}));
     const part=(g:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z:number,parent:THREE.Group=root)=>{
       const mesh=new THREE.Mesh(g,m);mesh.position.set(x,y,z);mesh.castShadow=m!==aura;mesh.receiveShadow=true;parent.add(mesh);return mesh;
     };
@@ -64,7 +64,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
       [new THREE.CylinderGeometry(.34,.69,1.78,10),0,.98,0],
       [new THREE.SphereGeometry(.3,12,10),0,2.04,.1],
       [new THREE.TorusGeometry(.88,.035,6,40),0,1.72,-.27],
-    ] as [THREE.BufferGeometry,number,number,number][]){const echo=part(g,aura,x,y,z);echo.renderOrder=20;echo.castShadow=false;}
+    ] as [THREE.BufferGeometry,number,number,number][]){const echo=part(g,aura,x,y,z);echo.layers.set(1);echo.renderOrder=20;echo.castShadow=false;}
     const ringMat=make(new THREE.MeshBasicMaterial({color:'#b8ffff',transparent:true,opacity:0,depthWrite:false,toneMapped:false}));
     const ring=part(new THREE.TorusGeometry(.85,.025,6,48),ringMat,0,.065,0);ring.rotation.x=Math.PI/2;
     if(enemy.kind==='danger'){
@@ -79,12 +79,14 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   });
   return {update(time:number){enemies.actors.forEach((e,i)=>{
     const a=actors[i],stunned=e.brain.mode==='stunned';
-    a.root.position.set(e.position.x,.035*Math.sin(time*.0018+i),e.position.z);a.root.rotation.y=e.facing;
+    a.root.position.set(e.position.x,e.floor+.035*Math.sin(time*.0018+i),e.position.z);a.root.rotation.y=e.facing;
     a.arms.forEach((arm,j)=>arm.rotation.x=stunned?0:Math.sin(time*.0035+i+j)*.12);
     a.halo.rotation.z=stunned?0:time*.00018*(i%2?1:-1);
     a.ribbons.forEach((r,j)=>r.rotation.z=Math.sin(time*.0018+j)*.045);
-    const color=stunned?'#b8ffff':colors[i];a.glow.color.set(color);a.aura.color.set(color);
+    const color=stunned?'#b8ffff':(e.kind==='danger'?colors[4]:colors[i%4]);a.glow.color.set(color);a.aura.color.set(color);
     a.mask.emissiveIntensity=stunned?.65:.22;a.ringMat.opacity=stunned?.7:0;
   });},dispose(){materials.forEach(m=>m.dispose());}};
 }
+
+
 

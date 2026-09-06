@@ -11,14 +11,14 @@ test('Circle opens doors once per press while Cross remains menu confirm',()=>{
  edge.update(pad(-1));assert.equal(edge.update(pad(1)).interact,true);
  assert.equal(edge.update(pad(0)).interact,false);
 });
-test('three large new stage wings contain distinct materials and join the existing complex',()=>{
- const l=createLayout();assert.equal(l.stages.length,3);assert.ok(l.cells.length>2400);
+test('four distinct stage wings contain distinct materials and join the existing complex',()=>{
+ const l=createLayout();assert.equal(l.stages.length,4);assert.ok(l.cells.length>2400);
  for(const kind of ['factory','bath','cistern'])assert.ok(l.cells.filter(c=>c.kind===kind).length>300,kind);
  for(const k of ['27,-17','-27,-17','-16,-49','16,-49'])assert.ok(l.grid.has(k));
 });
 test('exactly one danger enemy detects farther, moves faster, but can be outrun and stunned',()=>{
  const l=createLayout(),enemies=new Enemies(l.cells,l.obstacles);
- assert.equal(enemies.actors.length,5);assert.equal(enemies.actors.filter(e=>e.kind==='danger').length,1);
+ assert.equal(enemies.actors.length,12);assert.equal(enemies.actors.filter(e=>e.kind==='danger').length,1);
  const boss=enemies.actors.find(e=>e.kind==='danger')!;
  assert.ok(ENEMY_PROFILES.danger.sight>ENEMY_PROFILES.normal.sight*2);
  assert.ok(ENEMY_PROFILES.danger.chase>ENEMY_PROFILES.normal.chase);
@@ -31,4 +31,6 @@ test('exactly one danger enemy detects farther, moves faster, but can be outrun 
  enemies.burst({x:boss.position.x,z:boss.position.z},[]);
  assert.equal(boss.brain.stunRemaining,STUN_SECONDS);
 });
+
+
 

@@ -1,4 +1,4 @@
-export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'};
+export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'|'shop'};
 export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean;kind?:Cell['kind']};
 export type Room = {id:string;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
 export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string;rooms?:string[];floor?:number};
@@ -45,6 +45,8 @@ export function createLayout() {
   rect(-16,-27,-16,-22);rect(-16,-22,-11,-22);
   rect(16,-27,16,-22);rect(11,-22,16,-22);
   const rooms:Room[]=[
+    {id:'entry-west',x1:-5,x2:-3,z1:-1,z2:1,h:3.8,style:'tatami'},
+    {id:'entry-east',x1:3,x2:5,z1:-1,z2:1,h:3.8,style:'tatami'},
     {id:'annex-a',x1:15,x2:17,z1:1,z2:3,h:3.6,style:'tatami'},
     {id:'annex-b',x1:18,x2:20,z1:1,z2:3,h:3.6,style:'tatami'},
     {id:'annex-c',x1:15,x2:17,z1:4,z2:6,h:3.6,style:'tatami'},
@@ -58,6 +60,7 @@ export function createLayout() {
     {id:'east-reliquary',x1:17,x2:21,z1:-23,z2:-19,h:4.4,style:'ritual'},
   ];
   rect(-22,-21,-11,-21);rect(11,-21,22,-21);
+  rect(-4,-3,-4,-1);rect(4,-3,4,-1);
   rect(12,0,23,8,9,'hall');rect(6,5,12,5);rect(9,-3,14,-3);rect(14,-3,14,0);
   for(const x of [-12,-6,6,12])rect(x,-39,x,-29);
   for(const r of rooms)rect(r.x1,r.z1,r.x2,r.z2,r.h,r.style==='stone'?'stone':'hall');
@@ -76,10 +79,12 @@ export function createLayout() {
   }
   // Three enclosed wings, each connected at two distant entrances and internally looped.
   const stages=[
+    {id:'shop',x1:-20,x2:-12,z1:0,z2:8,kind:'shop' as const},
     {id:'factory',x1:25,x2:48,z1:-46,z2:-10,kind:'factory' as const},
     {id:'bath',x1:-22,x2:22,z1:-70,z2:-47,kind:'bath' as const},
     {id:'cistern',x1:-48,x2:-25,z1:-46,z2:-10,kind:'cistern' as const},
   ];
+  rect(-20,0,-12,8,4.5,'shop');rect(-12,1,-8,1);rect(-12,5,-8,5);
   for(const side of [-1,1]){
     const a=Math.min(side*22,side*48),b=Math.max(side*22,side*48);
     rect(a,-17,b,-17);rect(a,-37,b,-37);

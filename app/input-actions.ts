@@ -1,7 +1,17 @@
 import type {Pad} from './gamepad-input.ts';
 export class ButtonEdges {
   private previous:boolean[]=[];
-  update(pad:Pad|null){const current=pad?.buttons.map(b=>b.pressed)??[];const pressed=current.map((b,i)=>b&&!this.previous[i]);this.previous=current;return {flashlight:!!pressed[5],burst:!!pressed[7],menu:!!pressed[9],confirm:!!pressed[0],interact:!!pressed[1],back:!!pressed[1],up:!!pressed[12],down:!!pressed[13],left:!!pressed[14],right:!!pressed[15]};}
+  private device='';
+  update(pad:Pad|null){
+    const device=pad?`${pad.index??0}:${pad.id??''}:${pad.mapping}`:'';
+    if(device!==this.device){this.previous=[];this.device=device;}
+    const rawSony=!!pad&&pad.mapping!=='standard'&&/054c|sony|dualsense|dualshock|wireless controller|playstation/i.test(pad.id??'');
+    const current=pad?.buttons.map(b=>b.pressed)??[];
+    const pressed=current.map((b,i)=>b&&!this.previous[i]);this.previous=current;
+    // Standard API: Circle=1, Cross=0. Unmapped Sony USB HID: Circle=2, Cross=1.
+    const circle=rawSony?2:1,cross=rawSony?1:0;
+    return {flashlight:!!pressed[5],burst:!!pressed[7],menu:!!pressed[9],confirm:!!pressed[cross],interact:!!pressed[circle],back:!!pressed[circle],up:!!pressed[12],down:!!pressed[13],left:!!pressed[14],right:!!pressed[15]};
+  }
 }
 export function allowMouseLook(mode:string,paused:boolean,locked:boolean){return mode!=='gamepad'&&!paused&&locked;}
 export function allowExploration(mode:string,paused:boolean,focused:boolean,locked:boolean){

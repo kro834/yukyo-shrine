@@ -55,7 +55,7 @@ export default function Shrine(){
   const setFlashlight=useCallback((on:boolean)=>{state.current.light=on;setLight(on);if(worldRef.current)worldRef.current.flashlight.visible=on;return {enabled:on};},[]);
   const toggleLight=useCallback(()=>setFlashlight(!state.current.light),[setFlashlight]);
   const burst=useCallback(()=>{if(state.current.paused)return;worldRef.current?.burst();setBurstPulse(v=>v+1);},[]);
-  const interact=useCallback(()=>{if(!state.current.paused)worldRef.current?.interact();},[]);
+  const interact=useCallback(()=>{if(state.current.paused)return;const opened=worldRef.current?.interact();if(!opened)setNotice('開閉できるふすまに近づいて、そちらを向いて〇を押してください。');},[]);
   useLayoutEffect(()=>{
     document.documentElement.dataset.shrinePlaying=String(!menu);
     document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(menu));
@@ -196,7 +196,7 @@ export default function Shrine(){
   const blockControllerClick=(e:React.SyntheticEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&document.pointerLockElement===document.documentElement){e.preventDefault();e.stopPropagation();}};
   return <main className="experience" data-playing={!menu} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
     <canvas ref={canvas} tabIndex={-1} inputMode="none" aria-label="祭殿の一人称回廊" onPointerDown={e=>{if(e.pointerType==='mouse'&&session.current.mode==='gamepad'){void requestLock();return;}touchMode(e);}} onClick={e=>{if(e.detail===2&&session.current.mode!=='gamepad')void requestLock();}}/>
-    <div className="vignette"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%) rotate('+e.angle+'rad)',color:e.stunned?'#b8ffff':['#ff386a','#5fffe0','#bb78ff','#ffbc40','#ff201e'][e.id],opacity:Math.max(.4,1-e.distance/160)}}>⌃</span>)}</div>}<div className="reticle" aria-hidden="true"/>
+    <div className="vignette"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%) rotate('+e.angle+'rad)',color:e.stunned?'#b8ffff':(e.id===4?'#ff201e':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id%4]),opacity:Math.max(.4,1-e.distance/160)}}>⌃</span>)}</div>}<div className="reticle" aria-hidden="true"/>
     {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
     {caughtPulse>0&&<div key={'caught'+caughtPulse} className="caught-pulse" aria-hidden="true"/>}
     {doorNear&&!menu&&<button className="door-action" aria-label="〇：ふすまを開閉" onClick={interact}><DoorOpen size={20}/><span>〇</span></button>}
@@ -242,6 +242,7 @@ export default function Shrine(){
     </Dialog>
   </main>;
 }
+
 
 
 
