@@ -106,8 +106,10 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
     mergeFixed(halo);mergeFixed(root,new Set([...arms,...ribbons]));
     return {root,arms,halo,ribbons,glow,aura,mask,ringMat,index};
   });
-  return {update(time:number){enemies.actors.forEach((e,i)=>{
+  return {update(time:number,viewer?:{x:number;z:number},range=125){enemies.actors.forEach((e,i)=>{
     const a=actors[i],stunned=e.brain.mode==='stunned';
+    a.root.visible=!viewer||Math.hypot(e.position.x-viewer.x,e.position.z-viewer.z)<range;
+    if(!a.root.visible)return;
     a.root.position.set(e.position.x,e.floor+.035*Math.sin(time*.0018+i),e.position.z);a.root.rotation.y=e.facing;
     a.arms.forEach((arm,j)=>arm.rotation.x=stunned?0:Math.sin(time*.0035+i+j)*.12);
     a.halo.rotation.z=stunned?0:time*.00018*(i%2?1:-1);

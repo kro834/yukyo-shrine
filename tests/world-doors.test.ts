@@ -39,7 +39,7 @@ test('actual furnished world recognises and opens ground doors from both sides',
 });
 
 test('furnished random worlds collect and offer either route, then allow entry through the goal',t=>{
- t.mock.method(Enemies.prototype,'update',()=>false);t.mock.method(Enemies.prototype,'hear',()=>0);
+ const update=t.mock.method(Enemies.prototype,'update',()=>false);t.mock.method(Enemies.prototype,'hear',()=>0);
  const addTargets=Enemies.prototype.addPatrolTargets;let actualEnemies:Enemies|undefined;
  let points:Parameters<Enemies['addPatrolTargets']>[0]=[];
  t.mock.method(Enemies.prototype,'addPatrolTargets',function(this:Enemies,p:typeof points){actualEnemies=this;points=p;return addTargets.call(this,p);});
@@ -51,6 +51,12 @@ test('furnished random worlds collect and offer either route, then allow entry t
  for(const [seed,color] of [[71,'blue'],[72,'red']] as const){
   const world=createWorld(canvas as unknown as HTMLCanvasElement,renderer,seed);
   try{
+   const calls=update.mock.callCount();assert.equal(world.stopTime(),true);
+   const before=world.camera.position.clone();const moved=world.move(0,-1,0,false,.05);world.camera.position.set(moved.x,moved.y,moved.z);
+   assert.ok(world.camera.position.distanceTo(before)>0,'player can move during stopped time');
+   for(let i=0;i<200;i++)world.step(.05);
+   assert.equal(update.mock.callCount(),calls,'enemy AI cannot act during the ten-second stop');
+   assert.equal(world.timeStopped,false);world.step(.05);assert.ok(update.mock.callCount()>calls,'enemy AI resumes');
    const actual=actualEnemies!,start=actual.nodes.keys().next().value!,seen=new Set([start]),queue=[start];
    for(let i=0;i<queue.length;i++)for(const n of actual.graph.get(queue[i])??[])if(!seen.has(n)){seen.add(n);queue.push(n);}
    assert.equal(seen.size,actual.nodes.size,`seed ${seed}: furniture-inclusive navigation`);

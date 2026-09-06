@@ -1,5 +1,5 @@
 import {nearbyObstacles} from './spatial.ts';
-export type Obstacle = { minX: number; maxX: number; minZ: number; maxZ: number };
+export type Obstacle = { minX: number; maxX: number; minZ: number; maxZ: number; minY?:number; maxY?:number };
 export type Position = { x: number; z: number };
 export const RADIUS = 0.42;
 export const WALK_SPEED = 3.4;

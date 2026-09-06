@@ -19,7 +19,7 @@ test('ordinary patrol opens a closed fusuma and enters the room without player n
 test('patrol divides coverage across enemies and walks upstairs without hearing a player',()=>{
  const l=createLayout(),doors=new Doors(l.doors),walls=[...l.obstacles,...doors.frames,...STAIRS,...stairRails],enemies=new Enemies(l.cells,walls);
  enemies.update(.05,{x:-1000,z:-1000},walls);
- assert.equal(new Set(enemies.actors.map(e=>e.patrol?.id)).size,24);
+ assert.equal(new Set(enemies.actors.map(e=>e.patrol?.id)).size,28);
  assert.ok(enemies.patrolTargets.some(t=>t.floor===UPPER_HEIGHT));
  const e=enemies.actors[0];enemies.actors=[e];e.position={x:52,z:4};e.floor=0;e.route=[];e.planIn=0;
  const target={id:'upstairs',point:{x:52,z:30},floor:UPPER_HEIGHT,visits:0};e.patrol=target;

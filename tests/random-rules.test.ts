@@ -38,7 +38,7 @@ test('original fifteen beads are blue; each formerly empty wing receives a reach
   assert.ok(nav.nodes.has(Math.round(b.position.x/4)+','+Math.round(b.position.z/4)));
   assert.ok(!walls.some(w=>b.position.x>w.minX-.85&&b.position.x<w.maxX+.85&&b.position.z>w.minZ-.85&&b.position.z<w.maxZ+.85));
  }
- assert.equal(nav.actors.length,24);assert.ok(nav.actors.slice(16).every(e=>areaAt(e.home)==='red'));
+ assert.equal(nav.actors.length,28);assert.ok(nav.actors.slice(16).every(e=>areaAt(e.home)==='red'));
  nav.update(.05,{x:-1000,z:-1000},walls);
  const kind=(p:{x:number;z:number})=>l.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;
  for(const e of nav.actors.slice(16))assert.equal(kind(e.patrol!.point),kind(e.home),'red guards patrol their own wing');

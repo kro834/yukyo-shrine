@@ -1,5 +1,5 @@
 import {seededRandom} from './seeded-random.ts';
-export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'|'shop'};
+export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'|'shop'|'cave'|'field'};
 export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean;kind?:Cell['kind']};
 export type Room = {id:string;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
 export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string;rooms?:string[];floor?:number};
@@ -81,12 +81,14 @@ export function createLayout(seed=1) {
   }
   // Three enclosed wings, each connected at two distant entrances and internally looped.
   const stages=[
-    {id:'shop',x1:-20,x2:-12,z1:0,z2:8,kind:'shop' as const},
+    {id:'shop',x1:-24,x2:-12,z1:-1,z2:8,kind:'shop' as const},
+    {id:'cave',x1:-47,x2:-25,z1:-8,z2:8,kind:'cave' as const},
+    {id:'field',x1:25,x2:48,z1:-7,z2:8,kind:'field' as const},
     {id:'factory',x1:25,x2:48,z1:-46,z2:-10,kind:'factory' as const},
     {id:'bath',x1:-22,x2:22,z1:-70,z2:-47,kind:'bath' as const},
     {id:'cistern',x1:-48,x2:-25,z1:-46,z2:-10,kind:'cistern' as const},
   ];
-  rect(-20,0,-12,8,4.5,'shop');rect(-12,1,-8,1);rect(-12,5,-8,5);
+  rect(-24,-1,-12,8,4.5,'shop');rect(-12,1,-8,1);rect(-12,5,-8,5);
   for(const side of [-1,1]){
     const a=Math.min(side*22,side*48),b=Math.max(side*22,side*48);
     rect(a,-17,b,-17);rect(a,-37,b,-37);
@@ -106,9 +108,25 @@ export function createLayout(seed=1) {
   for(const x of [-18,18])rect(x-2,-64,x+2,-54,4.2,'hall');
   // Bath basin is a solid island with walkable promenades on every side.
   for(let x=-2;x<=2;x++)for(let z=-61;z<=-57;z++)grid.delete(key(x,z));
+  // Southern karst caverns: irregular inner chambers, two cistern mouths and
+  // two passages into the market. Rock islands stay solid in every seed.
+  ring(-47,-8,-27,8);ring(-43,-4,-31,4);
+  const caveCross=random()<.5?-1:1,caveSpine=random()<.5?-39:-35;
+  rect(-47,caveCross,-27,caveCross,5.8,'cave');rect(caveSpine,-8,caveSpine,8,5.8,'cave');
+  for(let x=-43;x<=-31;x++)for(let z=-4;z<=4;z++)if(((x+37)/6)**2+(z/4)**2<1)rect(x,z,x,z,7,'cave');
+  for(const [x,z] of [[-40,-2],[-34,2]])for(let dx=0;dx<=1;dx++)for(let dz=0;dz<=1;dz++)grid.delete(key(x+dx,z+dz));
+  rect(-46,-11,-46,-8);rect(-27,-11,-27,-8);rect(-27,1,-24,1);rect(-27,5,-24,5);
+  // Open, water-filled paddies encircled by walkable earthen berms. Each path
+  // joins another path; no unmarked exit leads outside the stage.
+  rect(26,-7,48,8,8,'field');rect(27,-11,27,-7);rect(46,-11,46,-7);rect(23,1,26,1);rect(23,7,26,7);
+  const paddies:{x1:number;x2:number;z1:number;z2:number}[]=[];
+  for(const [x1,x2] of [[28,32],[35,39],[42,46]])for(const [z1,z2] of [[-5,-2],[1,4]]){
+    paddies.push({x1,x2,z1,z2});for(let x=x1;x<=x2;x++)for(let z=z1;z<=z2;z++)grid.delete(key(x,z));
+  }
   // Generate new loops between the fixed landmark rooms. A passage always joins
   // two existing routes, so random generation cannot introduce a dead end.
   const protectedCell=(x:number,z:number)=>
+    (x>=25&&x<=49&&z>=-8&&z<=9)||(x>=-48&&x<=-25&&z>=-9&&z<=9)||
     (Math.abs(x)<=14&&z>-27)||
     (Math.abs(x)<=3&&z>=-62&&z<=-56)||
     rooms.some(r=>x>=r.x1-1&&x<=r.x2+1&&z>=r.z1-1&&z<=r.z2+1)||
@@ -127,7 +145,7 @@ export function createLayout(seed=1) {
   }
   for(const c of grid.values()){
     const s=stages.find(s=>c.x>=s.x1&&c.x<=s.x2&&c.z>=s.z1&&c.z<=s.z2);
-    if(s){c.kind=s.kind;c.h=Math.max(c.h,s.kind==='factory'?4.8:s.kind==='cistern'?4.6:3.8);}
+    if(s){c.kind=s.kind;c.h=Math.max(c.h,s.kind==='factory'?4.8:s.kind==='cistern'?4.6:s.kind==='cave'?5.8:3.8);}
   }
   // Clip only single-cell stubs; circulation and all rooms remain connected.
   let removed=true;
@@ -137,13 +155,15 @@ export function createLayout(seed=1) {
   }}
   const walls:Wall[]=[];
   const doors:DoorSpec[]=[];
-  const obstacles:{minX:number;maxX:number;minZ:number;maxZ:number}[]=[];
+  const obstacles:{minX:number;maxX:number;minZ:number;maxZ:number;maxY?:number}[]=[];
   for(const c of grid.values())for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
     if(grid.has(key(c.x+dx,c.z+dz)))continue;
     const x=c.x*CELL+dx*CELL/2,z=c.z*CELL+dz*CELL/2,alongX=!!dz;
     const basin=c.kind==='bath'&&c.x+dx>=-2&&c.x+dx<=2&&c.z+dz>=-61&&c.z+dz<=-57;
-    walls.push({x,z,alongX,h:basin?1.1:c.h,insideX:-dx,insideZ:-dz,kind:c.kind});
-    obstacles.push({minX:x-(alongX?2:.18),maxX:x+(alongX?2:.18),minZ:z-(alongX?.18:2),maxZ:z+(alongX?.18:2)});
+    const paddy=c.kind==='field'&&paddies.some(p=>c.x+dx>=p.x1&&c.x+dx<=p.x2&&c.z+dz>=p.z1&&c.z+dz<=p.z2);
+    const height=basin?1.1:paddy?.48:c.h;
+    walls.push({x,z,alongX,h:height,insideX:-dx,insideZ:-dz,kind:c.kind});
+    obstacles.push({minX:x-(alongX?2:.18),maxX:x+(alongX?2:.18),minZ:z-(alongX?.18:2),maxZ:z+(alongX?.18:2),maxY:height});
   }
   // Select real entrances on every connected side before building any partition.
   const openingMap=new Map<string,DoorSpec>();
@@ -184,5 +204,5 @@ export function createLayout(seed=1) {
       ?{minX:x-2,maxX:x+2,minZ:z+sign*1.68-.32,maxZ:z+sign*1.68+.32}
       :{minX:x+sign*1.68-.32,maxX:x+sign*1.68+.32,minZ:z-2,maxZ:z+2});
   }
-  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors,courts,stages};
+  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors,courts,stages,paddies};
 }

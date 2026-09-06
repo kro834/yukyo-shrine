@@ -9,7 +9,7 @@ export function adjustRange(p:Preferences,key:RangeKey,direction:number):Prefere
 }
 export function viewDelta(source:'gamepad'|'touch'|'mouse',x:number,y:number,dt:number,p:Preferences){
   const scale=source==='gamepad'?p.stickSensitivity:source==='touch'?p.touchSensitivity:p.mouseSensitivity;
-  const unit=source==='gamepad'?Math.max(0,Math.min(dt,.05)):1;
+  const unit=source==='gamepad'?Math.max(0,Math.min(dt,.15)):1;
   const horizontal=source==='gamepad'?1.65:source==='touch'?.003:.002;
   const vertical=source==='gamepad'?1.3:horizontal;
   return {yaw:-x*unit*horizontal*scale,pitch:-y*unit*vertical*scale*(p.invertY?-1:1)};

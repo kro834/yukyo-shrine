@@ -1,6 +1,6 @@
 import type {Position} from './movement.ts';
 import type {Cell} from './shrine-layout.ts';
-export const RED_AREAS=['factory','bath','cistern','shop'] as const;
+export const RED_AREAS=['factory','bath','cistern','shop','cave','field'] as const;
 export type AreaColor='blue'|'red';
 export function createAreaLookup(cells:Cell[]){
  const red=new Set(cells.filter(c=>(RED_AREAS as readonly string[]).includes(c.kind)).map(c=>c.x+','+c.z));

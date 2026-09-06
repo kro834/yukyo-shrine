@@ -2,7 +2,7 @@ import { stick } from './movement.ts';
 
 export type Pad = {
   id?: string; index?: number; connected?: boolean; mapping: string;
-  axes: readonly number[]; buttons: readonly { pressed: boolean }[];
+  axes: readonly number[]; buttons: readonly { pressed: boolean;value?:number }[];
 };
 export type PadMapping = { axes: number[]; signs: number[]; centers: number[]; sprint: number };
 export const mappingKey = (pad: Pad) => `${pad.id ?? ''}|${pad.mapping}|${pad.axes.length}|${pad.buttons.length}`;
