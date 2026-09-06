@@ -13,6 +13,9 @@ import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,
 import {RunningSteps,createFootstepAudio} from './footsteps.ts';
 import {placeMagatama,collectMagatama} from './magatama.ts';
 import {createMagatamaMeshes} from './magatama-mesh.ts';
+import {ShrineGoal,GOAL,GOAL_WALLS} from './shrine-goal.ts';
+import {createGoalMeshes} from './goal-mesh.ts';
+import {BurstRecharge} from './burst-recharge.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer) {
   const renderer=rendererOverride??new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);
@@ -211,7 +214,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   // Bell room, suspended bronze bell and crossbeam.
   box(-34,4.4,-88,6,.4,.5,'dark');
   cylinder(-34,3.1,-88,1.1,1.8,'gold',1.3);cylinder(-34,4.1,-88,.5,.3,'gold');cylinder(-34,4.25,-88,.1,.3,'dark');
-  box(-34,1.0,-88,3.2,2,2.8,'black');block(-34,-88,3.2,2.8);lantern(-36,2.6,-85,true);lantern(-32,2.6,-85,true);
+  box(-34,1.0,-88,3.0,2,2.8,'black');block(-34,-88,3.0,2.8);lantern(-36,2.6,-85,true);lantern(-32,2.6,-85,true);
   // Lantern chamber: staggered rows, entirely above walking height.
   for(const x of [42,44,46])for(const z of [-68,-71,-74]){lantern(x,3.4,z,true);box(x,4.8,z,.025,2,.025,'gold');}
   // Furnishings are kept off the two-door circulation axis through each room.
@@ -329,12 +332,17 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   const staticChunks:{mesh:THREE.Mesh;center:THREE.Vector3;radius:number}[]=[];
   for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=true;mesh.receiveShadow=true;mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
+  obstacles.push(...GOAL_WALLS);
   const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
   const upperFixed=[...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
   const beads=placeMagatama(layout.rooms,obstacles,upperFixed),beadMeshes=createMagatamaMeshes(scene,beads);
+  enemies.addPatrolTargets(beads.map(b=>({id:'room:'+b.id,position:b.position,floor:b.floor})));
+  const goal=new ShrineGoal(beads.length),goalMeshes=createGoalMeshes(scene,goal);
+  const burstRecharge=new BurstRecharge();
+  let goalBlockers=goal.blockers();
   let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
-  let groundCollision=[...obstacles,...groundDoors],groundEnemyCollision=[...enemyWalls,...groundDoors],upperCollision=[...upperFixed,...upperDoorBlocks];
-  const refreshCollision=()=>{const g=doors.blockers(),u=doors.blockers(UPPER_HEIGHT);if(g!==groundDoors){groundDoors=g;groundCollision=[...obstacles,...g];groundEnemyCollision=[...enemyWalls,...g];}if(u!==upperDoorBlocks){upperDoorBlocks=u;upperCollision=[...upperFixed,...u];}};
+  let groundCollision=[...obstacles,...groundDoors,...goalBlockers],groundEnemyCollision=[...enemyWalls,...groundDoors,...goalBlockers],upperCollision=[...upperFixed,...upperDoorBlocks];
+  const refreshCollision=()=>{const g=doors.blockers(),u=doors.blockers(UPPER_HEIGHT),seal=goal.blockers();if(g!==groundDoors||seal!==goalBlockers){groundDoors=g;goalBlockers=seal;groundCollision=[...obstacles,...g,...seal];groundEnemyCollision=[...enemyWalls,...g,...seal];}if(u!==upperDoorBlocks){upperDoorBlocks=u;upperCollision=[...upperFixed,...u];}};
   let elevation=0,collision=groundCollision,reflectionEnabled=true;
   const mirror=new Reflector(new THREE.PlaneGeometry(4.7,6.7),{textureWidth:512,textureHeight:512,color:0x293d38});mirror.rotation.x=-Math.PI/2;mirror.position.set(0,.38,-92);scene.add(mirror);water.visible=false;
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
@@ -362,16 +370,22 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   const floorLevel=()=>elevation>UPPER_HEIGHT-.3?UPPER_HEIGHT:0;
   return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
+    get completed(){return goal.completed;},
+    get burstCooldown(){return burstRecharge.remaining;},
+    goalDirection(){return enemyDirection(camera.position,GOAL,camera.rotation.y);},
     collection(){return {collected:beads.filter(b=>b.collected).length,total:beads.length};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
+      if(goal.completed)return {x:camera.position.x,z:camera.position.z,y:camera.position.y};
       refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
       const pos=movePlayer(camera.position,x,z,yaw,sprint,dt,collision);lastMotion={running:sprint,moving:Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68};
     },
     enemyDirections(){return enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned'}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
     interact(){return doors.interact(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
-    burst(){return enemies.burst(camera.position,collision,elevation);},
+    burst(){if(goal.completed||!burstRecharge.use())return null;return enemies.burst(camera.position,collision,elevation);},
     step(dt:number){
+      if(goal.completed)return false;
+      burstRecharge.step(dt);
       if(runningSteps.update(dt,lastMotion.running,lastMotion.moving)){
         enemies.hear(camera.position,elevation);
         const cell=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4));footsteps.play(['stone','factory','bath','cistern'].includes(cell?.kind??''));
@@ -380,6 +394,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>4.5?upperFixed:enemyWalls,dt);
       doors.update(dt,camera.position,floorLevel());refreshCollision();collision=floorLevel()?upperCollision:groundCollision;doorMeshes.update();
       collectMagatama(beads,camera.position,elevation,collision);
+      goal.update(dt,beads.filter(b=>b.collected).length,camera.position,elevation);refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
+      if(goal.completed)return false;
       if(enemies.update(dt,camera.position,groundEnemyCollision,elevation,upperCollision)){elevation=0;camera.position.set(SPAWN.x,1.68,SPAWN.z);enemies.reset();return true;}return false;
     },
     configure(p:Preferences){
@@ -412,10 +428,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       lightPool.forEach((l,i)=>l.intensity=10*(1+.02*Math.sin(time*.0021+i*2.3)));
       enemyMeshes.update(time);
       beadMeshes.update(time);
+      goalMeshes.update(beads.filter(b=>b.collected).length);
       if(effects)effects.render();else renderer.render(scene,camera);
     },
     resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();effects?.resize();},
-    dispose(){disposed=true;footsteps.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaceTextures.forEach(t=>t.dispose());scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose();enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowMat.dispose();glowTex.dispose();renderer.dispose();},
+    dispose(){disposed=true;footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaceTextures.forEach(t=>t.dispose());scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose();enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowMat.dispose();glowTex.dispose();renderer.dispose();},
   };
 }
 

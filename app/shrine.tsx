@@ -27,6 +27,8 @@ export default function Shrine(){
   const [ready,setReady]=useState(false),[error,setError]=useState(''),[menu,setMenu]=useState(false),[light,setLight]=useState(true),[locked,setLocked]=useState(false);
   const [calStep,setCalStep]=useState(-1),[notice,setNotice]=useState('');
   const [collection,setCollection]=useState({collected:0,total:15});
+  const [won,setWon]=useState(false),[goalBearing,setGoalBearing]=useState({angle:0,distance:0});
+  const [burstRemaining,setBurstRemaining]=useState(0);
   const [enemyMarkers,setEnemyMarkers]=useState<{id:number;angle:number;distance:number;stunned:boolean}[]>([]);
   const [lockRequired,setLockRequired]=useState(false);
   const lockPending=useRef(false);
@@ -56,13 +58,13 @@ export default function Shrine(){
   },[clearInput,requestLock]);
   const setFlashlight=useCallback((on:boolean)=>{state.current.light=on;setLight(on);if(worldRef.current)worldRef.current.flashlight.visible=on;return {enabled:on};},[]);
   const toggleLight=useCallback(()=>setFlashlight(!state.current.light),[setFlashlight]);
-  const burst=useCallback(()=>{if(state.current.paused)return;worldRef.current?.burst();setBurstPulse(v=>v+1);},[]);
+  const burst=useCallback(()=>{if(state.current.paused||!worldRef.current)return;const result=worldRef.current.burst();if(result===null){setNotice('バースト再使用まで '+Math.ceil(worldRef.current.burstCooldown)+'秒');return;}setBurstRemaining(14);setBurstPulse(v=>v+1);},[]);
   const interact=useCallback(()=>{if(state.current.paused)return;const opened=worldRef.current?.interact();if(!opened)setNotice('開閉できるふすまに近づいて、そちらを向いて〇を押してください。');},[]);
   useLayoutEffect(()=>{
-    document.documentElement.dataset.shrinePlaying=String(!menu);
-    document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(menu));
-    if(menu)document.documentElement.style.removeProperty('cursor');else document.documentElement.style.setProperty('cursor','none','important');
-  },[menu]);
+    document.documentElement.dataset.shrinePlaying=String(!menu&&!won);
+    document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(menu||won));
+    if(menu||won)document.documentElement.style.removeProperty('cursor');else document.documentElement.style.setProperty('cursor','none','important');
+  },[menu,won]);
   const touchMode=useCallback((e:React.PointerEvent)=>{
     session.current.poll(pollPads());
     if(!session.current.useTouch()){e.preventDefault();e.stopPropagation();return false;}
@@ -81,6 +83,7 @@ export default function Shrine(){
     setReady(true);let frame=0,last=performance.now(),lastHud=0,oldMode='touch',controllerBlocked=false;
     const loaded=new Set<string>(),edges=new ButtonEdges();
     const down=(e:KeyboardEvent)=>{
+      if(world.completed)return;
       if(e.code==='Escape'){if(state.current.paused)setMenuOpen(false);return;}
       if(state.current.paused)return;
       if(session.current.mode==='gamepad'){e.preventDefault();e.stopPropagation();return;}
@@ -126,9 +129,10 @@ export default function Shrine(){
       if(poll.mode!==oldMode){if(poll.mode==='gamepad'){clearInput();if(!state.current.paused){(document.activeElement as HTMLElement|null)?.blur?.();canvas.current?.focus({preventScroll:true});}}oldMode=poll.mode;if(poll.mode==='gamepad')requestLock();setPad(poll.mode==='gamepad');}
       const focused=!document.hidden&&document.hasFocus();
       const buttons=edges.update(poll.pad);
+      if(world.completed&&focused&&buttons.confirm)location.reload();
       const wasPaused=state.current.paused;
-      if(focused&&buttons.menu&&!calibration.current)setMenuOpen(!state.current.paused);
-      if(focused&&state.current.paused&&!calibration.current)menuNavigation(buttons);
+      if(focused&&buttons.menu&&!calibration.current&&!world.completed)setMenuOpen(!state.current.paused);
+      if(focused&&state.current.paused&&!calibration.current&&!world.completed)menuNavigation(buttons);
       const canExplore=allowExploration(poll.mode,state.current.paused,focused,document.pointerLockElement===document.documentElement);
       const blocked=poll.mode==='gamepad'&&!state.current.paused&&!canExplore;
       if(blocked!==controllerBlocked){controllerBlocked=blocked;clearInput();setLockRequired(blocked);}
@@ -141,7 +145,7 @@ export default function Shrine(){
           if(mapping){session.current.setMapping(poll.pad,mapping);try{localStorage.setItem('yukyo-pad:'+mappingKey(poll.pad),JSON.stringify(mapping));}catch{};calibration.current=null;setCalStep(-1);setNotice('スティックとL1の調整を保存しました。');}
         }
       } else if(calibration.current&&!poll.pad){calibration.current=null;setCalStep(-1);setNotice('コントローラーの接続が切れました。');}
-      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setEnemyMarkers(world.enemyDirections());const found=world.collection();setCollection(old=>old.collected===found.collected&&old.total===found.total?old:found);lastHud=time;}
+      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));const found=world.collection();setCollection(old=>old.collected===found.collected&&old.total===found.total?old:found);if(found.collected===found.total)setGoalBearing(world.goalDirection());lastHud=time;}
       const s=state.current,p=prefRef.current;
       if(canExplore){
         const k=keys.current,t=touch.current,game=poll.mode==='gamepad';
@@ -156,6 +160,7 @@ export default function Shrine(){
         world.camera.position.set(pos.x,pos.y+(p.motion&&moving?Math.sin(time*(sprint?.016:.01))*(sprint?.03:.018):0),pos.z);
         world.camera.rotation.set(s.pitch,s.yaw,0);
         if(world.step(dt)){setCaughtPulse(v=>v+1);clearInput();s.yaw=0;s.pitch=0;}
+        if(world.completed){s.paused=true;clearInput();setWon(true);setLockRequired(false);document.exitPointerLock?.();}
         const fov=p.fov+(p.motion&&sprint&&moving?4:0);
         if(Math.abs(world.camera.fov-fov)>.02){world.camera.fov+=(fov-world.camera.fov)*Math.min(1,dt*8);world.camera.updateProjectionMatrix();}
       }
@@ -196,27 +201,29 @@ export default function Shrine(){
   const change=(key:keyof Preferences,value:number|boolean|string)=>applyPreferences({...prefRef.current,[key]:value});
   const range=(key:RangeKey,label:string,min:number,max:number,step:number,suffix:string)=><div className="setting" data-setting={key}><label id={'label-'+key}>{label}<output aria-live="polite">{prefs[key].toFixed(key==='fov'?0:2)}{suffix}</output></label><div className="range-controls"><button type="button" aria-label={label+'を下げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,-1))}>−</button><Slider aria-labelledby={'label-'+key} min={min} max={max} step={step} value={[prefs[key]]} onValueChange={v=>change(key,Array.isArray(v)?v[0]:v)}/><button type="button" aria-label={label+'を上げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,1))}>＋</button></div></div>;
   const blockControllerClick=(e:React.SyntheticEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&document.pointerLockElement===document.documentElement){e.preventDefault();e.stopPropagation();}};
-  return <main className="experience" data-playing={!menu} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
+  return <main className="experience" data-playing={!menu&&!won} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
     <canvas ref={canvas} tabIndex={-1} inputMode="none" aria-label="祭殿の一人称回廊" onPointerDown={e=>{if(e.pointerType==='mouse'&&session.current.mode==='gamepad'){void requestLock();return;}touchMode(e);}} onClick={e=>{if(e.detail===2&&session.current.mode!=='gamepad')void requestLock();}}/>
     <div className="vignette"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%) rotate('+e.angle+'rad)',color:e.stunned?'#b8ffff':(e.id===4?'#ff201e':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id%4]),opacity:Math.max(.4,1-e.distance/160)}}>⌃</span>)}</div>}<div className="reticle" aria-hidden="true"/>
     {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
     {caughtPulse>0&&<div key={'caught'+caughtPulse} className="caught-pulse" aria-hidden="true"/>}
-    {doorNear&&!menu&&<button className="door-action" aria-label="〇：ふすまを開閉" onClick={interact}><DoorOpen size={20}/><span>〇</span></button>}
-    <nav className="toolbar" aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
+    {doorNear&&!menu&&!won&&<button className="door-action" aria-label="〇：ふすまを開閉" onClick={interact}><DoorOpen size={20}/><span>〇</span></button>}
+    <nav className="toolbar" hidden={won} aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
       <button aria-label="DualSenseで操作を開始してカーソルを固定" aria-pressed={pad} className={pad?'active':''} onClick={activateController}><Gamepad2 size={20}/></button>
       <button aria-label={light?'フラッシュライトを消す':'フラッシュライトを点ける'} aria-pressed={light} onClick={toggleLight} className={light?'active':''}>{light?<Flashlight size={19}/>:<FlashlightOff size={19}/>}</button>
       <button aria-label="マウスカーソルを固定" aria-pressed={locked} onClick={()=>void requestLock()} className={locked?'active':''}><Focus size={18}/></button>
       <button aria-label="全画面を切替" onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else setNotice('このブラウザでは全画面切替を利用できません。');}catch{setNotice('全画面表示を開始できませんでした。');}}}><Maximize size={18}/></button>
       <button aria-label="設定と操作ガイド" onClick={()=>setMenuOpen(true)}><Settings size={19}/></button>
     </nav>
-    {ready&&!menu&&<div className="collection-status" role="status" aria-live="polite"><span aria-hidden="true">◕</span> 勾玉 {collection.collected} / {collection.total}{collection.collected===collection.total?'　全て集めました':''}</div>}
+    {ready&&!menu&&!won&&<div className="collection-status"><div role="status" aria-live="polite"><span aria-hidden="true">◕</span> 勾玉 {collection.collected} / {collection.total}</div><small>{collection.collected===collection.total?<><i aria-hidden="true" style={{transform:'rotate('+goalBearing.angle+'rad)'}}>↑</i>開始地点の封門へ　{Math.round(goalBearing.distance)}m</>:<>あと{collection.total-collection.collected}個で封門が開きます</>}</small></div>}
+    {won&&<section className="clear-screen" role="dialog" aria-modal="true" aria-labelledby="clear-title"><span aria-hidden="true">◕</span><h1 id="clear-title">封印解除</h1><p>勾玉を揃え、封門を越えました。</p><strong>CLEAR</strong><button autoFocus onClick={()=>location.reload()}>もう一度挑戦</button><small>コントローラーは × で再挑戦</small></section>}
+    {pad&&burstRemaining>0&&!menu&&!won&&<div className="burst-cooldown">R2 再使用まで {burstRemaining}秒</div>}
     {!ready&&!error&&<div className="loading"><span/>灯りをともしています</div>}
     {error&&<div className="notice" role="alert">{error}<button className="text-button" onClick={()=>location.reload()}>再読み込み</button></div>}
     {lockRequired&&!menu&&<div className="lock-gate"><button className="lock-resume" onClick={requestLock}>クリックしてカーソルを固定・再開</button><p>固定が完了するまで探索を一時停止しています</p></div>}
     {notice&&<div className="toast" role="status">{notice}</div>}
-    <div className="touch-controls" hidden={pad||menu}>
+    <div className="touch-controls" hidden={pad||menu||won}>
       <div className="touch-pad" role="group" aria-label="移動タッチパッド" {...pointerEvents('move')}><span className="thumb" style={{transform:'translate('+stickPosition.x*32+'px,'+stickPosition.z*32+'px)'}}><Move size={22}/></span></div>
-      <div className="touch-right"><div className="touch-actions"><button className="sprint" aria-label="バースト：近くの敵を9秒スタン" onClick={burst}><Sparkles size={23}/></button><button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} onClick={()=>{session.current.poll(pollPads());if(!state.current.paused&&session.current.useTouch())setTouchSprint(touch.current.toggleSprint());}}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
+      <div className="touch-right"><div className="touch-actions"><button className="sprint" aria-label={burstRemaining?`バースト再使用まで ${burstRemaining}秒`:'バースト：近くの敵を9秒スタン'} disabled={burstRemaining>0} onClick={burst}><Sparkles size={23}/>{burstRemaining>0&&<small className="burst-timer">{burstRemaining}</small>}</button><button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} onClick={()=>{session.current.poll(pollPads());if(!state.current.paused&&session.current.useTouch())setTouchSprint(touch.current.toggleSprint());}}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
     </div>
     <Dialog open={menu} onOpenChange={setMenuOpen}>
       {menu&&<DialogContent ref={dialog} className="settings-dialog" showCloseButton={false} finalFocus={false}>

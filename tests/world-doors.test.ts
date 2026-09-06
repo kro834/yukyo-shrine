@@ -9,12 +9,18 @@ import {Enemies} from '../app/shrine-gameplay.ts';
 test('actual furnished world recognises and opens ground doors from both sides',t=>{
  // Isolate doors from enemies deliberately opening them during this test.
  t.mock.method(Enemies.prototype,'update',()=>false);t.mock.method(Enemies.prototype,'hear',()=>0);
+ const addTargets=Enemies.prototype.addPatrolTargets;let actualEnemies:Enemies|undefined;
+ t.mock.method(Enemies.prototype,'addPatrolTargets',function(this:Enemies,points:Parameters<Enemies['addPatrolTargets']>[0]){actualEnemies=this;return addTargets.call(this,points);});
  const g=globalThis as unknown as Record<string,unknown>;
  g.innerWidth=1280;g.innerHeight=720;g.devicePixelRatio=1;
  const canvas={getContext:()=>({createRadialGradient:()=>({addColorStop(){}}),fillRect(){}})};
  g.document={addEventListener(){},removeEventListener(){},createElement:()=>canvas,createElementNS:()=>({addEventListener(){},removeEventListener(){},set src(_v:string){}})};
  const renderer={setPixelRatio(){},setSize(){},shadowMap:{},capabilities:{getMaxAnisotropy:()=>1},dispose(){}} as unknown as THREE.WebGLRenderer;
  const world=createWorld(canvas as unknown as HTMLCanvasElement,renderer),failures:string[]=[];
+ const actual=actualEnemies!,first=actual.nodes.keys().next().value!,reachable=new Set([first]),queue=[first];
+ for(let i=0;i<queue.length;i++)for(const n of actual.graph.get(queue[i])??[])if(!reachable.has(n)){reachable.add(n);queue.push(n);}
+ assert.equal(reachable.size,actual.nodes.size,'furniture must not isolate any ground patrol node');
+ assert.equal(actual.patrolTargets.filter(t=>t.id.startsWith('room:')).length,15);
  for(const d of createLayout().doors)for(const side of [-1,1]){
    const nx=d.alongX?0:side,nz=d.alongX?side:0;
    world.camera.position.set(d.x+nx*1,1.68,d.z+nz*1);world.camera.rotation.y=Math.atan2(nx,nz);
