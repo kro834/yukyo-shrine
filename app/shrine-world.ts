@@ -6,6 +6,8 @@ import type {Preferences} from './preferences';
 import {Doors,Enemies} from './shrine-gameplay';
 import {createDoorMeshes,createEnemyMeshes} from './shrine-actors';
 import {enemyDirection} from './enemy-direction';
+import {movePlayer} from './movement';
+import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,floorHeightAt} from './annex';
 export function createWorld(canvas:HTMLCanvasElement) {
   const renderer=new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);
@@ -14,7 +16,7 @@ export function createWorld(canvas:HTMLCanvasElement) {
   const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.08,180);camera.position.set(SPAWN.x,1.68,SPAWN.z);camera.rotation.order='YXZ';
   scene.add(new THREE.HemisphereLight('#91a2af','#30271d',.36));
   const moon=new THREE.DirectionalLight('#8c9aa6',.35);moon.position.set(-10,18,5);scene.add(moon);
-  const layout=createLayout(),doors=new Doors(layout.doors),obstacles=[...layout.obstacles,...doors.frames];
+  const layout=createLayout(),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
   const mats={
     wood:new THREE.MeshStandardMaterial({color:'#685044',roughness:.42,metalness:.07}),
     dark:new THREE.MeshStandardMaterial({color:'#1c1413',roughness:.52}),
@@ -171,8 +173,9 @@ export function createWorld(canvas:HTMLCanvasElement) {
     lantern(cx,room.h-.7,cz,true);box(cx,room.h-.2,cz,.03,.8,.03,'dark');
     if(room.style==='tatami'){
       for(let x=room.x1*4-1;x<=room.x2*4+1;x+=2)for(let z=room.z1*4;z<=room.z2*4;z+=4){box(x,.025,z,1.96,.05,3.96,'tatami');box(x-.96,.055,z,.035,.01,3.95,'dark');}
-      for(const dz of [-5,5]){box(cx,.37,cz+dz,3.2,.13,1.8,'black');block(cx,cz+dz,3.2,1.8);for(const sx of [-1.3,1.3])for(const sz of [-.6,.6])box(cx+sx,.17,cz+dz+sz,.09,.34,.09,'dark');}
-      for(const dz of [-7,7])for(const dx of [-2,0,2])box(cx+dx,.1,cz+dz,.9,.15,.85,'red');
+      const offset=Math.min(5,(room.z2-room.z1+1)*2-3),cushion=Math.min(7,(room.z2-room.z1+1)*2-1.5);
+      for(const dz of [-offset,offset]){box(cx,.37,cz+dz,3.2,.13,1.8,'black');block(cx,cz+dz,3.2,1.8);for(const sx of [-1.3,1.3])for(const sz of [-.6,.6])box(cx+sx,.17,cz+dz+sz,.09,.34,.09,'dark');}
+      for(const dz of [-cushion,cushion])for(const dx of [-2,0,2])box(cx+dx,.1,cz+dz,.9,.15,.85,'red');
     }else if(room.style==='store'){
       for(const dz of [-6,6]){
         for(const dx of [-6,-2,2,6]){box(cx+dx,1.35,cz+dz,.14,2.7,.14,'dark');}
@@ -227,9 +230,36 @@ export function createWorld(canvas:HTMLCanvasElement) {
     cylinder(x-side*.6,.85,z,.04,.3,'rust');
     box(x-side*1.2,.18,z,.6,.36,.7,'wood');block(x-side*1.2,z,.6,.7);
   }
+  // A real upper deck, two open stairwells and adjoining upstairs guest rooms.
+  for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
+    if((x===13||x===22)&&z>=2&&z<=6)continue;
+    box(x*4,UPPER_HEIGHT-.12,z*4,4,.24,4,'wood');
+    if((x+z)%4===0)lantern(x*4,7.8,z*4);
+  }
+  for(const s of STAIRS){
+    for(let i=0;i<24;i++){
+      const depth=(s.maxZ-s.minZ)/24,height=(i+1)*UPPER_HEIGHT/24,z=s.minZ+(i+.5)*depth;
+      box((s.minX+s.maxX)/2,height/2,z,s.maxX-s.minX,height,depth,'wood');
+      box((s.minX+s.maxX)/2,height+.007,z-depth/2+.025,s.maxX-s.minX,.025,.05,'gold');
+    }
+    for(const x of [s.minX,s.maxX]){
+      for(let i=0;i<=10;i++){const z=s.minZ+i*2,y=i*UPPER_HEIGHT/10;box(x,y+.55,z,.1,1.1,.1,'red');}
+      const curve=new THREE.LineCurve3(new THREE.Vector3(x,1.1,s.minZ),new THREE.Vector3(x,UPPER_HEIGHT+1.1,s.maxZ));
+      add(new THREE.TubeGeometry(curve,1,.065,6,false),'gold');
+    }
+    box((s.minX+s.maxX)/2,UPPER_HEIGHT+.55,s.minZ,s.maxX-s.minX,1.1,.14,'dark');
+  }
+  for(const wall of upperPartitions){
+    const x=(wall.minX+wall.maxX)/2,z=(wall.minZ+wall.maxZ)/2,w=wall.maxX-wall.minX,d=wall.maxZ-wall.minZ;
+    box(x,UPPER_HEIGHT+1.8,z,w,3.6,d,'paper');box(x,UPPER_HEIGHT+.4,z,w+.03,.8,d+.03,'dark');
+    box(x,UPPER_HEIGHT+3.45,z,w+.04,.18,d+.04,'red');
+  }
+  for(const barrier of upperBarriers){const x=(barrier.minX+barrier.maxX)/2,z=(barrier.minZ+barrier.maxZ)/2;box(x,UPPER_HEIGHT+.55,z,barrier.maxX-barrier.minX,1.1,barrier.maxZ-barrier.minZ,'dark');}
+  for(const x of [64,76]){for(let dx=-4;dx<=4;dx+=2)for(const z of [4,8,12])box(x+dx,UPPER_HEIGHT+.018,z,1.95,.036,3.95,'tatami');lantern(x,7.5,8,true);}
   for(const [m,geometries] of batches){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);}geometries.forEach(g=>g.dispose());}
-  const enemies=new Enemies(layout.cells,obstacles),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
-  let collision=[...obstacles,...doors.blockers()];
+  const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
+  const upperFixed=[...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
+  let elevation=0,collision=[...obstacles,...doors.blockers()];
   const mirror=new Reflector(new THREE.PlaneGeometry(4.7,6.7),{textureWidth:512,textureHeight:512,color:0x293d38});mirror.rotation.x=-Math.PI/2;mirror.position.set(0,.38,-92);scene.add(mirror);water.visible=false;
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
   for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
@@ -243,12 +273,17 @@ export function createWorld(canvas:HTMLCanvasElement) {
   lanterns.filter(p=>!fixtureColors.has(p)).forEach(p=>{const s=new THREE.Sprite(glowMat);s.position.copy(p);s.scale.set(2.5,2.5,1);scene.add(s);});
   let lastLight=0,disposed=false;const direction=new THREE.Vector3();
   new THREE.TextureLoader().load('/cedar.png',texture=>{if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());mats.wood.map=texture;mats.wood.color.set('#b7a596');mats.wood.needsUpdate=true;mats.red.map=texture;mats.red.needsUpdate=true;});
+  const floorLevel=()=>elevation>UPPER_HEIGHT-.3?UPPER_HEIGHT:0;
   return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
+    move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
+      collision=[...(floorLevel()?upperFixed:obstacles),...doors.blockers(floorLevel())];
+      const pos=movePlayer(camera.position,x,z,yaw,sprint,dt,collision);elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68};
+    },
     enemyDirections(){return enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned'}));},
-    nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,obstacles);},
-    interact(){return doors.interact(camera.position,camera.rotation.y,obstacles);},
-    burst(){return enemies.burst(camera.position,collision);},
-    step(dt:number){doors.update(dt,camera.position);collision=[...obstacles,...doors.blockers()];doorMeshes.update();if(enemies.update(dt,camera.position,collision)){camera.position.set(SPAWN.x,1.68,SPAWN.z);enemies.reset();return true;}return false;},
+    nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
+    interact(){return doors.interact(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
+    burst(){return elevation<1?enemies.burst(camera.position,[...enemyWalls,...doors.blockers()]):0;},
+    step(dt:number){doors.update(dt,camera.position,floorLevel());collision=[...(floorLevel()?upperFixed:obstacles),...doors.blockers(floorLevel())];doorMeshes.update();if(enemies.update(dt,camera.position,[...enemyWalls,...doors.blockers()],elevation)){elevation=0;camera.position.set(SPAWN.x,1.68,SPAWN.z);enemies.reset();return true;}return false;},
     configure(p:Preferences){
       renderer.setPixelRatio(Math.min(devicePixelRatio,p.quality==='low'?1:p.quality==='high'?2:1.5));renderer.setSize(innerWidth,innerHeight);
       renderer.toneMappingExposure=p.brightness;

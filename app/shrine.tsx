@@ -7,7 +7,7 @@ import {Slider} from '@/components/ui/slider';
 import {Switch} from '@/components/ui/switch';
 import {RadioGroup,RadioGroupItem} from '@/components/ui/radio-group';
 import {createWorld} from './shrine-world';
-import {movePlayer} from './movement';
+
 import {GamepadSession,PadCalibration,mappingKey,validMapping,type Pad} from './gamepad-input';
 import {ButtonEdges,TouchInput,allowMouseLook,allowExploration} from './input-actions';
 import {DEFAULTS,sanitizePreferences,type Preferences} from './preferences';
@@ -149,9 +149,9 @@ export default function Shrine(){
         const delta=viewDelta('gamepad',poll.input.look.x,poll.input.look.z,dt,prefRef.current);
         s.yaw+=delta.yaw-(!game?(Number(k.has('ArrowRight'))-Number(k.has('ArrowLeft')))*1.4*p.stickSensitivity*dt:0);
         s.pitch=clampPitch(s.pitch+delta.pitch-(!game?(Number(k.has('ArrowDown'))-Number(k.has('ArrowUp')))*1.2*p.stickSensitivity*dt*(p.invertY?-1:1):0));
-        const pos=movePlayer(world.camera.position,x,z,s.yaw,sprint,dt,world.obstacles);
+        const pos=world.move(x,z,s.yaw,sprint,dt);
         const moving=Math.hypot(pos.x-world.camera.position.x,pos.z-world.camera.position.z)>.0001;
-        world.camera.position.set(pos.x,1.68+(p.motion&&moving?Math.sin(time*(sprint?.016:.01))*(sprint?.03:.018):0),pos.z);
+        world.camera.position.set(pos.x,pos.y+(p.motion&&moving?Math.sin(time*(sprint?.016:.01))*(sprint?.03:.018):0),pos.z);
         world.camera.rotation.set(s.pitch,s.yaw,0);
         if(world.step(dt)){setCaughtPulse(v=>v+1);clearInput();s.yaw=0;s.pitch=0;}
         const fov=p.fov+(p.motion&&sprint&&moving?4:0);
@@ -199,7 +199,7 @@ export default function Shrine(){
     <div className="vignette"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%) rotate('+e.angle+'rad)',color:e.stunned?'#b8ffff':['#ff386a','#5fffe0','#bb78ff','#ffbc40','#ff201e'][e.id],opacity:Math.max(.4,1-e.distance/160)}}>⌃</span>)}</div>}<div className="reticle" aria-hidden="true"/>
     {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
     {caughtPulse>0&&<div key={'caught'+caughtPulse} className="caught-pulse" aria-hidden="true"/>}
-    {doorNear&&!menu&&<button className="door-action" aria-label="×：ふすまを開閉" onClick={interact}><DoorOpen size={20}/><span>×</span></button>}
+    {doorNear&&!menu&&<button className="door-action" aria-label="〇：ふすまを開閉" onClick={interact}><DoorOpen size={20}/><span>〇</span></button>}
     <nav className="toolbar" aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
       <button aria-label="DualSenseで操作を開始してカーソルを固定" aria-pressed={pad} className={pad?'active':''} onClick={activateController}><Gamepad2 size={20}/></button>
       <button aria-label={light?'フラッシュライトを消す':'フラッシュライトを点ける'} aria-pressed={light} onClick={toggleLight} className={light?'active':''}>{light?<Flashlight size={19}/>:<FlashlightOff size={19}/>}</button>
@@ -232,7 +232,7 @@ export default function Shrine(){
           </TabsContent>
           <TabsContent value="controls" className="settings-panel controls-panel">
             <div className="connection"><Gamepad2 size={17}/><span>{connected?'コントローラー接続中':'接続後、コントローラーのボタンを押してください'}</span></div>
-            <dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>× / R2</dt><dd>ふすま開閉 / 9秒スタン</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま開閉 / バースト</dd></div></dl>
+            <dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>〇 / R2</dt><dd>ふすま開閉 / 9秒スタン</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま開閉 / バースト</dd></div></dl>
             <p className="setting-note">設定内：方向キーで選択・調整、×で決定、○で戻る。<br/>タッチは左右のパッドで移動・視点、足跡ボタンでダッシュ。<br/>カーソルを固定するには、画面右上の固定ボタンをクリック。Escで解除。</p>
             {calStep>=0?<div className="calibration"><span>{['Lスティックを右へ','Lスティックを下へ','Rスティックを右へ','Rスティックを下へ','L1ボタンを押す'][Math.min(calStep,4)]}</span><small>操作ごとにスティック・ボタンを離してください。</small><button className="text-button" onClick={()=>{calibration.current=null;setCalStep(-1);}}>中止</button></div>:<button className="text-button" disabled={!connected} onClick={()=>{const p=lastPad.current;if(p){calibration.current=new PadCalibration(mappingKey(p),p);setCalStep(0);}}}>スティックが反応しない場合：手動調整</button>}
           </TabsContent>
@@ -242,6 +242,8 @@ export default function Shrine(){
     </Dialog>
   </main>;
 }
+
+
 
 
 

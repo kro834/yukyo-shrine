@@ -1,7 +1,7 @@
 export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'};
 export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean;kind?:Cell['kind']};
 export type Room = {id:string;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
-export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string};
+export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string;rooms?:string[];floor?:number};
 export const CELL=4;
 export const SPAWN={x:0,z:14};
 export function createLayout() {
@@ -45,6 +45,11 @@ export function createLayout() {
   rect(-16,-27,-16,-22);rect(-16,-22,-11,-22);
   rect(16,-27,16,-22);rect(11,-22,16,-22);
   const rooms:Room[]=[
+    {id:'annex-a',x1:15,x2:17,z1:1,z2:3,h:3.6,style:'tatami'},
+    {id:'annex-b',x1:18,x2:20,z1:1,z2:3,h:3.6,style:'tatami'},
+    {id:'annex-c',x1:15,x2:17,z1:4,z2:6,h:3.6,style:'tatami'},
+    {id:'annex-d',x1:18,x2:20,z1:4,z2:6,h:3.6,style:'tatami'},
+    {id:'old-tatami',x1:7,x2:9,z1:1,z2:3,h:3.6,style:'tatami'},
     {id:'west-guest',x1:-11,x2:-7,z1:-34,z2:-30,h:3.8,style:'tatami'},
     {id:'east-archive',x1:7,x2:11,z1:-34,z2:-30,h:3.8,style:'store'},
     {id:'west-ritual',x1:-11,x2:-7,z1:-39,z2:-35,h:5.6,style:'ritual'},
@@ -53,6 +58,7 @@ export function createLayout() {
     {id:'east-reliquary',x1:17,x2:21,z1:-23,z2:-19,h:4.4,style:'ritual'},
   ];
   rect(-22,-21,-11,-21);rect(11,-21,22,-21);
+  rect(12,0,23,8,9,'hall');rect(6,5,12,5);rect(9,-3,14,-3);rect(14,-3,14,0);
   for(const x of [-12,-6,6,12])rect(x,-39,x,-29);
   for(const r of rooms)rect(r.x1,r.z1,r.x2,r.z2,r.h,r.style==='stone'?'stone':'hall');
   // Broad cloister courts with solid central sanctuaries: four routes around each.
@@ -113,14 +119,28 @@ export function createLayout() {
     walls.push({x,z,alongX,h:basin?1.1:c.h,insideX:-dx,insideZ:-dz,kind:c.kind});
     obstacles.push({minX:x-(alongX?2:.18),maxX:x+(alongX?2:.18),minZ:z-(alongX?.18:2),maxZ:z+(alongX?.18:2)});
   }
+  // Select real entrances on every connected side before building any partition.
+  const openingMap=new Map<string,DoorSpec>();
+  for(const r of rooms)for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+    const candidates:{x:number;z:number;distance:number}[]=[];
+    for(let x=r.x1;x<=r.x2;x++)for(let z=r.z1;z<=r.z2;z++){
+      if(dx&&x!==(dx<0?r.x1:r.x2)||dz&&z!==(dz<0?r.z1:r.z2))continue;
+      if(!grid.has(key(x+dx,z+dz)))continue;
+      candidates.push({x:x*4+dx*2,z:z*4+dz*2,distance:dx?Math.abs(z-(r.z1+r.z2)/2):Math.abs(x-(r.x1+r.x2)/2)});
+    }
+    candidates.sort((a,b)=>a.distance-b.distance);const p=candidates[0];if(!p)continue;
+    const k=key(p.x,p.z),old=openingMap.get(k);
+    if(old){if(!old.rooms!.includes(r.id))old.rooms!.push(r.id);}
+    else openingMap.set(k,{id:'door-'+k,x:p.x,z:p.z,alongX:!!dz,room:r.id,rooms:[r.id]});
+  }
+  doors.push(...openingMap.values());
   for(const r of rooms){
-    const middleZ=(r.z1+r.z2)/2;
     for(let x=r.x1;x<=r.x2;x++)for(let z=r.z1;z<=r.z2;z++)for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
       const nx=x+dx,nz=z+dz;
       if(nx>=r.x1&&nx<=r.x2&&nz>=r.z1&&nz<=r.z2)continue;
       if(!grid.has(key(nx,nz)))continue; // Existing outer envelope already closes this edge.
       const wx=x*CELL+dx*2,wz=z*CELL+dz*2;
-      if(dx!==0&&z===middleZ){doors.push({id:r.id+(dx<0?'-west':'-east'),x:wx,z:wz,alongX:false,room:r.id});continue;}
+      if(openingMap.has(key(wx,wz)))continue;
       if(walls.some(w=>w.x===wx&&w.z===wz))continue;
       walls.push({x:wx,z:wz,alongX:!!dz,h:r.h,insideX:-dx,insideZ:-dz,twoSided:true});
       obstacles.push({minX:wx-(dz?2:.18),maxX:wx+(dz?2:.18),minZ:wz-(dz?.18:2),maxZ:wz+(dz?.18:2)});

@@ -4,11 +4,11 @@ import {createLayout} from '../app/shrine-layout.ts';
 import {Enemies,ENEMY_PROFILES,STUN_SECONDS} from '../app/shrine-gameplay.ts';
 import {SPRINT_SPEED} from '../app/movement.ts';
 import {ButtonEdges} from '../app/input-actions.ts';
-test('Cross opens doors once per press while Circle is reserved for menu back',()=>{
+test('Circle opens doors once per press while Cross remains menu confirm',()=>{
  const pad=(i:number)=>({mapping:'standard',axes:[0,0,0,0],buttons:Array.from({length:18},(_,n)=>({pressed:i===n}))});
  const edge=new ButtonEdges();
- assert.equal(edge.update(pad(1)).interact,false);
- edge.update(pad(-1));assert.equal(edge.update(pad(0)).interact,true);
+ assert.equal(edge.update(pad(0)).interact,false);
+ edge.update(pad(-1));assert.equal(edge.update(pad(1)).interact,true);
  assert.equal(edge.update(pad(0)).interact,false);
 });
 test('three large new stage wings contain distinct materials and join the existing complex',()=>{
@@ -31,3 +31,4 @@ test('exactly one danger enemy detects farther, moves faster, but can be outrun 
  enemies.burst({x:boss.position.x,z:boss.position.z},[]);
  assert.equal(boss.brain.stunRemaining,STUN_SECONDS);
 });
+

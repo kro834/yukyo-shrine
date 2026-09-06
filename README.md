@@ -2,7 +2,7 @@
 
 Original first-person shrine exploration, with a closed interconnected floor plan, processional hall, sanctum, tatami room, storehouse, bell room, lantern chamber and still-water sanctuary. The expanded plan has 957 floor cells, interlocking circulation loops, six additional furnished rooms and twelve sliding fusuma doors. Every added room has two doors. Open-door circulation is tested for connectivity and absence of dead ends.
 
-Controls: DualSense L/R sticks move/look, L1 hold to sprint, R1 toggles flashlight, R2 emits a burst, cross opens/closes a nearby fusuma, and Options opens settings. D-pad navigates settings, cross activates and circle closes the menu. Touch supports simultaneous movement, view drag, sprint, burst and nearby door interaction. Keyboard: WASD, Shift, F; E interacts with doors, Q emits a burst; arrow keys look; P/O opens settings. Double-click canvas or use cursor icon for mouse pointer lock. Esc releases pointer lock.
+Controls: DualSense L/R sticks move/look, L1 hold to sprint, R1 toggles flashlight, R2 emits a burst, circle opens/closes a nearby fusuma, and Options opens settings. D-pad navigates settings, cross activates and circle closes the menu. Touch supports simultaneous movement, view drag, sprint, burst and nearby door interaction. Keyboard: WASD, Shift, F; E interacts with doors, Q emits a burst; arrow keys look; P/O opens settings. Double-click canvas or use cursor icon for mouse pointer lock. Esc releases pointer lock.
 
 Four silent patrolling enemies use sight only. Walls and closed doors block sight, and a 0.65 second sight break ends pursuit with a 2 second reacquisition grace period. Sprinting is faster than chasing. A burst stuns enemies within 10 meters and unblocked sight for exactly 9 simulation seconds. Holding R2 does not repeatedly trigger a burst. Contact returns the player to the starting hall with a silent fade. No audio is created or played.
 
@@ -26,3 +26,5 @@ public/cedar.png is a single original generated material texture.
 
 
 Expansion: enclosed derelict factory, abandoned bathhouse and underground cistern wings join the shrine at multiple entrances. One red danger enemy has 32 m sight and 8 m/s chase speed (player sprint 9.2 m/s); it still loses line of sight and is stunned for nine seconds by R2.
+
+Guest annex: four adjoining ground-floor rooms and two upstairs rooms. Two staircases connect a walkable 4.8 m upper deck. Door selection and collision use the current floor; shared partitions contain one actual opening, and every door is tested from both sides. Ground enemies cannot see or attack through the upper floor.

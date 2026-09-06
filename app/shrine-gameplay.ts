@@ -18,20 +18,23 @@ export class Doors {
   frames:Obstacle[];
   constructor(specs:DoorSpec[]){
     this.states=specs.map(spec=>({spec,open:false,progress:0}));
-    this.frames=specs.flatMap(d=>[-1,1].map(s=>({minX:d.x+(d.alongX?s*1.76:0)-(d.alongX?.24:.19),maxX:d.x+(d.alongX?s*1.76:0)+(d.alongX?.24:.19),minZ:d.z+(d.alongX?0:s*1.76)-(d.alongX?.19:.24),maxZ:d.z+(d.alongX?0:s*1.76)+(d.alongX?.19:.24)})));
+    this.frames=this.framesFor(0);
   }
-  blockers(){return this.states.filter(d=>d.progress<.92).map(d=>doorBox(d.spec));}
-  nearest(player:Position,yaw:number,walls:Obstacle[]){
-    return this.states.map(d=>({d,dx:d.spec.x-player.x,dz:d.spec.z-player.z,dist:Math.hypot(d.spec.x-player.x,d.spec.z-player.z)}))
-      .filter(v=>v.dist<3.4&&(v.dist<.9||(-Math.sin(yaw)*v.dx-Math.cos(yaw)*v.dz)/v.dist>.25)&&!segmentBlocked(player,v.d.spec,walls))
+  framesFor(floor=0){return this.states.filter(d=>Math.abs((d.spec.floor??0)-floor)<.5).flatMap(({spec:d})=>[-1,1].map(s=>({minX:d.x+(d.alongX?s*1.76:0)-(d.alongX?.24:.19),maxX:d.x+(d.alongX?s*1.76:0)+(d.alongX?.24:.19),minZ:d.z+(d.alongX?0:s*1.76)-(d.alongX?.19:.24),maxZ:d.z+(d.alongX?0:s*1.76)+(d.alongX?.19:.24)})));}
+  blockers(floor=0){return this.states.filter(d=>d.progress<.92&&Math.abs((d.spec.floor??0)-floor)<.5).map(d=>doorBox(d.spec));}
+  nearest(player:Position,yaw:number,walls:Obstacle[],floor=0){
+    return this.states.filter(d=>Math.abs((d.spec.floor??0)-floor)<.5).map(d=>{
+      const p={x:d.spec.alongX?Math.max(d.spec.x-1.25,Math.min(d.spec.x+1.25,player.x)):d.spec.x,z:d.spec.alongX?d.spec.z:Math.max(d.spec.z-1.25,Math.min(d.spec.z+1.25,player.z))};
+      return {d,p,dx:p.x-player.x,dz:p.z-player.z,dist:Math.hypot(p.x-player.x,p.z-player.z)};
+    }).filter(v=>v.dist<3.6&&(v.dist<1.1||(-Math.sin(yaw)*v.dx-Math.cos(yaw)*v.dz)/v.dist>.15)&&!segmentBlocked(player,v.p,walls))
       .sort((a,b)=>a.dist-b.dist)[0]?.d??null;
   }
-  interact(player:Position,yaw:number,walls:Obstacle[]){const d=this.nearest(player,yaw,walls);if(!d)return false;d.open=!d.open;return true;}
-  update(dt:number,player:Position){
+  interact(player:Position,yaw:number,walls:Obstacle[],floor=0){const d=this.nearest(player,yaw,walls,floor);if(!d)return false;d.open=!d.open;return true;}
+  update(dt:number,player:Position,floor=0){
     for(const d of this.states){
       const normal=d.spec.alongX?Math.abs(player.z-d.spec.z):Math.abs(player.x-d.spec.x);
       const tangent=d.spec.alongX?Math.abs(player.x-d.spec.x):Math.abs(player.z-d.spec.z);
-      if(!d.open&&d.progress>.1&&normal<.72&&tangent<1.9)d.open=true;
+      if(!d.open&&d.progress>.1&&normal<.72&&tangent<1.9&&Math.abs((d.spec.floor??0)-floor)<.5)d.open=true;
       const target=d.open?1:0;d.progress=Math.max(0,Math.min(1,d.progress+Math.sign(target-d.progress)*Math.min(Math.abs(target-d.progress),dt*2)));
     }
   }
@@ -73,13 +76,13 @@ export class Enemies {
   private closest(p:Position){let result:{key:string;point:Position;distance:number}|null=null;for(const [key,point] of this.nodes){const distance=Math.hypot(point.x-p.x,point.z-p.z);if((!result||distance<result.distance)&&!segmentBlocked(p,point,this.walls))result={key,point,distance};}return result;}
   burst(player:Position,blockers:Obstacle[]){let count=0;for(const e of this.actors)if(Math.hypot(e.position.x-player.x,e.position.z-player.z)<=10&&!segmentBlocked(player,e.position,blockers)){e.brain.stun();count++;}return count;}
   reset(){for(const e of this.actors){e.position={...e.home};e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;}}
-  update(dt:number,player:Position,blockers:Obstacle[]){
+  update(dt:number,player:Position,blockers:Obstacle[],playerFloor=0){
     let caught=false;
     for(const e of this.actors){
       const dx=player.x-e.position.x,dz=player.z-e.position.z,distance=Math.hypot(dx,dz);
       const facing=(dx*Math.sin(e.facing)+dz*Math.cos(e.facing))/Math.max(.01,distance);
       const profile=ENEMY_PROFILES[e.kind];
-      const sees=distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!segmentBlocked(e.position,player,blockers);
+      const sees=playerFloor<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!segmentBlocked(e.position,player,blockers);
       const previousMode=e.brain.mode;e.brain.update(dt,sees,player);
       if(previousMode!==e.brain.mode&&e.brain.mode==='patrol'){e.waypoint=null;e.planIn=0;}
       if(e.brain.mode==='stunned')continue;

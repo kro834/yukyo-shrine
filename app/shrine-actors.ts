@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import type {Doors,Enemies} from './shrine-gameplay';
 export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
   const wood=new THREE.MeshStandardMaterial({color:'#211815',roughness:.8});
-  const paper=new THREE.MeshStandardMaterial({color:'#979284',roughness:.95});
+  const paper=new THREE.MeshStandardMaterial({color:'#c8b58e',roughness:.85});
   const metal=new THREE.MeshStandardMaterial({color:'#352e23',metalness:.65,roughness:.45});
   const panels:THREE.Group[]=[];
   for(const door of doors.states){
-    const group=new THREE.Group();group.position.set(door.spec.x,0,door.spec.z);if(!door.spec.alongX)group.rotation.y=Math.PI/2;scene.add(group);
+    const group=new THREE.Group();group.position.set(door.spec.x,door.spec.floor??0,door.spec.z);if(!door.spec.alongX)group.rotation.y=Math.PI/2;scene.add(group);
     const box=(parent:THREE.Group,x:number,y:number,z:number,w:number,h:number,d:number,m:THREE.Material)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=true;parent.add(mesh);};
     for(const x of [-1.76,1.76])box(group,x,1.7,0,.48,3.4,.36,wood);
     box(group,0,3.17,0,4,.48,.34,wood);box(group,0,.035,0,4,.07,.35,wood);

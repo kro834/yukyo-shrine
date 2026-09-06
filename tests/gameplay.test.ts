@@ -6,10 +6,10 @@ import {movePlayer} from '../app/movement.ts';
 import {ButtonEdges} from '../app/input-actions.ts';
 import type {Pad} from '../app/gamepad-input.ts';
 const layout=createLayout();
-test('expanded traversable circulation has no dead ends and every room has two doors',()=>{
+test('expanded traversable circulation has no dead ends and every room has multiple real doors',()=>{
  const doors=new Doors(layout.doors),nav=new Enemies(layout.cells,[...layout.obstacles,...doors.frames]);
- assert.ok(layout.cells.length>900);assert.equal(layout.rooms.length,6);assert.equal(doors.states.length,12);
- for(const room of layout.rooms)assert.equal(layout.doors.filter(d=>d.room===room.id).length,2,room.id);
+ assert.ok(layout.cells.length>900);assert.ok(layout.rooms.length>=11);assert.ok(doors.states.length>=20);
+ for(const room of layout.rooms)assert.ok(layout.doors.filter(d=>d.rooms?.includes(room.id)||d.room===room.id).length>=2,room.id);
  for(const [key,neighbors] of nav.graph)assert.ok(neighbors.length>=2,'dead end '+key);
  const first=[...nav.graph.keys()][0],seen=new Set([first]),queue=[first];
  for(let i=0;i<queue.length;i++)for(const n of nav.graph.get(queue[i])??[])if(!seen.has(n)){seen.add(n);queue.push(n);}
@@ -66,4 +66,5 @@ test('R2 and circle are edge-triggered and independent of R1',()=>{
  for(let i=0;i<300;i++){const held=edges.update(pad([7,1]));assert.equal(held.burst,false);assert.equal(held.back,false);}
  edges.update(pad([]));assert.ok(edges.update(pad([7])).burst);
 });
+
 
