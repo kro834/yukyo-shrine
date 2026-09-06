@@ -26,6 +26,7 @@ export default function Shrine(){
   const [prefs,setPrefs]=useState<Preferences>(DEFAULTS),[pad,setPad]=useState(false),[connected,setConnected]=useState(false);
   const [ready,setReady]=useState(false),[error,setError]=useState(''),[menu,setMenu]=useState(false),[light,setLight]=useState(true),[locked,setLocked]=useState(false);
   const [calStep,setCalStep]=useState(-1),[notice,setNotice]=useState('');
+  const [collection,setCollection]=useState({collected:0,total:15});
   const [enemyMarkers,setEnemyMarkers]=useState<{id:number;angle:number;distance:number;stunned:boolean}[]>([]);
   const [lockRequired,setLockRequired]=useState(false);
   const lockPending=useRef(false);
@@ -37,8 +38,9 @@ export default function Shrine(){
     try{const result=document.documentElement.requestPointerLock();if(result)void result.catch(failed);}catch{failed();}
   },[]);
   const [stickPosition,setStickPosition]=useState({x:0,z:0});
+  const [touchSprint,setTouchSprint]=useState(false);
   const [doorNear,setDoorNear]=useState(false),[burstPulse,setBurstPulse]=useState(0),[caughtPulse,setCaughtPulse]=useState(0);
-  const clearInput=useCallback(()=>{keys.current.clear();touch.current.clear();setStickPosition({x:0,z:0});},[]);
+  const clearInput=useCallback(()=>{keys.current.clear();touch.current.clear();setTouchSprint(false);setStickPosition({x:0,z:0});},[]);
   const applyPreferences=useCallback((next:Preferences)=>{const v=sanitizePreferences(next);prefRef.current=v;setPrefs(v);try{localStorage.setItem('yukyo-preferences-v1',JSON.stringify(v));}catch{};worldRef.current?.configure(v);return v;},[]);
   const setMenuOpen=useCallback((open:boolean)=>{
     state.current.paused=open;setMenu(open);clearInput();
@@ -139,7 +141,7 @@ export default function Shrine(){
           if(mapping){session.current.setMapping(poll.pad,mapping);try{localStorage.setItem('yukyo-pad:'+mappingKey(poll.pad),JSON.stringify(mapping));}catch{};calibration.current=null;setCalStep(-1);setNotice('スティックとL1の調整を保存しました。');}
         }
       } else if(calibration.current&&!poll.pad){calibration.current=null;setCalStep(-1);setNotice('コントローラーの接続が切れました。');}
-      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setEnemyMarkers(world.enemyDirections());lastHud=time;}
+      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setEnemyMarkers(world.enemyDirections());const found=world.collection();setCollection(old=>old.collected===found.collected&&old.total===found.total?old:found);lastHud=time;}
       const s=state.current,p=prefRef.current;
       if(canExplore){
         const k=keys.current,t=touch.current,game=poll.mode==='gamepad';
@@ -207,13 +209,14 @@ export default function Shrine(){
       <button aria-label="全画面を切替" onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else setNotice('このブラウザでは全画面切替を利用できません。');}catch{setNotice('全画面表示を開始できませんでした。');}}}><Maximize size={18}/></button>
       <button aria-label="設定と操作ガイド" onClick={()=>setMenuOpen(true)}><Settings size={19}/></button>
     </nav>
+    {ready&&!menu&&<div className="collection-status" role="status" aria-live="polite"><span aria-hidden="true">◕</span> 勾玉 {collection.collected} / {collection.total}{collection.collected===collection.total?'　全て集めました':''}</div>}
     {!ready&&!error&&<div className="loading"><span/>灯りをともしています</div>}
     {error&&<div className="notice" role="alert">{error}<button className="text-button" onClick={()=>location.reload()}>再読み込み</button></div>}
     {lockRequired&&!menu&&<div className="lock-gate"><button className="lock-resume" onClick={requestLock}>クリックしてカーソルを固定・再開</button><p>固定が完了するまで探索を一時停止しています</p></div>}
     {notice&&<div className="toast" role="status">{notice}</div>}
     <div className="touch-controls" hidden={pad||menu}>
       <div className="touch-pad" role="group" aria-label="移動タッチパッド" {...pointerEvents('move')}><span className="thumb" style={{transform:'translate('+stickPosition.x*32+'px,'+stickPosition.z*32+'px)'}}><Move size={22}/></span></div>
-      <div className="touch-right"><div className="touch-actions"><button className="sprint" aria-label="バースト：近くの敵を9秒スタン" onClick={burst}><Sparkles size={23}/></button><button className="sprint" aria-label="押している間ダッシュ" {...pointerEvents('sprint')}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
+      <div className="touch-right"><div className="touch-actions"><button className="sprint" aria-label="バースト：近くの敵を9秒スタン" onClick={burst}><Sparkles size={23}/></button><button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} onClick={()=>{session.current.poll(pollPads());if(!state.current.paused&&session.current.useTouch())setTouchSprint(touch.current.toggleSprint());}}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
     </div>
     <Dialog open={menu} onOpenChange={setMenuOpen}>
       {menu&&<DialogContent ref={dialog} className="settings-dialog" showCloseButton={false} finalFocus={false}>

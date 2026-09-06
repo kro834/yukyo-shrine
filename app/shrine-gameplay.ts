@@ -1,9 +1,10 @@
 import {movePlayer,SPRINT_SPEED,RADIUS,type Position,type Obstacle} from './movement.ts';
 import type {Cell,DoorSpec} from './shrine-layout.ts';
+import {nearbyObstacles} from './spatial.ts';
 import {STAIRS,UPPER_HEIGHT,floorHeightAt,upperPartitions,upperBarriers,stairRails,upperDoors} from './annex.ts';
 export function segmentBlocked(a:Position,b:Position,obstacles:Obstacle[]){
   const dx=b.x-a.x,dz=b.z-a.z;
-  return obstacles.some(o=>{
+  return nearbyObstacles(obstacles,Math.min(a.x,b.x),Math.min(a.z,b.z),Math.max(a.x,b.x),Math.max(a.z,b.z)).some(o=>{
     let lo=0,hi=1;
     for(const [origin,direction,min,max] of [[a.x,dx,o.minX,o.maxX],[a.z,dz,o.minZ,o.maxZ]]){
       if(Math.abs(direction)<1e-9){if(origin<min||origin>max)return false;continue;}
@@ -17,12 +18,13 @@ const doorBox=(d:DoorSpec,half=1.48):Obstacle=>({minX:d.x-(d.alongX?half:.13),ma
 export class Doors {
   states:({spec:DoorSpec;open:boolean;progress:number})[];
   frames:Obstacle[];
+  private blockerCache=new Map<number,{key:string;items:Obstacle[]}>();
   constructor(specs:DoorSpec[]){
     this.states=specs.map(spec=>({spec,open:false,progress:0}));
     this.frames=this.framesFor(0);
   }
   framesFor(floor=0){return this.states.filter(d=>Math.abs((d.spec.floor??0)-floor)<.5).flatMap(({spec:d})=>[-1,1].map(s=>({minX:d.x+(d.alongX?s*1.76:0)-(d.alongX?.24:.19),maxX:d.x+(d.alongX?s*1.76:0)+(d.alongX?.24:.19),minZ:d.z+(d.alongX?0:s*1.76)-(d.alongX?.19:.24),maxZ:d.z+(d.alongX?0:s*1.76)+(d.alongX?.19:.24)})));}
-  blockers(floor=0){return this.states.filter(d=>d.progress<.92&&Math.abs((d.spec.floor??0)-floor)<.5).map(d=>doorBox(d.spec));}
+  blockers(floor=0){const closed=this.states.filter(d=>d.progress<.92&&Math.abs((d.spec.floor??0)-floor)<.5),key=closed.map(d=>d.spec.id).join('|');const old=this.blockerCache.get(floor);if(old?.key===key)return old.items;const items=closed.map(d=>doorBox(d.spec));this.blockerCache.set(floor,{key,items});return items;}
   nearest(player:Position,yaw:number,walls:Obstacle[],floor=0){
     return this.states.filter(d=>Math.abs((d.spec.floor??0)-floor)<.5).map(d=>{
       const p={x:d.spec.alongX?Math.max(d.spec.x-1.25,Math.min(d.spec.x+1.25,player.x)):d.spec.x,z:d.spec.alongX?d.spec.z:Math.max(d.spec.z-1.25,Math.min(d.spec.z+1.25,player.z))};
@@ -60,8 +62,9 @@ export class EnemyBrain {
     }
   }
 }
-export const ENEMY_PROFILES={normal:{sight:18,nearSight:3.5,cone:.1,chase:5.2,patrol:1.8,hearing:70},danger:{sight:40,nearSight:6,cone:-.25,chase:8,patrol:2.6,hearing:120}};
-export type Enemy={id:number;kind:'normal'|'danger';position:Position;home:Position;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number};
+export const ENEMY_PROFILES={normal:{sight:18,nearSight:3.5,cone:.1,chase:5.2,patrol:1.8,hearing:70},danger:{sight:40,nearSight:6,cone:-.25,chase:8,patrol:2.6,hearing:120},listener:{sight:12,nearSight:2,cone:.2,chase:4.8,patrol:1.5,hearing:110},watcher:{sight:32,nearSight:3,cone:.65,chase:5,patrol:1.2,hearing:55},stalker:{sight:16,nearSight:4,cone:-.1,chase:6.4,patrol:2.4,hearing:45}};
+export type EnemyKind=keyof typeof ENEMY_PROFILES;
+export type Enemy={id:number;kind:EnemyKind;position:Position;home:Position;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number};
 export function openPursuedDoor(doors:Doors,e:Enemy,walls:Obstacle[],dt:number){
   const d=(e.brain.mode==='chase'||e.investigate)&&e.brain.mode!=='stunned'?doors.nearest(e.position,e.facing+Math.PI,walls,e.floor>4.5?UPPER_HEIGHT:0):null;
   const close=d&&!d.open&&Math.hypot(d.spec.x-e.position.x,d.spec.z-e.position.z)<1.65;
@@ -86,9 +89,12 @@ export class Enemies {
       this.upperNodes.set(x+','+z,p);
     }
     for(const [key,p] of this.upperNodes){const [x,z]=key.split(',').map(Number);this.upperGraph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.upperNodes.has(k)&&!segmentBlocked(p,this.upperNodes.get(k)!,this.upperWalls)));}
-    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:0,z:-128},{x:128,z:-116},{x:64,z:20},{x:-64,z:-84},{x:144,z:-100},{x:-144,z:-100},{x:0,z:-212},{x:72,z:-236},{x:-72,z:-236}].map((p,id)=>{const home=this.closest(p)!.point;return {id,kind:id===4?'danger':'normal',home:{...home},position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map<string,number>(),doorWait:0,floor:0,destinationFloor:0,lastSeenFloor:0};});
+    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:0,z:-128},{x:128,z:-116},{x:64,z:20},{x:-64,z:-84},{x:144,z:-100},{x:-144,z:-100},{x:0,z:-212},{x:72,z:-236},{x:-72,z:-236}].map((p,id)=>{const home=this.closest(p)!.point;return {id,kind:id===4?'danger':(['normal','listener','watcher','stalker'] as EnemyKind[])[id%4],home:{...home},position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map<string,number>(),doorWait:0,floor:0,destinationFloor:0,lastSeenFloor:0};});
   }
-  private closest(p:Position,upper=false){let result:{key:string;point:Position;distance:number}|null=null;for(const [key,point] of upper?this.upperNodes:this.nodes){const distance=Math.hypot(point.x-p.x,point.z-p.z);if((!result||distance<result.distance)&&!segmentBlocked(p,point,upper?this.upperWalls:this.walls))result={key,point,distance};}return result;}
+  private closest(p:Position,upper=false){
+    const candidates=Array.from(upper?this.upperNodes:this.nodes,([key,point])=>({key,point,distance:Math.hypot(point.x-p.x,point.z-p.z)})).sort((a,b)=>a.distance-b.distance);
+    return candidates.find(c=>!segmentBlocked(p,c.point,upper?this.upperWalls:this.walls))??null;
+  }
   private path(start:Position,target:Position,upper=false):Position[]{
     const a=this.closest(start,upper),b=this.closest(target,upper);if(!a||!b)return [];
     const queue=[a.key],parent=new Map<string,string|null>([[a.key,null]]);
@@ -101,7 +107,9 @@ export class Enemies {
   hear(position:Position,floor=0){
     let count=0;for(const e of this.actors){
       if(e.brain.mode==='stunned'||Math.hypot(e.position.x-position.x,e.position.z-position.z)>ENEMY_PROFILES[e.kind].hearing)continue;
-      e.investigate={...position};e.destinationFloor=floor>2.4?UPPER_HEIGHT:0;e.searchTime=45;e.planIn=0;e.route=[];count++;
+      const nextFloor=floor>2.4?UPPER_HEIGHT:0;
+      if(!e.investigate||e.destinationFloor!==nextFloor){e.planIn=Math.min(e.planIn,.03*e.id);e.route=[];}
+      e.investigate={...position};e.destinationFloor=nextFloor;e.searchTime=45;count++;
     }return count;
   }
   burst(player:Position,blockers:Obstacle[],floor=0){let count=0;for(const e of this.actors)if(Math.abs(e.floor-floor)<1&&Math.hypot(e.position.x-player.x,e.position.z-player.z)<=10&&!segmentBlocked(player,e.position,blockers)){e.brain.stun();e.route=[];e.investigate=null;e.searchTime=0;count++;}return count;}
@@ -133,7 +141,7 @@ export class Enemies {
       if(goal){
         e.planIn-=dt;
         if(!stairTravel&&segmentBlocked(e.position,goal,blockers)){
-          if(e.planIn<=0||!e.route.length){e.route=this.path(e.position,goal,upstairs);e.planIn=.9;}
+          if(e.planIn<=0){e.route=this.path(e.position,goal,upstairs);e.planIn=.9+e.id*.017;}
           while(e.route[0]&&Math.hypot(e.route[0].x-e.position.x,e.route[0].z-e.position.z)<.22)e.route.shift();
           goal=e.route[0]??null;
         }else e.route=[];

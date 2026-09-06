@@ -1,3 +1,4 @@
+import {nearbyObstacles} from './spatial.ts';
 export type Obstacle = { minX: number; maxX: number; minZ: number; maxZ: number };
 export type Position = { x: number; z: number };
 export const RADIUS = 0.42;
@@ -20,7 +21,8 @@ export function movePlayer(position: Position, x: number, z: number, yaw: number
   const dz = (-Math.sin(yaw) * x + Math.cos(yaw) * z) / magnitude * distance;
   const steps = Math.max(1, Math.ceil(Math.hypot(dx, dz) / (RADIUS * 0.45)));
   const next = { ...position };
-  const blocked = (px: number, pz: number) => obstacles.some(o => px > o.minX - RADIUS && px < o.maxX + RADIUS && pz > o.minZ - RADIUS && pz < o.maxZ + RADIUS);
+  const nearby=nearbyObstacles(obstacles,Math.min(position.x,position.x+dx)-RADIUS,Math.min(position.z,position.z+dz)-RADIUS,Math.max(position.x,position.x+dx)+RADIUS,Math.max(position.z,position.z+dz)+RADIUS);
+  const blocked = (px: number, pz: number) => nearby.some(o => px > o.minX - RADIUS && px < o.maxX + RADIUS && pz > o.minZ - RADIUS && pz < o.maxZ + RADIUS);
   for (let i = 0; i < steps; i++) {
     const px = Math.max(BOUNDS.minX + RADIUS, Math.min(BOUNDS.maxX - RADIUS, next.x + dx / steps));
     if (!blocked(px, next.z)) next.x = px;

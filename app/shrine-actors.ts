@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import type {Doors,Enemies} from './shrine-gameplay';
 export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
   const wood=new THREE.MeshStandardMaterial({color:'#211815',roughness:.8});
@@ -21,6 +22,20 @@ export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
   return {update(){doors.states.forEach((d,i)=>panels[i].position.x=d.progress*3.02);},dispose(){wood.dispose();paper.dispose();metal.dispose();}};
 }
 export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
+  const mergeFixed=(group:THREE.Group,animated=new Set<THREE.Object3D>())=>{
+    const batches=new Map<string,THREE.Mesh[]>();
+    for(const child of group.children)if(child instanceof THREE.Mesh&&!animated.has(child)&&!Array.isArray(child.material)){
+      const key=child.material.uuid+':'+child.layers.mask+':'+Boolean(child.geometry.index);
+      if(!batches.has(key))batches.set(key,[]);batches.get(key)!.push(child);
+    }
+    for(const pieces of batches.values()){
+      if(pieces.length<2)continue;
+      const copies=pieces.map(p=>{p.updateMatrix();return p.geometry.clone().applyMatrix4(p.matrix);});
+      const g=mergeGeometries(copies);copies.forEach(c=>c.dispose());if(!g)continue;
+      const first=pieces[0],mesh=new THREE.Mesh(g,first.material);mesh.layers.mask=first.layers.mask;mesh.castShadow=first.castShadow;mesh.receiveShadow=first.receiveShadow;mesh.renderOrder=first.renderOrder;
+      for(const p of pieces){group.remove(p);p.geometry.dispose();}group.add(mesh);
+    }
+  };
   const materials:THREE.Material[]=[];
   const make=<T extends THREE.Material>(m:T)=>{materials.push(m);return m;};
   const cloth=make(new THREE.MeshStandardMaterial({color:'#240d25',metalness:.35,roughness:.5}));
@@ -29,6 +44,8 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const colors=['#ff386a','#5fffe0','#bb78ff','#ffbc40','#ff201e'];
   const actors=enemies.actors.map((enemy,index)=>{
     const root=new THREE.Group();scene.add(root);if(enemy.kind==='danger')root.scale.set(1.14,1.1,1.14);
+    if(enemy.kind==='watcher')root.scale.set(.8,1.25,.8);
+    if(enemy.kind==='stalker')root.scale.set(1.13,.82,1.1);
     const glow=make(new THREE.MeshBasicMaterial({color:(enemy.kind==='danger'?colors[4]:colors[index%4]),toneMapped:false}));
     const mask=make(new THREE.MeshStandardMaterial({color:'#fff2d0',metalness:.25,roughness:.3,emissive:(enemy.kind==='danger'?colors[4]:colors[index%4]),emissiveIntensity:.18}));
     const aura=make(new THREE.MeshBasicMaterial({color:(enemy.kind==='danger'?colors[4]:colors[index%4]),transparent:true,opacity:.13,depthWrite:false,depthTest:false,fog:false,toneMapped:false}));
@@ -37,6 +54,17 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
     };
     part(new THREE.CylinderGeometry(.32,.67,1.75,12,5),cloth,0,.98,0);
     part(new THREE.CylinderGeometry(.34,.38,.23,12),gold,0,1.4,0);
+    if(enemy.kind==='listener')for(const side of [-1,1]){
+      const ear=part(new THREE.TorusGeometry(.23,.045,7,20),gold,side*.35,2.1,0);ear.rotation.y=Math.PI/2;
+      part(new THREE.SphereGeometry(.09,8,6),glow,side*.37,2.1,0);
+    }
+    if(enemy.kind==='watcher'){
+      const veil=part(new THREE.ConeGeometry(.58,.38,12),black,0,2.42,0);veil.scale.z=.8;
+      part(new THREE.OctahedronGeometry(.12),glow,0,2.33,.26);
+    }
+    if(enemy.kind==='stalker')for(const side of [-1,1]){
+      const claw=part(new THREE.ConeGeometry(.08,.75,5),gold,side*.6,.45,.3);claw.rotation.x=.6;
+    }
     part(new THREE.SphereGeometry(.29,16,12),black,0,2.04,0);
     const face=part(new THREE.SphereGeometry(.27,18,12),mask,0,2.04,.15);face.scale.set(.87,1.22,.45);
     for(const side of [-1,1]){
@@ -75,6 +103,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
       }
       for(let j=0;j<5;j++)part(new THREE.OctahedronGeometry(.055,0),glow,0,1.1+j*.15,.36);
     }
+    mergeFixed(halo);mergeFixed(root,new Set([...arms,...ribbons]));
     return {root,arms,halo,ribbons,glow,aura,mask,ringMat,index};
   });
   return {update(time:number){enemies.actors.forEach((e,i)=>{

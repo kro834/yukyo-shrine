@@ -19,6 +19,7 @@ export function allowExploration(mode:string,paused:boolean,focused:boolean,lock
 }
 export class TouchInput {
   x=0;z=0;sprint=false;
+  toggleSprint(){this.sprint=!this.sprint;return this.sprint;}
   pointers=new Map<number,{kind:'move'|'look'|'sprint';x:number;y:number}>();
   start(id:number,kind:'move'|'look'|'sprint',x:number,y:number){
     if([...this.pointers.values()].some(p=>p.kind===kind))return false;

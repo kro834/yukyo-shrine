@@ -11,6 +11,8 @@ import {enemyDirection} from './enemy-direction.ts';
 import {movePlayer} from './movement.ts';
 import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,floorHeightAt} from './annex.ts';
 import {RunningSteps,createFootstepAudio} from './footsteps.ts';
+import {placeMagatama,collectMagatama} from './magatama.ts';
+import {createMagatamaMeshes} from './magatama-mesh.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer) {
   const renderer=rendererOverride??new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);
@@ -18,9 +20,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const scene=new THREE.Scene();scene.background=new THREE.Color('#050809');scene.fog=new THREE.FogExp2('#080c0d',.027);
   const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.08,180);camera.position.set(SPAWN.x,1.68,SPAWN.z);camera.rotation.order='YXZ';
   let environment:THREE.WebGLRenderTarget|undefined;
-  if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=.16;room.dispose();pmrem.dispose();}
-  scene.add(new THREE.HemisphereLight('#91a2af','#30271d',.36));
-  const moon=new THREE.DirectionalLight('#8c9aa6',.35);moon.position.set(-10,18,5);scene.add(moon);
+  if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=.065;room.dispose();pmrem.dispose();}
+  scene.add(new THREE.HemisphereLight('#91a2af','#30271d',.18));
+  const moon=new THREE.DirectionalLight('#8c9aa6',.18);moon.position.set(-10,18,5);scene.add(moon);
   const layout=createLayout(),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
@@ -315,24 +317,39 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   for(const barrier of upperBarriers){const x=(barrier.minX+barrier.maxX)/2,z=(barrier.minZ+barrier.maxZ)/2;box(x,UPPER_HEIGHT+.55,z,barrier.maxX-barrier.minX,1.1,barrier.maxZ-barrier.minZ,'dark');}
   for(const x of [64,76]){for(let dx=-4;dx<=4;dx+=2)for(const z of [4,8,12])box(x+dx,UPPER_HEIGHT+.018,z,1.95,.036,3.95,'tatami');lantern(x,7.5,8,true);}
-  for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);}geometries.forEach(g=>g.dispose());}
+  // Material thresholds and overhead lintels mark changes of wing without signs
+  // or new obstructions in the walkable route.
+  for(const c of layout.cells)for(const [dx,dz] of [[1,0],[0,1]]){
+    const n=layout.grid.get((c.x+dx)+','+(c.z+dz));
+    if(!n||n.kind===c.kind||!['factory','bath','cistern','shop'].includes(n.kind)&&!['factory','bath','cistern','shop'].includes(c.kind))continue;
+    const x=c.x*4+dx*2,z=c.z*4+dz*2,metal=['factory','cistern'].includes(n.kind)||['factory','cistern'].includes(c.kind);
+    box(x,.012,z,dx?.18:3.65,.018,dz?.18:3.65,metal?'steel':'gold');
+    box(x,Math.min(c.h,n.h)-.25,z,dx?.28:4,.32,dz?.28:4,metal?'rust':'red');
+    for(const side of [-1,1])box(x+(dz?side*1.88:0),1.6,z+(dx?side*1.88:0),.12,3.2,.12,metal?'steel':'wood');
+  }
+  const staticChunks:{mesh:THREE.Mesh;center:THREE.Vector3;radius:number}[]=[];
+  for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=true;mesh.receiveShadow=true;mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
   const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
   const upperFixed=[...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
-  let elevation=0,collision=[...obstacles,...doors.blockers()];
+  const beads=placeMagatama(layout.rooms,obstacles,upperFixed),beadMeshes=createMagatamaMeshes(scene,beads);
+  let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
+  let groundCollision=[...obstacles,...groundDoors],groundEnemyCollision=[...enemyWalls,...groundDoors],upperCollision=[...upperFixed,...upperDoorBlocks];
+  const refreshCollision=()=>{const g=doors.blockers(),u=doors.blockers(UPPER_HEIGHT);if(g!==groundDoors){groundDoors=g;groundCollision=[...obstacles,...g];groundEnemyCollision=[...enemyWalls,...g];}if(u!==upperDoorBlocks){upperDoorBlocks=u;upperCollision=[...upperFixed,...u];}};
+  let elevation=0,collision=groundCollision,reflectionEnabled=true;
   const mirror=new Reflector(new THREE.PlaneGeometry(4.7,6.7),{textureWidth:512,textureHeight:512,color:0x293d38});mirror.rotation.x=-Math.PI/2;mirror.position.set(0,.38,-92);scene.add(mirror);water.visible=false;
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
   for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
   dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
-  const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ff9b49',23,14,2);scene.add(p);return p;});
-  const flashlight=new THREE.SpotLight('#e6efff',65,36,.52,.65,1.5);flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
+  const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ff9b49',10,14,2);scene.add(p);return p;});
+  const flashlight=new THREE.SpotLight('#e6efff',46,36,.52,.65,1.5);flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
   renderer.shadowMap.type=THREE.PCFShadowMap;flashlight.castShadow=true;flashlight.shadow.mapSize.set(1024,1024);flashlight.shadow.bias=-.00015;flashlight.shadow.normalBias=.03;flashlight.shadow.camera.near=.1;flashlight.shadow.camera.far=36;
   const glowCanvas=document.createElement('canvas');glowCanvas.width=64;glowCanvas.height=64;const ctx=glowCanvas.getContext('2d')!;
   const grad=ctx.createRadialGradient(32,32,0,32,32,32);grad.addColorStop(0,'rgba(255,178,78,.36)');grad.addColorStop(.3,'rgba(255,112,31,.10)');grad.addColorStop(1,'rgba(255,100,20,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,64,64);
   const glowTex=new THREE.CanvasTexture(glowCanvas),glowMat=new THREE.SpriteMaterial({map:glowTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
   lanterns.filter(p=>!fixtureColors.has(p)).forEach(p=>{const s=new THREE.Sprite(glowMat);s.position.copy(p);s.scale.set(2.5,2.5,1);scene.add(s);});
-  let lastLight=0,disposed=false;const direction=new THREE.Vector3(),moodTarget=new THREE.Color('#080c0d');
+  let lastLight=0,disposed=false,configuredQuality:Preferences['quality']|null=null;const direction=new THREE.Vector3(),moodTarget=new THREE.Color('#080c0d');
   const effects=rendererOverride?undefined:createEffects(renderer,scene,camera);
-  mats.light.color.multiplyScalar(2.8);mats.coolLight.color.multiplyScalar(2.2);
+  mats.light.color.multiplyScalar(1.35);mats.coolLight.color.multiplyScalar(1.15);
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),shrine:new THREE.Color('#080c0d')};
   new THREE.TextureLoader().load('/cedar.png',texture=>{if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());mats.wood.map=texture;mats.wood.color.set('#b7a596');mats.wood.needsUpdate=true;mats.red.map=texture;mats.red.needsUpdate=true;});
   const surfaceTextures:THREE.Texture[]=[];
@@ -345,8 +362,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   const floorLevel=()=>elevation>UPPER_HEIGHT-.3?UPPER_HEIGHT:0;
   return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
+    collection(){return {collected:beads.filter(b=>b.collected).length,total:beads.length};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
-      collision=[...(floorLevel()?upperFixed:obstacles),...doors.blockers(floorLevel())];
+      refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
       const pos=movePlayer(camera.position,x,z,yaw,sprint,dt,collision);lastMotion={running:sprint,moving:Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68};
     },
     enemyDirections(){return enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned'}));},
@@ -360,31 +378,44 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       }
       lastMotion={running:false,moving:false};
       for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>4.5?upperFixed:enemyWalls,dt);
-      doors.update(dt,camera.position,floorLevel());collision=[...(floorLevel()?upperFixed:obstacles),...doors.blockers(floorLevel())];doorMeshes.update();
-      if(enemies.update(dt,camera.position,[...enemyWalls,...doors.blockers()],elevation,[...upperFixed,...doors.blockers(UPPER_HEIGHT)])){elevation=0;camera.position.set(SPAWN.x,1.68,SPAWN.z);enemies.reset();return true;}return false;
+      doors.update(dt,camera.position,floorLevel());refreshCollision();collision=floorLevel()?upperCollision:groundCollision;doorMeshes.update();
+      collectMagatama(beads,camera.position,elevation,collision);
+      if(enemies.update(dt,camera.position,groundEnemyCollision,elevation,upperCollision)){elevation=0;camera.position.set(SPAWN.x,1.68,SPAWN.z);enemies.reset();return true;}return false;
     },
     configure(p:Preferences){
-      renderer.setPixelRatio(Math.min(devicePixelRatio,p.quality==='low'?1:p.quality==='high'?2:1.5));renderer.setSize(innerWidth,innerHeight);
       renderer.toneMappingExposure=p.brightness;
+      camera.fov=p.fov;camera.updateProjectionMatrix();
+      if(configuredQuality===p.quality)return;
+      configuredQuality=p.quality;
+      renderer.setPixelRatio(Math.min(devicePixelRatio,p.quality==='low'?1:p.quality==='high'?2:1.5));renderer.setSize(innerWidth,innerHeight);
       renderer.shadowMap.enabled=p.quality!=='low';
       const size=p.quality==='high'?2048:1024;
       if(flashlight.shadow.mapSize.x!==size){flashlight.shadow.map?.dispose();flashlight.shadow.map=null;flashlight.shadow.mapSize.set(size,size);}
       flashlight.castShadow=p.quality!=='low';camera.fov=p.fov;camera.updateProjectionMatrix();
-      mirror.visible=p.quality!=='low';water.visible=p.quality==='low';mirror.getRenderTarget().setSize(p.quality==='high'?768:384,p.quality==='high'?768:384);
+      reflectionEnabled=p.quality!=='low';mirror.visible=reflectionEnabled;water.visible=!reflectionEnabled;mirror.getRenderTarget().setSize(p.quality==='high'?768:384,p.quality==='high'?768:384);
       effects?.configure(p.quality);
     },
     render(time:number){
       const area=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind;
       moodTarget.copy(area==='shop'||area==='factory'||area==='bath'||area==='cistern'?moods[area]:moods.shrine);
       scene.fog!.color.lerp(moodTarget,.025);(scene.background as THREE.Color).lerp(moodTarget,.025);
-      if(time-lastLight>220){const nearby=lanterns.map(p=>({p,d:p.distanceToSquared(camera.position)})).sort((a,b)=>a.d-b.d);lightPool.forEach((light,i)=>{light.position.copy(nearby[i].p);light.color.set(fixtureColors.get(nearby[i].p)??'#ff9b49');});lastLight=time;}
+      if(time-lastLight>220){
+        const nearby:{p:THREE.Vector3;d:number}[]=[];
+        for(const p of lanterns){const d=p.distanceToSquared(camera.position);if(nearby.length===6&&d>=nearby[5].d)continue;let i=0;while(i<nearby.length&&nearby[i].d<d)i++;nearby.splice(i,0,{p,d});if(nearby.length>6)nearby.pop();}
+        lightPool.forEach((light,i)=>{if(nearby[i]){light.position.copy(nearby[i].p);light.color.set(fixtureColors.get(nearby[i].p)??'#ff9b49');}});
+        // At this distance exponential fog is already opaque; keep nearby detail intact.
+        for(const c of staticChunks)c.mesh.visible=c.center.distanceToSquared(camera.position)<(110+c.radius)**2;
+        mirror.visible=reflectionEnabled&&mirror.position.distanceToSquared(camera.position)<3600;water.visible=!mirror.visible;
+        lastLight=time;
+      }
       flashlight.position.copy(camera.position);flashlight.position.y-=.12;camera.getWorldDirection(direction);flashlight.target.position.copy(camera.position).addScaledVector(direction,10);
-      lightPool.forEach((l,i)=>l.intensity=23*(1+.025*Math.sin(time*.0021+i*2.3)));
+      lightPool.forEach((l,i)=>l.intensity=10*(1+.02*Math.sin(time*.0021+i*2.3)));
       enemyMeshes.update(time);
+      beadMeshes.update(time);
       if(effects)effects.render();else renderer.render(scene,camera);
     },
     resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();effects?.resize();},
-    dispose(){disposed=true;footsteps.dispose();effects?.dispose();environment?.dispose();surfaceTextures.forEach(t=>t.dispose());scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose();enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowMat.dispose();glowTex.dispose();renderer.dispose();},
+    dispose(){disposed=true;footsteps.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaceTextures.forEach(t=>t.dispose());scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose();enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowMat.dispose();glowTex.dispose();renderer.dispose();},
   };
 }
 
