@@ -26,7 +26,8 @@ export default function Shrine(){
   const [prefs,setPrefs]=useState<Preferences>(DEFAULTS),[pad,setPad]=useState(false),[connected,setConnected]=useState(false);
   const [ready,setReady]=useState(false),[error,setError]=useState(''),[menu,setMenu]=useState(false),[light,setLight]=useState(true),[locked,setLocked]=useState(false);
   const [calStep,setCalStep]=useState(-1),[notice,setNotice]=useState('');
-  const [collection,setCollection]=useState({collected:0,total:15});
+  const [collection,setCollection]=useState({blue:0,red:0,blueOffered:0,redOffered:0,unlocked:false,area:'blue' as 'blue'|'red'});
+  const [altarNear,setAltarNear]=useState(false);
   const [won,setWon]=useState(false),[goalBearing,setGoalBearing]=useState({angle:0,distance:0});
   const [burstRemaining,setBurstRemaining]=useState(0);
   const [enemyMarkers,setEnemyMarkers]=useState<{id:number;angle:number;distance:number;stunned:boolean}[]>([]);
@@ -59,7 +60,7 @@ export default function Shrine(){
   const setFlashlight=useCallback((on:boolean)=>{state.current.light=on;setLight(on);if(worldRef.current)worldRef.current.flashlight.visible=on;return {enabled:on};},[]);
   const toggleLight=useCallback(()=>setFlashlight(!state.current.light),[setFlashlight]);
   const burst=useCallback(()=>{if(state.current.paused||!worldRef.current)return;const result=worldRef.current.burst();if(result===null){setNotice('バースト再使用まで '+Math.ceil(worldRef.current.burstCooldown)+'秒');return;}setBurstRemaining(14);setBurstPulse(v=>v+1);},[]);
-  const interact=useCallback(()=>{if(state.current.paused)return;const opened=worldRef.current?.interact();if(!opened)setNotice('開閉できるふすまに近づいて、そちらを向いて〇を押してください。');},[]);
+  const interact=useCallback(()=>{if(state.current.paused)return;const opened=worldRef.current?.interact();if(opened==='offered')setNotice(worldRef.current?.collection().unlocked?'奉納が完了しました。祭壇の奥の扉へ進んでください。':'青勾玉を祭壇に捧げました。');else if(opened==='empty')setNotice(worldRef.current?.collection().unlocked?'祭壇の奥の扉が開いています。':'青勾玉5個、または赤勾玉1個を捧げると扉が開きます。');else if(!opened)setNotice('祭壇かふすまに近づいて、そちらを向いて〇を押してください。');},[]);
   useLayoutEffect(()=>{
     document.documentElement.dataset.shrinePlaying=String(!menu&&!won);
     document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(menu||won));
@@ -145,7 +146,7 @@ export default function Shrine(){
           if(mapping){session.current.setMapping(poll.pad,mapping);try{localStorage.setItem('yukyo-pad:'+mappingKey(poll.pad),JSON.stringify(mapping));}catch{};calibration.current=null;setCalStep(-1);setNotice('スティックとL1の調整を保存しました。');}
         }
       } else if(calibration.current&&!poll.pad){calibration.current=null;setCalStep(-1);setNotice('コントローラーの接続が切れました。');}
-      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));const found=world.collection();setCollection(old=>old.collected===found.collected&&old.total===found.total?old:found);if(found.collected===found.total)setGoalBearing(world.goalDirection());lastHud=time;}
+      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setAltarNear(world.nearAltar());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));const found=world.collection();setCollection(old=>old.blue===found.blue&&old.red===found.red&&old.blueOffered===found.blueOffered&&old.redOffered===found.redOffered&&old.unlocked===found.unlocked&&old.area===found.area?old:found);setGoalBearing(world.goalDirection());lastHud=time;}
       const s=state.current,p=prefRef.current;
       if(canExplore){
         const k=keys.current,t=touch.current,game=poll.mode==='gamepad';
@@ -206,7 +207,7 @@ export default function Shrine(){
     <div className="vignette"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%) rotate('+e.angle+'rad)',color:e.stunned?'#b8ffff':(e.id===4?'#ff201e':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id%4]),opacity:Math.max(.4,1-e.distance/160)}}>⌃</span>)}</div>}<div className="reticle" aria-hidden="true"/>
     {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
     {caughtPulse>0&&<div key={'caught'+caughtPulse} className="caught-pulse" aria-hidden="true"/>}
-    {doorNear&&!menu&&!won&&<button className="door-action" aria-label="〇：ふすまを開閉" onClick={interact}><DoorOpen size={20}/><span>〇</span></button>}
+    {(doorNear||altarNear)&&!menu&&!won&&<button className="door-action" aria-label={altarNear?'〇：勾玉を祭壇に捧げる':'〇：ふすまを開閉'} onClick={interact}>{altarNear?<Sparkles size={20}/>:<DoorOpen size={20}/>}<span>〇{altarNear?' 捧げる':''}</span></button>}
     <nav className="toolbar" hidden={won} aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
       <button aria-label="DualSenseで操作を開始してカーソルを固定" aria-pressed={pad} className={pad?'active':''} onClick={activateController}><Gamepad2 size={20}/></button>
       <button aria-label={light?'フラッシュライトを消す':'フラッシュライトを点ける'} aria-pressed={light} onClick={toggleLight} className={light?'active':''}>{light?<Flashlight size={19}/>:<FlashlightOff size={19}/>}</button>
@@ -214,7 +215,7 @@ export default function Shrine(){
       <button aria-label="全画面を切替" onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else setNotice('このブラウザでは全画面切替を利用できません。');}catch{setNotice('全画面表示を開始できませんでした。');}}}><Maximize size={18}/></button>
       <button aria-label="設定と操作ガイド" onClick={()=>setMenuOpen(true)}><Settings size={19}/></button>
     </nav>
-    {ready&&!menu&&!won&&<div className="collection-status"><div role="status" aria-live="polite"><span aria-hidden="true">◕</span> 勾玉 {collection.collected} / {collection.total}</div><small>{collection.collected===collection.total?<><i aria-hidden="true" style={{transform:'rotate('+goalBearing.angle+'rad)'}}>↑</i>開始地点の封門へ　{Math.round(goalBearing.distance)}m</>:<>あと{collection.total-collection.collected}個で封門が開きます</>}</small></div>}
+    {ready&&!menu&&!won&&<><div className="collection-status"><div role="status" aria-live="polite"><span className="blue-bead">◕ 青 {collection.blue}</span>　<span className="red-bead">◕ 赤 {collection.red}</span></div><small>{collection.unlocked?'奉納完了 · 祭壇の奥の扉へ':`奉納：青 ${collection.blueOffered}/5 または 赤 ${collection.redOffered}/1`}</small><small className={collection.area==='red'?'red-bead':''}>{collection.area==='red'?'危険区域':'青勾玉の回廊'}</small></div><div className="altar-compass" role="img" aria-label={`赤い針は祭壇の方向。距離${Math.round(goalBearing.distance)}メートル`}><div className="compass-dial"><i style={{transform:'rotate('+goalBearing.angle+'rad)'}}/><b/></div><span>祭壇 {Math.round(goalBearing.distance)}m</span></div></>}
     {won&&<section className="clear-screen" role="dialog" aria-modal="true" aria-labelledby="clear-title"><span aria-hidden="true">◕</span><h1 id="clear-title">封印解除</h1><p>勾玉を揃え、封門を越えました。</p><strong>CLEAR</strong><button autoFocus onClick={()=>location.reload()}>もう一度挑戦</button><small>コントローラーは × で再挑戦</small></section>}
     {pad&&burstRemaining>0&&!menu&&!won&&<div className="burst-cooldown">R2 再使用まで {burstRemaining}秒</div>}
     {!ready&&!error&&<div className="loading"><span/>灯りをともしています</div>}
@@ -223,7 +224,7 @@ export default function Shrine(){
     {notice&&<div className="toast" role="status">{notice}</div>}
     <div className="touch-controls" hidden={pad||menu||won}>
       <div className="touch-pad" role="group" aria-label="移動タッチパッド" {...pointerEvents('move')}><span className="thumb" style={{transform:'translate('+stickPosition.x*32+'px,'+stickPosition.z*32+'px)'}}><Move size={22}/></span></div>
-      <div className="touch-right"><div className="touch-actions"><button className="sprint" aria-label={burstRemaining?`バースト再使用まで ${burstRemaining}秒`:'バースト：近くの敵を9秒スタン'} disabled={burstRemaining>0} onClick={burst}><Sparkles size={23}/>{burstRemaining>0&&<small className="burst-timer">{burstRemaining}</small>}</button><button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} onClick={()=>{session.current.poll(pollPads());if(!state.current.paused&&session.current.useTouch())setTouchSprint(touch.current.toggleSprint());}}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
+      <div className="touch-right"><div className="touch-actions"><button className="sprint" aria-label={burstRemaining?`バースト再使用まで ${burstRemaining}秒`:'バースト：前方120°の敵を9秒スタン'} disabled={burstRemaining>0} onClick={burst}><Sparkles size={23}/>{burstRemaining>0&&<small className="burst-timer">{burstRemaining}</small>}</button><button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} onClick={()=>{session.current.poll(pollPads());if(!state.current.paused&&session.current.useTouch())setTouchSprint(touch.current.toggleSprint());}}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
     </div>
     <Dialog open={menu} onOpenChange={setMenuOpen}>
       {menu&&<DialogContent ref={dialog} className="settings-dialog" showCloseButton={false} finalFocus={false}>
@@ -242,7 +243,7 @@ export default function Shrine(){
           </TabsContent>
           <TabsContent value="controls" className="settings-panel controls-panel">
             <div className="connection"><Gamepad2 size={17}/><span>{connected?'コントローラー接続中':'接続後、コントローラーのボタンを押してください'}</span></div>
-            <dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>〇 / R2</dt><dd>ふすま開閉 / 9秒スタン</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま開閉 / バースト</dd></div></dl>
+            <dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>〇 / R2</dt><dd>ふすま・奉納 / 前方120°バースト</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま・奉納 / バースト</dd></div></dl>
             <p className="setting-note">設定内：方向キーで選択・調整、×で決定、○で戻る。<br/>タッチは左右のパッドで移動・視点、足跡ボタンでダッシュ。<br/>カーソルを固定するには、画面右上の固定ボタンをクリック。Escで解除。</p>
             {calStep>=0?<div className="calibration"><span>{['Lスティックを右へ','Lスティックを下へ','Rスティックを右へ','Rスティックを下へ','L1ボタンを押す'][Math.min(calStep,4)]}</span><small>操作ごとにスティック・ボタンを離してください。</small><button className="text-button" onClick={()=>{calibration.current=null;setCalStep(-1);}}>中止</button></div>:<button className="text-button" disabled={!connected} onClick={()=>{const p=lastPad.current;if(p){calibration.current=new PadCalibration(mappingKey(p),p);setCalStep(0);}}}>スティックが反応しない場合：手動調整</button>}
           </TabsContent>

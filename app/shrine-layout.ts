@@ -1,10 +1,12 @@
+import {seededRandom} from './seeded-random.ts';
 export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'|'shop'};
 export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean;kind?:Cell['kind']};
 export type Room = {id:string;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
 export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string;rooms?:string[];floor?:number};
 export const CELL=4;
 export const SPAWN={x:0,z:14};
-export function createLayout() {
+export function createLayout(seed=1) {
+  const random=seededRandom(seed);
   const grid=new Map<string,Cell>();
   const key=(x:number,z:number)=>x+','+z;
   const rect=(x1:number,z1:number,x2:number,z2:number,h=3.6,kind:Cell['kind']='passage')=>{
@@ -104,6 +106,25 @@ export function createLayout() {
   for(const x of [-18,18])rect(x-2,-64,x+2,-54,4.2,'hall');
   // Bath basin is a solid island with walkable promenades on every side.
   for(let x=-2;x<=2;x++)for(let z=-61;z<=-57;z++)grid.delete(key(x,z));
+  // Generate new loops between the fixed landmark rooms. A passage always joins
+  // two existing routes, so random generation cannot introduce a dead end.
+  const protectedCell=(x:number,z:number)=>
+    (Math.abs(x)<=14&&z>-27)||
+    (Math.abs(x)<=3&&z>=-62&&z<=-56)||
+    rooms.some(r=>x>=r.x1-1&&x<=r.x2+1&&z>=r.z1-1&&z<=r.z2+1)||
+    courts.some(c=>Math.abs(x-c.x)<=c.rx&&Math.abs(z-c.z)<=c.rz);
+  const starts=[...grid.values()].map(c=>({c,order:random()})).sort((a,b)=>a.order-b.order);
+  let loops=0;
+  for(const {c} of starts){
+    if(loops>=38)break;
+    for(const [dx,dz] of [[1,0],[0,1]]){
+      const length=3+Math.floor(random()*5),end=grid.get(key(c.x+dx*length,c.z+dz*length));
+      if(!end||random()>.55)continue;
+      const cells=Array.from({length:length-1},(_,i)=>({x:c.x+dx*(i+1),z:c.z+dz*(i+1)}));
+      if(cells.some(p=>grid.has(key(p.x,p.z))||protectedCell(p.x,p.z)))continue;
+      for(const p of cells)grid.set(key(p.x,p.z),{...p,h:3.6,kind:'passage'});loops++;
+    }
+  }
   for(const c of grid.values()){
     const s=stages.find(s=>c.x>=s.x1&&c.x<=s.x2&&c.z>=s.z1&&c.z<=s.z2);
     if(s){c.kind=s.kind;c.h=Math.max(c.h,s.kind==='factory'?4.8:s.kind==='cistern'?4.6:3.8);}

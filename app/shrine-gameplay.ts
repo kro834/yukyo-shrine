@@ -1,6 +1,8 @@
 import {movePlayer,SPRINT_SPEED,RADIUS,type Position,type Obstacle} from './movement.ts';
 import type {Cell,DoorSpec} from './shrine-layout.ts';
 import {nearbyObstacles} from './spatial.ts';
+import {createAreaLookup,AREA_MULTIPLIERS,type AreaColor} from './area-rules.ts';
+import {inFlashCone} from './flash-cone.ts';
 import {STAIRS,UPPER_HEIGHT,floorHeightAt,upperPartitions,upperBarriers,stairRails,upperDoors} from './annex.ts';
 export function segmentBlocked(a:Position,b:Position,obstacles:Obstacle[]){
   const dx=b.x-a.x,dz=b.z-a.z;
@@ -79,11 +81,16 @@ export class Enemies {
   actors:Enemy[];
   patrolTargets:PatrolTarget[]=[];
   private walls:Obstacle[];
+  private areaAt:(p:Position,floor?:number)=>AreaColor;
+  private wingAt:(p:Position)=>Cell['kind']|undefined;
   private upperWalls=[...upperPartitions,...upperBarriers,...stairRails,...new Doors(upperDoors).framesFor(UPPER_HEIGHT)];
   private upperNodes=new Map<string,Position>();
   private upperGraph=new Map<string,string[]>();
   constructor(cells:Cell[],walls:Obstacle[]){
     this.walls=walls;
+    this.areaAt=createAreaLookup(cells);
+    const kinds=new Map(cells.map(c=>[c.x+','+c.z,c.kind]));
+    this.wingAt=p=>kinds.get(Math.round(p.x/4)+','+Math.round(p.z/4));
     const free=(p:Position)=>!walls.some(o=>p.x>o.minX-RADIUS&&p.x<o.maxX+RADIUS&&p.z>o.minZ-RADIUS&&p.z<o.maxZ+RADIUS);
     for(const c of cells){const p={x:c.x*4,z:c.z*4};if(free(p))this.nodes.set(c.x+','+c.z,p);}
     for(const [key,p] of this.nodes){const [x,z]=key.split(',').map(Number);this.graph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.nodes.has(k)&&!segmentBlocked(p,this.nodes.get(k)!,walls)));}
@@ -93,6 +100,14 @@ export class Enemies {
     }
     for(const [key,p] of this.upperNodes){const [x,z]=key.split(',').map(Number);this.upperGraph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.upperNodes.has(k)&&!segmentBlocked(p,this.upperNodes.get(k)!,this.upperWalls)));}
     this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:0,z:-128},{x:128,z:-116},{x:64,z:20},{x:-64,z:-84},{x:144,z:-100},{x:-144,z:-100},{x:0,z:-212},{x:72,z:-236},{x:-72,z:-236},{x:-64,z:12},{x:168,z:-164},{x:-168,z:-164},{x:0,z:-196}].map((p,id)=>{const home=this.closest(p)!.point;return {id,kind:id===4?'danger':(['normal','listener','watcher','stalker'] as EnemyKind[])[id%4],home:{...home},position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map<string,number>(),doorWait:0,floor:0,destinationFloor:0,lastSeenFloor:0,patrol:null};});
+    const cellKinds=new Map(cells.map(c=>[c.x+','+c.z,c.kind]));
+    for(const area of ['factory','bath','cistern','shop']){
+      const candidates=[...this.nodes.values()].filter(p=>cellKinds.get(Math.round(p.x/4)+','+Math.round(p.z/4))===area);
+      if(!candidates.length)continue;
+      for(const fraction of [.3,.7]){const home={...candidates[Math.floor(candidates.length*fraction)]},id=this.actors.length;
+        this.actors.push({id,kind:id%2?'stalker':'watcher',home,position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map(),doorWait:0,floor:0,destinationFloor:0,lastSeenFloor:0,patrol:null});
+      }
+    }
   }
   addPatrolTargets(points:{id:string;position:Position;floor:number}[]){
     if(!this.patrolTargets.length){
@@ -109,7 +124,9 @@ export class Enemies {
     if(!this.patrolTargets.length)this.addPatrolTargets([]);
     const assigned=new Set(this.actors.filter(a=>a!==e).map(a=>a.patrol?.id));
     const score=(t:PatrolTarget)=>(t.visits+(assigned.has(t.id)?2:0))*500+Math.hypot(e.position.x-t.point.x,e.position.z-t.point.z)+(Math.abs(e.floor-t.floor)>1?75:0);
-    e.patrol=this.patrolTargets.reduce((best,t)=>score(t)<score(best)?t:best);
+    const homeArea=this.areaAt(e.home),homeWing=this.wingAt(e.home);
+    const local=this.patrolTargets.filter(t=>homeArea==='red'?t.floor===0&&this.wingAt(t.point)===homeWing:this.areaAt(t.point,t.floor)==='blue'),candidates=local.length?local:this.patrolTargets;
+    e.patrol=candidates.reduce((best,t)=>score(t)<score(best)?t:best);
     e.destinationFloor=e.patrol.floor;e.route=[];e.waypoint=null;e.planIn=0;
   }
   private closest(p:Position,upper=false){
@@ -126,14 +143,15 @@ export class Enemies {
     result.reverse();if(a.distance>.3&&(!result[0]||segmentBlocked(start,result[0],upper?this.upperWalls:this.walls)))result.unshift(a.point);return result;
   }
   hear(position:Position,floor=0){
+    const balance=AREA_MULTIPLIERS[this.areaAt(position,floor)];
     let count=0;for(const e of this.actors){
-      if(e.brain.mode==='stunned'||Math.hypot(e.position.x-position.x,e.position.z-position.z)>ENEMY_PROFILES[e.kind].hearing)continue;
+      if(e.brain.mode==='stunned'||Math.hypot(e.position.x-position.x,e.position.z-position.z)>ENEMY_PROFILES[e.kind].hearing*balance.sense)continue;
       const nextFloor=floor>2.4?UPPER_HEIGHT:0;
       if(!e.investigate||e.destinationFloor!==nextFloor){e.planIn=Math.min(e.planIn,.03*e.id);e.route=[];}
-      e.investigate={...position};e.destinationFloor=nextFloor;e.searchTime=45;count++;
+      e.investigate={...position};e.destinationFloor=nextFloor;e.searchTime=Math.max(45*balance.search,Math.hypot(e.position.x-position.x,e.position.z-position.z)/(3.3*balance.speed)+8*balance.search);count++;
     }return count;
   }
-  burst(player:Position,blockers:Obstacle[],floor=0){let count=0;for(const e of this.actors)if(Math.abs(e.floor-floor)<1&&Math.hypot(e.position.x-player.x,e.position.z-player.z)<=10&&!segmentBlocked(player,e.position,blockers)){e.brain.stun();e.route=[];e.investigate=null;e.searchTime=0;count++;}return count;}
+  burst(player:Position&{y?:number},blockers:Obstacle[],floor=0,yaw=0,pitch=0){let count=0;for(const e of this.actors)if(Math.abs(e.floor-floor)<1&&Math.hypot(e.position.x-player.x,e.position.z-player.z)<=10&&inFlashCone({x:player.x,z:player.z,y:player.y??floor+1.5},{...e.position,y:e.floor+1.5},yaw,pitch)&&!segmentBlocked(player,e.position,blockers)){e.brain.stun();e.route=[];e.investigate=null;e.searchTime=0;count++;}return count;}
   reset(){for(const e of this.actors){e.position={...e.home};e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;e.route=[];e.investigate=null;e.searchTime=0;e.doorWait=0;e.floor=0;e.destinationFloor=0;e.patrol=null;}}
   update(dt:number,player:Position,groundBlockers:Obstacle[],playerFloor=0,upperBlockers:Obstacle[]=this.upperWalls){
     let caught=false;
@@ -141,10 +159,11 @@ export class Enemies {
       const upstairs=e.floor>4.5,blockers=upstairs?upperBlockers:groundBlockers;
       const dx=player.x-e.position.x,dz=player.z-e.position.z,distance=Math.hypot(dx,dz);
       const facing=(dx*Math.sin(e.facing)+dz*Math.cos(e.facing))/Math.max(.01,distance);
-      const profile=ENEMY_PROFILES[e.kind];
+      const base=ENEMY_PROFILES[e.kind],balance=AREA_MULTIPLIERS[this.areaAt(player,playerFloor)];
+      const profile={...base,sight:base.sight*balance.sense,nearSight:base.nearSight*balance.sense,chase:Math.min(8.9,base.chase*balance.speed),patrol:base.patrol*balance.speed};
       const sees=Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!segmentBlocked(e.position,player,blockers);
       const previousMode=e.brain.mode,lastSeen=e.brain.lastSeen?{...e.brain.lastSeen}:null;e.brain.update(dt,sees,player);
-      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.searchTime=5;e.waypoint=null;e.route=[];e.planIn=0;}
+      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.searchTime=5*balance.search;e.waypoint=null;e.route=[];e.planIn=0;}
       if(sees){e.investigate=null;e.searchTime=0;e.lastSeenFloor=playerFloor>2.4?UPPER_HEIGHT:0;e.destinationFloor=e.lastSeenFloor;}
       if(e.brain.mode==='stunned')continue;
       if(e.brain.mode==='chase'&&distance<.8&&sees){caught=true;continue;}
@@ -192,7 +211,7 @@ export class Enemies {
       }
       if(goal){
         const gx=goal.x-e.position.x,gz=goal.z-e.position.z,len=Math.hypot(gx,gz);
-        const speed=e.brain.mode==='chase'?profile.chase:e.investigate?3.3:profile.patrol;
+        const speed=e.brain.mode==='chase'?profile.chase:e.investigate?3.3*balance.speed:profile.patrol;
         if(len>.03){e.facing=Math.atan2(gx,gz);const movementWalls=stairTravel?blockers.filter(o=>!STAIRS.includes(o)):blockers;e.position=movePlayer(e.position,gx/len,gz/len,0,true,Math.min(dt,len/speed)*speed/SPRINT_SPEED,movementWalls);e.floor=floorHeightAt(e.position,e.floor);}
       }
     }

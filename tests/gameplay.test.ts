@@ -55,7 +55,7 @@ test('burst reaches nearby visible enemies, but not through walls or across dist
  const p={x:0,z:0};enemies.actors[0].position={x:0,z:-5};enemies.actors[1].position={x:0,z:-20};
  enemies.actors[2].position={x:5,z:0};enemies.actors[3].position={x:-5,z:0};
  const wall={minX:2,maxX:3,minZ:-3,maxZ:3};
- assert.equal(enemies.burst(p,[wall]),2);
+ assert.equal(enemies.burst(p,[wall]),1);
  assert.equal(enemies.actors[0].brain.mode,'stunned');assert.equal(enemies.actors[1].brain.mode,'patrol');assert.equal(enemies.actors[2].brain.mode,'patrol');
  const position={...enemies.actors[0].position};enemies.update(1,p,[wall]);assert.deepEqual(enemies.actors[0].position,position);
 });

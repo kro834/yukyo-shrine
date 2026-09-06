@@ -11,12 +11,14 @@ import {enemyDirection} from './enemy-direction.ts';
 import {movePlayer} from './movement.ts';
 import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,floorHeightAt} from './annex.ts';
 import {RunningSteps,createFootstepAudio} from './footsteps.ts';
-import {placeMagatama,collectMagatama} from './magatama.ts';
+import {placeMagatama,placeRedMagatama,collectMagatama,beadInventory,spendBeads} from './magatama.ts';
 import {createMagatamaMeshes} from './magatama-mesh.ts';
-import {ShrineGoal,GOAL,GOAL_WALLS} from './shrine-goal.ts';
+import {ShrineGoal,ALTAR,GOAL_WALLS} from './shrine-goal.ts';
+import {seededRandom} from './seeded-random.ts';
+import {createAreaLookup} from './area-rules.ts';
 import {createGoalMeshes} from './goal-mesh.ts';
 import {BurstRecharge} from './burst-recharge.ts';
-export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer) {
+export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff)) {
   const renderer=rendererOverride??new THREE.WebGLRenderer({canvas,antialias:true,powerPreference:'high-performance'});
   renderer.setPixelRatio(Math.min(devicePixelRatio,1.5));renderer.setSize(innerWidth,innerHeight);
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;
@@ -26,7 +28,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=.065;room.dispose();pmrem.dispose();}
   scene.add(new THREE.HemisphereLight('#91a2af','#30271d',.18));
   const moon=new THREE.DirectionalLight('#8c9aa6',.18);moon.position.set(-10,18,5);scene.add(moon);
-  const layout=createLayout(),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
+  const layout=createLayout(seed),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
     wood:new THREE.MeshStandardMaterial({color:'#685044',roughness:.42,metalness:.07}),
@@ -335,9 +337,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   obstacles.push(...GOAL_WALLS);
   const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
   const upperFixed=[...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
-  const beads=placeMagatama(layout.rooms,obstacles,upperFixed),beadMeshes=createMagatamaMeshes(scene,beads);
+  const beads=[...placeMagatama(layout.rooms,obstacles,upperFixed),...placeRedMagatama(layout.cells,enemies.nodes.values(),obstacles,seededRandom(seed^0x5231))],beadMeshes=createMagatamaMeshes(scene,beads);
   enemies.addPatrolTargets(beads.map(b=>({id:'room:'+b.id,position:b.position,floor:b.floor})));
-  const goal=new ShrineGoal(beads.length),goalMeshes=createGoalMeshes(scene,goal);
+  const goal=new ShrineGoal(),goalMeshes=createGoalMeshes(scene,goal);
   const burstRecharge=new BurstRecharge();
   let goalBlockers=goal.blockers();
   let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
@@ -372,8 +374,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
     get completed(){return goal.completed;},
     get burstCooldown(){return burstRecharge.remaining;},
-    goalDirection(){return enemyDirection(camera.position,GOAL,camera.rotation.y);},
-    collection(){return {collected:beads.filter(b=>b.collected).length,total:beads.length};},
+    goalDirection(){return enemyDirection(camera.position,ALTAR,camera.rotation.y);},
+    collection(){return {...beadInventory(beads),blueOffered:goal.blueOffered,redOffered:goal.redOffered,unlocked:goal.unlocked,area:areaAt(camera.position,elevation)};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
       if(goal.completed)return {x:camera.position.x,z:camera.position.z,y:camera.position.y};
       refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
@@ -381,8 +383,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     },
     enemyDirections(){return enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned'}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
-    interact(){return doors.interact(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
-    burst(){if(goal.completed||!burstRecharge.use())return null;return enemies.burst(camera.position,collision,elevation);},
+    nearAltar(){return goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
+    interact(){if(goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
+    burst(){if(goal.completed||!burstRecharge.use())return null;return enemies.burst(camera.position,collision,elevation,camera.rotation.y,camera.rotation.x);},
     step(dt:number){
       if(goal.completed)return false;
       burstRecharge.step(dt);
@@ -394,7 +397,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>4.5?upperFixed:enemyWalls,dt);
       doors.update(dt,camera.position,floorLevel());refreshCollision();collision=floorLevel()?upperCollision:groundCollision;doorMeshes.update();
       collectMagatama(beads,camera.position,elevation,collision);
-      goal.update(dt,beads.filter(b=>b.collected).length,camera.position,elevation);refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
+      goal.update(dt,camera.position,elevation);refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
       if(goal.completed)return false;
       if(enemies.update(dt,camera.position,groundEnemyCollision,elevation,upperCollision)){elevation=0;camera.position.set(SPAWN.x,1.68,SPAWN.z);enemies.reset();return true;}return false;
     },
@@ -428,7 +431,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       lightPool.forEach((l,i)=>l.intensity=10*(1+.02*Math.sin(time*.0021+i*2.3)));
       enemyMeshes.update(time);
       beadMeshes.update(time);
-      goalMeshes.update(beads.filter(b=>b.collected).length);
+      goalMeshes.update();
       if(effects)effects.render();else renderer.render(scene,camera);
     },
     resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();effects?.resize();},
