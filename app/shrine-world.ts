@@ -26,6 +26,12 @@ export function createWorld(canvas:HTMLCanvasElement) {
     light:new THREE.MeshBasicMaterial({color:'#ffc781'}),
     rope:new THREE.MeshStandardMaterial({color:'#b19d78',roughness:1}),
     tatami:new THREE.MeshStandardMaterial({color:'#727253',roughness:.95}),
+    concrete:new THREE.MeshStandardMaterial({color:'#454946',roughness:.94}),
+    rust:new THREE.MeshStandardMaterial({color:'#713d27',roughness:.85,metalness:.4}),
+    steel:new THREE.MeshStandardMaterial({color:'#29393c',roughness:.56,metalness:.8}),
+    tile:new THREE.MeshStandardMaterial({color:'#829791',roughness:.27,metalness:.12}),
+    water:new THREE.MeshStandardMaterial({color:'#0b3034',roughness:.13,metalness:.75}),
+    coolLight:new THREE.MeshBasicMaterial({color:'#a3e7f1'}),
   };
   type MaterialKey=keyof typeof mats;
   const batches=new Map<MaterialKey,THREE.BufferGeometry[]>();
@@ -34,6 +40,8 @@ export function createWorld(canvas:HTMLCanvasElement) {
   const cylinder=(x:number,y:number,z:number,r:number,h:number,m:MaterialKey,r2=r)=>add(new THREE.CylinderGeometry(r,r2,h,12).translate(x,y,z),m);
   const block=(x:number,z:number,w:number,d:number)=>obstacles.push({minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2});
   const lanterns:THREE.Vector3[]=[];
+  const fixtureColors=new Map<THREE.Vector3,string>();
+  const fixture=(x:number,y:number,z:number,color:string)=>{const p=new THREE.Vector3(x,y,z);lanterns.push(p);fixtureColors.set(p,color);};
   const lantern=(x:number,y:number,z:number,large=false)=>{
     const r=large?.42:.22,h=large?.95:.6;
     cylinder(x,y,z,r,h,'light',r*.85);cylinder(x,y+h/2,z,r*1.13,.09,'dark');cylinder(x,y-h/2,z,r*1.02,.09,'dark');
@@ -43,6 +51,23 @@ export function createWorld(canvas:HTMLCanvasElement) {
   };
   for(const c of layout.cells){
     const x=c.x*CELL,z=c.z*CELL;
+    if(c.kind==='factory'||c.kind==='bath'||c.kind==='cistern'){
+      const factory=c.kind==='factory',bath=c.kind==='bath';
+      box(x,-.14,z,4,.28,4,bath?'tile':'concrete');box(x,c.h+.12,z,4,.24,4,'concrete');
+      box(x,c.h-.15,z,4,.3,.24,factory?'steel':'concrete');
+      if(bath){for(let j=-2;j<2;j++){box(x+j,.008,z,.015,.016,4,'dark');box(x,.008,z+j,4,.016,.015,'dark');}}
+      else {box(x,.005,z,4,.012,.035,'black');box(x,.005,z,.035,.012,4,'black');}
+      if((c.x+c.z)%4===0){
+        box(x,c.h-.36,z,1.7,.13,.32,'steel');box(x,c.h-.44,z,1.45,.04,.17,'coolLight');
+        fixture(x,c.h-.5,z,bath?'#97d6c7':factory?'#9dd4e7':'#73bfc6');
+      }
+      if(factory||!bath){
+        const ew=layout.grid.has((c.x+1)+','+c.z)||layout.grid.has((c.x-1)+','+c.z);
+        const pipe=new THREE.CylinderGeometry(.09,.09,4,8);pipe.rotateZ(ew?Math.PI/2:0);if(!ew)pipe.rotateX(Math.PI/2);
+        pipe.translate(x,c.h-.6,z+.7);add(pipe,factory?'rust':'steel');
+      }
+      continue;
+    }
     box(x,-.14,z,4,.28,4,c.kind==='stone'?'stone':'wood');
     box(x,c.h+.12,z,4,.24,4,'dark');
     if(c.kind==='stone'){box(x,.004,z,.022,.008,4,'black');box(x,.004,z,4,.008,.022,'black');}
@@ -55,6 +80,18 @@ export function createWorld(canvas:HTMLCanvasElement) {
     if(c.kind==='passage'&&(c.x+c.z)%3===0){lantern(x,c.h-.68,z);box(x,c.h-.12,z,.025,.65,.025,'gold');}
   }
   for(const w of layout.walls){
+    if(w.kind==='factory'||w.kind==='bath'||w.kind==='cistern'){
+      const bath=w.kind==='bath',factory=w.kind==='factory',x=w.x+w.insideX*.19,z=w.z+w.insideZ*.19;
+      box(w.x,w.h/2,w.z,w.alongX?4:.3,w.h,w.alongX?.3:4,bath?'tile':'concrete');
+      box(x,.55,z,w.alongX?4:.05,1.1,w.alongX?.05:4,bath?'water':factory?'rust':'steel');
+      for(const side of [-1,1])box(x+(w.alongX?side*1.9:0),w.h/2,z+(w.alongX?0:side*1.9),.16,w.h,.16,factory?'steel':'concrete');
+      if(bath)for(let j=1;j*.45<w.h;j++)box(x,j*.45,z,w.alongX?4:.035,.013,w.alongX?.035:4,'steel');
+      if(factory){
+        box(x,2.4,z,w.alongX?2.7:.08,1.2,w.alongX?.08:2.7,'steel');
+        for(let j=-3;j<=3;j++)box(x+(w.alongX?j*.35:0),2.4,z+(w.alongX?0:j*.35),w.alongX?.12:.1,1.1,w.alongX?.1:.12,'black');
+      }
+      continue;
+    }
     box(w.x,w.h/2,w.z,w.alongX?4:.3,w.h,w.alongX?.3:4,'dark');
     const x=w.x+w.insideX*.18,z=w.z+w.insideZ*.18;
     box(x,2.05,z,w.alongX?3.65:.05,2.3,w.alongX?.05:3.65,'paper');
@@ -165,6 +202,31 @@ export function createWorld(canvas:HTMLCanvasElement) {
     }
     for(const side of [-1,1])for(let j=-1;j<=1;j++)lantern(cx+side*9,court.h-1.3,cz+j*5,true);
   }
+  // Industrial machinery flanks the through-routes, leaving the central floor clear.
+  for(const x of [120,168])for(const z of [-112,-120,-144,-152]){
+    box(x,.18,z,3.2,.36,2.5,'steel');block(x,z,3.2,2.5);
+    cylinder(x,1.4,z,1.0,2.5,'rust');cylinder(x,2.72,z,1.06,.13,'steel');
+    box(x+.86,1.5,z+.83,.5,.8,.3,'steel');
+    const wheel=new THREE.TorusGeometry(.3,.045,8,18);wheel.translate(x+.86,1.6,z+1.02);add(wheel,'rust');
+    cylinder(x,3.3,z,.12,1.05,'steel');
+  }
+  for(const x of [120,132,144,156,168]){
+    box(x,5.65,-116,.2,.3,20,'steel');box(x,5.4,-116,.08,.08,20,'rust');
+  }
+  // Silent pump galleries and low, still water basins.
+  for(const x of [-168,-120])for(const z of [-112,-120,-144,-152]){
+    box(x,.5,z,3.2,1,2.3,'concrete');box(x,1.015,z,2.9,.025,2,'water');block(x,z,3.2,2.3);
+    cylinder(x+1.4,1.75,z,.16,2.3,'steel');
+  }
+  // Long washing bays in the abandoned bathhouse, with tarnished mirrors and taps.
+  box(0,.7,-236,19.8,.06,19.8,'water');box(0,6.92,-236,20,.24,20,'concrete');
+  for(const side of [-1,1])for(const z of [-224,-232,-240,-248]){
+    const x=side*77;
+    box(x,.45,z,1,.9,2.6,'tile');block(x,z,1,2.6);
+    box(x-side*.48,1.65,z,.06,1.2,1.6,'steel');
+    cylinder(x-side*.6,.85,z,.04,.3,'rust');
+    box(x-side*1.2,.18,z,.6,.36,.7,'wood');block(x-side*1.2,z,.6,.7);
+  }
   for(const [m,geometries] of batches){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=true;mesh.receiveShadow=true;scene.add(mesh);}geometries.forEach(g=>g.dispose());}
   const enemies=new Enemies(layout.cells,obstacles),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
   let collision=[...obstacles,...doors.blockers()];
@@ -178,7 +240,7 @@ export function createWorld(canvas:HTMLCanvasElement) {
   const glowCanvas=document.createElement('canvas');glowCanvas.width=64;glowCanvas.height=64;const ctx=glowCanvas.getContext('2d')!;
   const grad=ctx.createRadialGradient(32,32,0,32,32,32);grad.addColorStop(0,'rgba(255,178,78,.36)');grad.addColorStop(.3,'rgba(255,112,31,.10)');grad.addColorStop(1,'rgba(255,100,20,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,64,64);
   const glowTex=new THREE.CanvasTexture(glowCanvas),glowMat=new THREE.SpriteMaterial({map:glowTex,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
-  lanterns.forEach(p=>{const s=new THREE.Sprite(glowMat);s.position.copy(p);s.scale.set(2.5,2.5,1);scene.add(s);});
+  lanterns.filter(p=>!fixtureColors.has(p)).forEach(p=>{const s=new THREE.Sprite(glowMat);s.position.copy(p);s.scale.set(2.5,2.5,1);scene.add(s);});
   let lastLight=0,disposed=false;const direction=new THREE.Vector3();
   new THREE.TextureLoader().load('/cedar.png',texture=>{if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());mats.wood.map=texture;mats.wood.color.set('#b7a596');mats.wood.needsUpdate=true;mats.red.map=texture;mats.red.needsUpdate=true;});
   return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
@@ -197,7 +259,7 @@ export function createWorld(canvas:HTMLCanvasElement) {
       mirror.visible=p.quality!=='low';water.visible=p.quality==='low';mirror.getRenderTarget().setSize(p.quality==='high'?768:384,p.quality==='high'?768:384);
     },
     render(time:number){
-      if(time-lastLight>220){const nearby=lanterns.map(p=>({p,d:p.distanceToSquared(camera.position)})).sort((a,b)=>a.d-b.d);lightPool.forEach((light,i)=>light.position.copy(nearby[i].p));lastLight=time;}
+      if(time-lastLight>220){const nearby=lanterns.map(p=>({p,d:p.distanceToSquared(camera.position)})).sort((a,b)=>a.d-b.d);lightPool.forEach((light,i)=>{light.position.copy(nearby[i].p);light.color.set(fixtureColors.get(nearby[i].p)??'#ff9b49');});lastLight=time;}
       flashlight.position.copy(camera.position);flashlight.position.y-=.12;camera.getWorldDirection(direction);flashlight.target.position.copy(camera.position).addScaledVector(direction,10);
       lightPool.forEach((l,i)=>l.intensity=23*(1+.025*Math.sin(time*.0021+i*2.3)));
       enemyMeshes.update(time);

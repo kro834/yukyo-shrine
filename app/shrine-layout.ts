@@ -1,5 +1,5 @@
-export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'};
-export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean};
+export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'};
+export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean;kind?:Cell['kind']};
 export type Room = {id:string;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
 export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string};
 export const CELL=4;
@@ -68,6 +68,35 @@ export function createLayout() {
     rect(side*20,-37,side*20,-31);
     rect(Math.min(side*20,side*22),-31,Math.max(side*20,side*22),-31);
   }
+  // Three enclosed wings, each connected at two distant entrances and internally looped.
+  const stages=[
+    {id:'factory',x1:25,x2:48,z1:-46,z2:-10,kind:'factory' as const},
+    {id:'bath',x1:-22,x2:22,z1:-70,z2:-47,kind:'bath' as const},
+    {id:'cistern',x1:-48,x2:-25,z1:-46,z2:-10,kind:'cistern' as const},
+  ];
+  for(const side of [-1,1]){
+    const a=Math.min(side*22,side*48),b=Math.max(side*22,side*48);
+    rect(a,-17,b,-17);rect(a,-37,b,-37);
+    const left=Math.min(side*27,side*46),right=Math.max(side*27,side*46);
+    ring(left,-45,right,-11);ring(left+3,-41,right-3,-15);
+    rect(left,-25,right,-25);rect(left,-33,right,-33);
+    for(const x of [left+6,right-6])rect(x,-45,x,-11);
+    rect(left+2,-31,right-2,-27,6.5,'hall');
+    rect(left+2,-23,left+7,-19,5,'hall');rect(right-7,-23,right-2,-19,5,'hall');
+    rect(left+2,-41,left+7,-35,7,'hall');rect(right-7,-41,right-2,-35,7,'hall');
+  }
+  rect(-16,-50,-16,-43);rect(16,-50,16,-43);
+  ring(-21,-69,21,-49);ring(-15,-65,15,-53);
+  rect(-21,-59,21,-59);rect(0,-69,0,-49);
+  rect(-9,-69,-9,-49);rect(9,-69,9,-49);
+  rect(-7,-63,7,-55,6.8,'hall');
+  for(const x of [-18,18])rect(x-2,-64,x+2,-54,4.2,'hall');
+  // Bath basin is a solid island with walkable promenades on every side.
+  for(let x=-2;x<=2;x++)for(let z=-61;z<=-57;z++)grid.delete(key(x,z));
+  for(const c of grid.values()){
+    const s=stages.find(s=>c.x>=s.x1&&c.x<=s.x2&&c.z>=s.z1&&c.z<=s.z2);
+    if(s){c.kind=s.kind;c.h=Math.max(c.h,s.kind==='factory'?4.8:s.kind==='cistern'?4.6:3.8);}
+  }
   // Clip only single-cell stubs; circulation and all rooms remain connected.
   let removed=true;
   while(removed){removed=false;for(const [k,c] of grid){
@@ -80,7 +109,8 @@ export function createLayout() {
   for(const c of grid.values())for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
     if(grid.has(key(c.x+dx,c.z+dz)))continue;
     const x=c.x*CELL+dx*CELL/2,z=c.z*CELL+dz*CELL/2,alongX=!!dz;
-    walls.push({x,z,alongX,h:c.h,insideX:-dx,insideZ:-dz});
+    const basin=c.kind==='bath'&&c.x+dx>=-2&&c.x+dx<=2&&c.z+dz>=-61&&c.z+dz<=-57;
+    walls.push({x,z,alongX,h:basin?1.1:c.h,insideX:-dx,insideZ:-dz,kind:c.kind});
     obstacles.push({minX:x-(alongX?2:.18),maxX:x+(alongX?2:.18),minZ:z-(alongX?.18:2),maxZ:z+(alongX?.18:2)});
   }
   for(const r of rooms){
@@ -108,5 +138,5 @@ export function createLayout() {
       ?{minX:x-2,maxX:x+2,minZ:z+sign*1.68-.32,maxZ:z+sign*1.68+.32}
       :{minX:x+sign*1.68-.32,maxX:x+sign*1.68+.32,minZ:z-2,maxZ:z+2});
   }
-  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors,courts};
+  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors,courts,stages};
 }

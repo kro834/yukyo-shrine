@@ -56,7 +56,8 @@ export class EnemyBrain {
     }
   }
 }
-export type Enemy={id:number;position:Position;home:Position;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number};
+export const ENEMY_PROFILES={normal:{sight:14,nearSight:3,cone:.2,chase:4.3,patrol:1.35},danger:{sight:32,nearSight:6,cone:-.25,chase:8,patrol:2.6}};
+export type Enemy={id:number;kind:'normal'|'danger';position:Position;home:Position;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number};
 export class Enemies {
   nodes=new Map<string,Position>();
   graph=new Map<string,string[]>();
@@ -67,7 +68,7 @@ export class Enemies {
     const free=(p:Position)=>!walls.some(o=>p.x>o.minX-RADIUS&&p.x<o.maxX+RADIUS&&p.z>o.minZ-RADIUS&&p.z<o.maxZ+RADIUS);
     for(const c of cells){const p={x:c.x*4,z:c.z*4};if(free(p))this.nodes.set(c.x+','+c.z,p);}
     for(const [key,p] of this.nodes){const [x,z]=key.split(',').map(Number);this.graph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.nodes.has(k)&&!segmentBlocked(p,this.nodes.get(k)!,walls)));}
-    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:0,z:-128}].map((p,id)=>{const home=this.closest(p)!.point;return {id,home:{...home},position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0};});
+    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:0,z:-128},{x:128,z:-116}].map((p,id)=>{const home=this.closest(p)!.point;return {id,kind:id===4?'danger':'normal',home:{...home},position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0};});
   }
   private closest(p:Position){let result:{key:string;point:Position;distance:number}|null=null;for(const [key,point] of this.nodes){const distance=Math.hypot(point.x-p.x,point.z-p.z);if((!result||distance<result.distance)&&!segmentBlocked(p,point,this.walls))result={key,point,distance};}return result;}
   burst(player:Position,blockers:Obstacle[]){let count=0;for(const e of this.actors)if(Math.hypot(e.position.x-player.x,e.position.z-player.z)<=10&&!segmentBlocked(player,e.position,blockers)){e.brain.stun();count++;}return count;}
@@ -77,7 +78,8 @@ export class Enemies {
     for(const e of this.actors){
       const dx=player.x-e.position.x,dz=player.z-e.position.z,distance=Math.hypot(dx,dz);
       const facing=(dx*Math.sin(e.facing)+dz*Math.cos(e.facing))/Math.max(.01,distance);
-      const sees=distance<14&&(distance<3||facing>.2)&&!segmentBlocked(e.position,player,blockers);
+      const profile=ENEMY_PROFILES[e.kind];
+      const sees=distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!segmentBlocked(e.position,player,blockers);
       const previousMode=e.brain.mode;e.brain.update(dt,sees,player);
       if(previousMode!==e.brain.mode&&e.brain.mode==='patrol'){e.waypoint=null;e.planIn=0;}
       if(e.brain.mode==='stunned')continue;
@@ -100,7 +102,7 @@ export class Enemies {
       }
       if(goal){
         const gx=goal.x-e.position.x,gz=goal.z-e.position.z,len=Math.hypot(gx,gz);
-        const speed=e.brain.mode==='chase'?4.3:1.35;
+        const speed=e.brain.mode==='chase'?profile.chase:profile.patrol;
         if(len>.03){e.facing=Math.atan2(gx,gz);e.position=movePlayer(e.position,gx/len,gz/len,0,true,Math.min(dt,len/speed)*speed/SPRINT_SPEED,blockers);}
       }
     }

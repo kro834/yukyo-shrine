@@ -3,7 +3,7 @@ export type Position = { x: number; z: number };
 export const RADIUS = 0.42;
 export const WALK_SPEED = 3.4;
 export const SPRINT_SPEED = 9.2;
-export const BOUNDS = { minX: -92, maxX: 92, minZ: -176, maxZ: 38 };
+export const BOUNDS = { minX: -196, maxX: 196, minZ: -284, maxZ: 38 };
 
 export function stick(x = 0, y = 0, deadzone = 0.16): Position {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, z: 0 };

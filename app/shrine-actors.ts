@@ -26,9 +26,9 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const cloth=make(new THREE.MeshStandardMaterial({color:'#240d25',metalness:.35,roughness:.5}));
   const gold=make(new THREE.MeshStandardMaterial({color:'#f2bf57',metalness:.8,roughness:.24,emissive:'#b17621',emissiveIntensity:.35}));
   const black=make(new THREE.MeshStandardMaterial({color:'#080813',roughness:.5}));
-  const colors=['#ff386a','#5fffe0','#bb78ff','#ffbc40'];
+  const colors=['#ff386a','#5fffe0','#bb78ff','#ffbc40','#ff201e'];
   const actors=enemies.actors.map((enemy,index)=>{
-    const root=new THREE.Group();scene.add(root);
+    const root=new THREE.Group();scene.add(root);if(enemy.kind==='danger')root.scale.set(1.14,1.1,1.14);
     const glow=make(new THREE.MeshBasicMaterial({color:colors[index],toneMapped:false}));
     const mask=make(new THREE.MeshStandardMaterial({color:'#fff2d0',metalness:.25,roughness:.3,emissive:colors[index],emissiveIntensity:.18}));
     const aura=make(new THREE.MeshBasicMaterial({color:colors[index],transparent:true,opacity:.13,depthWrite:false,depthTest:false,fog:false,toneMapped:false}));
@@ -67,6 +67,14 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
     ] as [THREE.BufferGeometry,number,number,number][]){const echo=part(g,aura,x,y,z);echo.renderOrder=20;echo.castShadow=false;}
     const ringMat=make(new THREE.MeshBasicMaterial({color:'#b8ffff',transparent:true,opacity:0,depthWrite:false,toneMapped:false}));
     const ring=part(new THREE.TorusGeometry(.85,.025,6,48),ringMat,0,.065,0);ring.rotation.x=Math.PI/2;
+    if(enemy.kind==='danger'){
+      const crown=part(new THREE.TorusGeometry(1.18,.045,8,64),glow,0,1.65,-.4);crown.rotation.y=.35;
+      for(const side of [-1,1]){
+        const blade=part(new THREE.ConeGeometry(.15,1.3,4),gold,side*.82,1.4,-.2);blade.rotation.z=-side*.55;
+        for(let j=0;j<4;j++){const spine=part(new THREE.ConeGeometry(.08,.45,4),glow,side*(.42+j*.18),2.2-j*.18,-.35);spine.rotation.z=-side*.8;}
+      }
+      for(let j=0;j<5;j++)part(new THREE.OctahedronGeometry(.055,0),glow,0,1.1+j*.15,.36);
+    }
     return {root,arms,halo,ribbons,glow,aura,mask,ringMat,index};
   });
   return {update(time:number){enemies.actors.forEach((e,i)=>{
