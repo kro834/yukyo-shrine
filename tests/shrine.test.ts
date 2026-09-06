@@ -10,13 +10,13 @@ test('all rooms and corridors form one connected walkable complex',()=>{
  const l=createLayout(),start=Math.round(SPAWN.x/4)+','+Math.round(SPAWN.z/4);
  const seen=new Set([start]),queue=[start];
  for(let i=0;i<queue.length;i++){const c=l.grid.get(queue[i])!;for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){const k=(c.x+dx)+','+(c.z+dz);if(l.grid.has(k)&&!seen.has(k)){seen.add(k);queue.push(k);}}}
- assert.equal(seen.size,l.cells.length);assert.ok(l.cells.length>300);
+ assert.equal(seen.size,l.cells.length);assert.ok(l.cells.length>900);
  for(const key of ['0,-10','8,2','-8,-7','-9,-22','11,-18','0,-23'])assert.ok(seen.has(key),key);
 });
 test('closed envelope matches every exposed tile edge',()=>{
  const l=createLayout();let boundary=0;
  for(const c of l.cells)for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]])if(!l.grid.has((c.x+dx)+','+(c.z+dz)))boundary++;
- assert.equal(l.walls.length,boundary);assert.equal(l.obstacles.length,boundary+l.narrows.length*2);assert.ok(l.narrows.length>10);
+ assert.equal(l.walls.filter(w=>!w.twoSided).length,boundary);assert.equal(l.obstacles.length,l.walls.length+l.narrows.length*2);assert.ok(l.narrows.length>10);
  for(const c of l.cells){assert.ok(c.x*4-2>BOUNDS.minX&&c.x*4+2<BOUNDS.maxX);assert.ok(c.z*4-2>BOUNDS.minZ&&c.z*4+2<BOUNDS.maxZ);}
 });
 test('sprint cannot cross any outer wall at its center',()=>{

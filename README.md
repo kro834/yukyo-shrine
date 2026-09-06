@@ -1,10 +1,12 @@
 # 幽境 — 祭殿回廊
 
-Original first-person shrine exploration, with a closed interconnected floor plan, processional hall, sanctum, tatami room, storehouse, bell room, lantern chamber and still-water sanctuary.
+Original first-person shrine exploration, with a closed interconnected floor plan, processional hall, sanctum, tatami room, storehouse, bell room, lantern chamber and still-water sanctuary. The expanded plan has 957 floor cells, interlocking circulation loops, six additional furnished rooms and twelve sliding fusuma doors. Every added room has two doors. Open-door circulation is tested for connectivity and absence of dead ends.
 
-Controls: DualSense L/R sticks move/look, L1 hold to sprint, R1 toggles flashlight, Options opens settings. D-pad navigates settings, cross activates and circle closes. Touch supports simultaneous movement, view drag and sprint. Keyboard: WASD, Shift, F; arrow keys look; P/O opens settings. Double-click canvas or use cursor icon for mouse pointer lock. Esc releases pointer lock.
+Controls: DualSense L/R sticks move/look, L1 hold to sprint, R1 toggles flashlight, R2 emits a burst, circle opens/closes a nearby fusuma, and Options opens settings. D-pad navigates settings, cross activates and circle closes the menu. Touch supports simultaneous movement, view drag, sprint, burst and nearby door interaction. Keyboard: WASD, Shift, F; E interacts with doors, Q emits a burst; arrow keys look; P/O opens settings. Double-click canvas or use cursor icon for mouse pointer lock. Esc releases pointer lock.
 
-Controller activity hides cursor/touch controls and ignores emulated mouse look. Actual OS cursor confinement requires browser pointer lock through a user gesture; the website cannot disable global OS or third-party controller mouse emulation outside that lock.
+Four silent patrolling enemies use sight only. Walls and closed doors block sight, and a 0.65 second sight break ends pursuit with a 2 second reacquisition grace period. Sprinting is faster than chasing. A burst stuns enemies within 10 meters and unblocked sight for exactly 9 simulation seconds. Holding R2 does not repeatedly trigger a burst. Contact returns the player to the starting hall with a silent fade. No audio is created or played.
+
+The cursor is hidden outside settings, independently of controller detection. Controller activity hides touch controls and ignores emulated mouse look. Closing settings requests pointer lock again and defers canvas focus until after the dialog closes. Actual OS cursor confinement requires browser pointer lock through a user gesture; the website cannot disable global OS or third-party controller mouse emulation outside that lock.
 
 Device-local preferences include sensitivity, FOV, brightness, graphics quality, invert Y and optional motion. Gamepad manual calibration is under Controls. No account, collection or backend storage.
 

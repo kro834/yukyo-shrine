@@ -1,5 +1,7 @@
 export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'};
-export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number};
+export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean};
+export type Room = {id:string;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
+export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string};
 export const CELL=4;
 export const SPAWN={x:0,z:14};
 export function createLayout() {
@@ -29,7 +31,38 @@ export function createLayout() {
   rect(-8,-8,-7,-6,3.6,'hall');rect(-7,-6,-6,-6);
   rect(7,1,9,3,3.6,'hall');rect(6,2,7,2);
   rect(-9,-23,-8,-21,5,'hall');rect(-11,-22,-9,-22);
+  // Second exits for every former side room.
+  rect(-2,8,6,8);rect(6,5,6,8);
+  rect(9,-3,9,2);rect(-8,-10,-8,-8);
+  rect(-8,-25,-8,-23);rect(13,-5,13,-3);rect(-13,-8,-13,-3);
+  // Three interlocked outer circuits, with cross-passages and offsets.
+  const ring=(x1:number,z1:number,x2:number,z2:number)=>{rect(x1,z1,x2,z1);rect(x1,z2,x2,z2);rect(x1,z1,x1,z2);rect(x2,z1,x2,z2);};
+  ring(-22,-43,22,-27);ring(-16,-39,16,-29);ring(-22,-27,-11,-10);ring(11,-27,22,-10);
+  rect(-22,-17,-11,-17);rect(11,-17,22,-17);
+  rect(0,-43,0,-25);rect(-22,-32,22,-32);rect(-22,-37,22,-37);
+  rect(-16,-43,-16,-39);rect(16,-43,16,-39);
+  rect(-22,-10,-14,-10);rect(14,-10,22,-10);
+  rect(-16,-27,-16,-22);rect(-16,-22,-11,-22);
+  rect(16,-27,16,-22);rect(11,-22,16,-22);
+  const rooms:Room[]=[
+    {id:'west-guest',x1:-11,x2:-7,z1:-34,z2:-30,h:3.8,style:'tatami'},
+    {id:'east-archive',x1:7,x2:11,z1:-34,z2:-30,h:3.8,style:'store'},
+    {id:'west-ritual',x1:-11,x2:-7,z1:-39,z2:-35,h:5.6,style:'ritual'},
+    {id:'east-water',x1:7,x2:11,z1:-39,z2:-35,h:5.6,style:'stone'},
+    {id:'west-retreat',x1:-21,x2:-17,z1:-23,z2:-19,h:3.4,style:'tatami'},
+    {id:'east-reliquary',x1:17,x2:21,z1:-23,z2:-19,h:4.4,style:'ritual'},
+  ];
+  rect(-22,-21,-11,-21);rect(11,-21,22,-21);
+  for(const x of [-12,-6,6,12])rect(x,-39,x,-29);
+  for(const r of rooms)rect(r.x1,r.z1,r.x2,r.z2,r.h,r.style==='stone'?'stone':'hall');
+  // Clip only single-cell stubs; circulation and all rooms remain connected.
+  let removed=true;
+  while(removed){removed=false;for(const [k,c] of grid){
+    const neighbors=[[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dz])=>grid.has(key(c.x+dx,c.z+dz))).length;
+    if(neighbors<2){grid.delete(k);removed=true;}
+  }}
   const walls:Wall[]=[];
+  const doors:DoorSpec[]=[];
   const obstacles:{minX:number;maxX:number;minZ:number;maxZ:number}[]=[];
   for(const c of grid.values())for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]) {
     if(grid.has(key(c.x+dx,c.z+dz)))continue;
@@ -37,16 +70,30 @@ export function createLayout() {
     walls.push({x,z,alongX,h:c.h,insideX:-dx,insideZ:-dz});
     obstacles.push({minX:x-(alongX?2:.18),maxX:x+(alongX?2:.18),minZ:z-(alongX?.18:2),maxZ:z+(alongX?.18:2)});
   }
+  for(const r of rooms){
+    const middleZ=(r.z1+r.z2)/2;
+    for(let x=r.x1;x<=r.x2;x++)for(let z=r.z1;z<=r.z2;z++)for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){
+      const nx=x+dx,nz=z+dz;
+      if(nx>=r.x1&&nx<=r.x2&&nz>=r.z1&&nz<=r.z2)continue;
+      if(!grid.has(key(nx,nz)))continue; // Existing outer envelope already closes this edge.
+      const wx=x*CELL+dx*2,wz=z*CELL+dz*2;
+      if(dx!==0&&z===middleZ){doors.push({id:r.id+(dx<0?'-west':'-east'),x:wx,z:wz,alongX:false,room:r.id});continue;}
+      if(walls.some(w=>w.x===wx&&w.z===wz))continue;
+      walls.push({x:wx,z:wz,alongX:!!dz,h:r.h,insideX:-dx,insideZ:-dz,twoSided:true});
+      obstacles.push({minX:wx-(dz?2:.18),maxX:wx+(dz?2:.18),minZ:wz-(dz?.18:2),maxZ:wz+(dz?.18:2)});
+    }
+  }
   const narrows:{x:number;z:number;alongX:boolean}[]=[];
   for(const c of grid.values()){
     if(c.kind!=='passage'||!(c.x===-11||c.x===7||c.z===-23))continue;
     const ew=grid.has(key(c.x-1,c.z))&&grid.has(key(c.x+1,c.z));
     const ns=grid.has(key(c.x,c.z-1))&&grid.has(key(c.x,c.z+1));
-    if(ew===ns)continue;
+    const degree=[[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dz])=>grid.has(key(c.x+dx,c.z+dz))).length;
+    if(ew===ns||degree!==2)continue;
     const x=c.x*CELL,z=c.z*CELL;narrows.push({x,z,alongX:ew});
     for(const sign of [-1,1])obstacles.push(ew
       ?{minX:x-2,maxX:x+2,minZ:z+sign*1.68-.32,maxZ:z+sign*1.68+.32}
       :{minX:x+sign*1.68-.32,maxX:x+sign*1.68+.32,minZ:z-2,maxZ:z+2});
   }
-  return {cells:[...grid.values()],grid,walls,obstacles,narrows};
+  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors};
 }

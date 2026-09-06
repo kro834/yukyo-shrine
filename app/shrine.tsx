@@ -1,6 +1,6 @@
 'use client';
-import {useCallback,useEffect,useRef,useState} from 'react';
-import {Maximize,Settings,Footprints,Move,Scan,MousePointer2,Flashlight,FlashlightOff,X,RotateCcw,Gamepad2} from 'lucide-react';
+import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
+import {Maximize,Settings,Footprints,Move,Scan,MousePointer2,Flashlight,FlashlightOff,X,RotateCcw,Gamepad2,DoorOpen,Sparkles} from 'lucide-react';
 import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 import {Tabs,TabsList,TabsTrigger,TabsContent} from '@/components/ui/tabs';
 import {Slider} from '@/components/ui/slider';
@@ -23,25 +23,34 @@ export default function Shrine(){
   const state=useRef({yaw:0,pitch:0,light:true,paused:false});
   const calibration=useRef<PadCalibration|null>(null),lastPad=useRef<Pad|null>(null);
   const prefRef=useRef<Preferences>(DEFAULTS);
-  const relockOnClose=useRef(false);
   const [prefs,setPrefs]=useState<Preferences>(DEFAULTS),[pad,setPad]=useState(false),[connected,setConnected]=useState(false);
   const [ready,setReady]=useState(false),[error,setError]=useState(''),[menu,setMenu]=useState(false),[light,setLight]=useState(true),[locked,setLocked]=useState(false);
   const [calStep,setCalStep]=useState(-1),[notice,setNotice]=useState('');
   const [stickPosition,setStickPosition]=useState({x:0,z:0});
+  const [doorNear,setDoorNear]=useState(false),[burstPulse,setBurstPulse]=useState(0),[caughtPulse,setCaughtPulse]=useState(0);
   const clearInput=useCallback(()=>{keys.current.clear();touch.current.clear();setStickPosition({x:0,z:0});},[]);
   const applyPreferences=useCallback((next:Preferences)=>{const v=sanitizePreferences(next);prefRef.current=v;setPrefs(v);try{localStorage.setItem('yukyo-preferences-v1',JSON.stringify(v));}catch{};worldRef.current?.configure(v);return v;},[]);
   const setMenuOpen=useCallback((open:boolean)=>{
     state.current.paused=open;setMenu(open);clearInput();
-    if(open){relockOnClose.current=!!document.pointerLockElement;document.exitPointerLock?.();document.documentElement.classList.remove('controller-cursor-hidden');}
+    document.documentElement.dataset.shrinePlaying=String(!open);
+    if(open){document.exitPointerLock?.();document.documentElement.classList.remove('controller-cursor-hidden');document.documentElement.style.removeProperty('cursor');}
     else{
       calibration.current=null;setCalStep(-1);
       document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(false));
-      if(relockOnClose.current){try{const result=canvas.current?.requestPointerLock?.();if(result)void result.catch(()=>{});}catch{} }
-      canvas.current?.focus({preventScroll:true});
+      document.documentElement.style.setProperty('cursor','none','important');
+      try{const result=canvas.current?.requestPointerLock?.();if(result)void result.catch(()=>{});}catch{}
+      requestAnimationFrame(()=>{if(!state.current.paused)canvas.current?.focus({preventScroll:true});});
     }
   },[clearInput]);
   const setFlashlight=useCallback((on:boolean)=>{state.current.light=on;setLight(on);if(worldRef.current)worldRef.current.flashlight.visible=on;return {enabled:on};},[]);
   const toggleLight=useCallback(()=>setFlashlight(!state.current.light),[setFlashlight]);
+  const burst=useCallback(()=>{if(state.current.paused)return;worldRef.current?.burst();setBurstPulse(v=>v+1);},[]);
+  const interact=useCallback(()=>{if(!state.current.paused)worldRef.current?.interact();},[]);
+  useLayoutEffect(()=>{
+    document.documentElement.dataset.shrinePlaying=String(!menu);
+    document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(menu));
+    if(menu)document.documentElement.style.removeProperty('cursor');else document.documentElement.style.setProperty('cursor','none','important');
+  },[menu]);
   const requestLock=useCallback(async()=>{
     try{if(!canvas.current?.requestPointerLock){setNotice('このブラウザではカーソル固定を利用できません。');return;}await canvas.current.requestPointerLock();}
     catch{setNotice('カーソル固定を開始できませんでした。固定ボタンをもう一度押してください。');}
@@ -69,6 +78,8 @@ export default function Shrine(){
       if(session.current.mode==='gamepad'){e.preventDefault();e.stopPropagation();return;}
       if(['KeyW','KeyA','KeyS','KeyD','ShiftLeft','ShiftRight','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space','Tab'].includes(e.code)){e.preventDefault();keys.current.add(e.code);}
       if(e.code==='KeyF'&&!e.repeat)toggleLight();
+      if(e.code==='KeyE'&&!e.repeat)interact();
+      if(e.code==='KeyQ'&&!e.repeat)burst();
       if((e.code==='KeyP'||e.code==='KeyO')&&!e.repeat)setMenuOpen(true);
     };
     const up=(e:KeyboardEvent)=>keys.current.delete(e.code);
@@ -79,8 +90,8 @@ export default function Shrine(){
       const delta=viewDelta('mouse',e.movementX,e.movementY,0,prefRef.current);
       state.current.yaw+=delta.yaw;state.current.pitch=clampPitch(state.current.pitch+delta.pitch);
     };
-    const lockChanged=()=>setLocked(document.pointerLockElement===canvas.current);
-    const focusGuard=(e:FocusEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&e.target instanceof HTMLElement&&e.target!==canvas.current){e.target.blur();canvas.current?.focus({preventScroll:true});}};
+    const lockChanged=()=>{setLocked(document.pointerLockElement===canvas.current);document.documentElement.dataset.shrinePlaying=String(!state.current.paused);if(!state.current.paused)document.documentElement.style.setProperty('cursor','none','important');};
+    const focusGuard=(e:FocusEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&e.target instanceof HTMLElement&&e.target.matches('input,textarea,[contenteditable=true]')&&!dialog.current?.contains(e.target)){e.target.blur();canvas.current?.focus({preventScroll:true});}};
     const gamepadConnected=()=>{const p=session.current.poll(pollPads());if(p.pad){session.current.mode='gamepad';clearInput();setPad(true);setConnected(true);if(!state.current.paused)canvas.current?.focus({preventScroll:true});}};
     const hidden=()=>{if(document.hidden)clearInput();};
     const wheel=(e:WheelEvent)=>e.preventDefault();
@@ -106,16 +117,19 @@ export default function Shrine(){
       if(poll.mode!==oldMode){if(poll.mode==='gamepad'){clearInput();if(!state.current.paused){(document.activeElement as HTMLElement|null)?.blur?.();canvas.current?.focus({preventScroll:true});}}oldMode=poll.mode;setPad(poll.mode==='gamepad');}
       const focused=!document.hidden&&document.hasFocus();
       const buttons=edges.update(poll.pad);
+      const wasPaused=state.current.paused;
       if(focused&&buttons.menu&&!calibration.current)setMenuOpen(!state.current.paused);
       if(focused&&state.current.paused&&!calibration.current)menuNavigation(buttons);
       if(focused&&!state.current.paused&&buttons.flashlight)toggleLight();
+      if(focused&&!wasPaused&&!state.current.paused&&buttons.back)interact();
+      if(focused&&!wasPaused&&!state.current.paused&&buttons.burst)burst();
       if(calibration.current&&poll.pad){
         if(mappingKey(poll.pad)!==calibration.current.padKey){calibration.current=null;setCalStep(-1);setNotice('接続が変わりました。もう一度調整を開始してください。');}
         else {const mapping=calibration.current.update(poll.pad);setCalStep(calibration.current.step);
           if(mapping){session.current.setMapping(poll.pad,mapping);try{localStorage.setItem('yukyo-pad:'+mappingKey(poll.pad),JSON.stringify(mapping));}catch{};calibration.current=null;setCalStep(-1);setNotice('スティックとL1の調整を保存しました。');}
         }
       } else if(calibration.current&&!poll.pad){calibration.current=null;setCalStep(-1);setNotice('コントローラーの接続が切れました。');}
-      if(time-lastHud>300){setConnected(!!poll.pad);lastHud=time;}
+      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());lastHud=time;}
       const s=state.current,p=prefRef.current;
       if(focused&&!s.paused){
         const k=keys.current,t=touch.current,game=poll.mode==='gamepad';
@@ -129,6 +143,7 @@ export default function Shrine(){
         const moving=Math.hypot(pos.x-world.camera.position.x,pos.z-world.camera.position.z)>.0001;
         world.camera.position.set(pos.x,1.68+(p.motion&&moving?Math.sin(time*(sprint?.016:.01))*(sprint?.03:.018):0),pos.z);
         world.camera.rotation.set(s.pitch,s.yaw,0);
+        if(world.step(dt)){setCaughtPulse(v=>v+1);clearInput();s.yaw=0;s.pitch=0;}
         const fov=p.fov+(p.motion&&sprint&&moving?4:0);
         if(Math.abs(world.camera.fov-fov)>.02){world.camera.fov+=(fov-world.camera.fov)*Math.min(1,dt*8);world.camera.updateProjectionMatrix();}
       }
@@ -145,8 +160,8 @@ export default function Shrine(){
     document.addEventListener('wheel',wheel,{passive:false});document.addEventListener('touchmove',touchMove,{passive:false});
     const lost=(e:Event)=>{e.preventDefault();setError('3D描画が中断されました。ページを再読み込みしてください。');clearInput();};
     canvas.current?.addEventListener('webglcontextlost',lost);const element=canvas.current;
-    return()=>{cancelAnimationFrame(frame);worldRef.current=null;world.dispose();window.removeEventListener('keydown',down,true);window.removeEventListener('keyup',up);window.removeEventListener('blur',clearInput);window.removeEventListener('gamepadconnected',gamepadConnected);document.removeEventListener('focusin',focusGuard);document.removeEventListener('mousemove',mouse);document.removeEventListener('pointerlockchange',lockChanged);document.removeEventListener('visibilitychange',hidden);window.removeEventListener('resize',world.resize);document.removeEventListener('wheel',wheel);document.removeEventListener('touchmove',touchMove);element?.removeEventListener('webglcontextlost',lost);document.documentElement.classList.remove('controller-cursor-hidden');};
-  },[clearInput,setMenuOpen,toggleLight,applyPreferences]);
+    return()=>{cancelAnimationFrame(frame);worldRef.current=null;world.dispose();window.removeEventListener('keydown',down,true);window.removeEventListener('keyup',up);window.removeEventListener('blur',clearInput);window.removeEventListener('gamepadconnected',gamepadConnected);document.removeEventListener('focusin',focusGuard);document.removeEventListener('mousemove',mouse);document.removeEventListener('pointerlockchange',lockChanged);document.removeEventListener('visibilitychange',hidden);window.removeEventListener('resize',world.resize);document.removeEventListener('wheel',wheel);document.removeEventListener('touchmove',touchMove);element?.removeEventListener('webglcontextlost',lost);document.documentElement.classList.remove('controller-cursor-hidden');delete document.documentElement.dataset.shrinePlaying;document.documentElement.style.removeProperty('cursor');};
+  },[clearInput,setMenuOpen,toggleLight,applyPreferences,burst,interact]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),6000);return()=>clearTimeout(timer);},[notice]);
   useEffect(()=>{
     const context=(document as Document&{modelContext?:{registerTool:(tool:ModelTool,options:{signal:AbortSignal})=>void|Promise<void>}}).modelContext;
@@ -171,6 +186,9 @@ export default function Shrine(){
   return <main className="experience" data-playing={!menu} onContextMenu={e=>e.preventDefault()}>
     <canvas ref={canvas} tabIndex={-1} inputMode="none" aria-label="祭殿の一人称回廊" onPointerDown={e=>{if(e.pointerType==='mouse'&&session.current.mode==='gamepad'){void requestLock();return;}touchMode(e);}} onClick={e=>{if(e.detail===2&&session.current.mode!=='gamepad')void requestLock();}}/>
     <div className="vignette"/><div className="reticle" aria-hidden="true"/>
+    {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
+    {caughtPulse>0&&<div key={'caught'+caughtPulse} className="caught-pulse" aria-hidden="true"/>}
+    {doorNear&&!menu&&<button className="door-action" aria-label="〇：ふすまを開閉" onClick={interact}><DoorOpen size={20}/><span>〇</span></button>}
     <nav className="toolbar" aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
       <button aria-label="DualSenseで操作を開始してカーソルを固定" aria-pressed={pad} className={pad?'active':''} onClick={activateController}><Gamepad2 size={20}/></button>
       <button aria-label={light?'フラッシュライトを消す':'フラッシュライトを点ける'} aria-pressed={light} onClick={toggleLight} className={light?'active':''}>{light?<Flashlight size={19}/>:<FlashlightOff size={19}/>}</button>
@@ -183,10 +201,10 @@ export default function Shrine(){
     {notice&&<div className="toast" role="status">{notice}</div>}
     <div className="touch-controls" hidden={pad||menu}>
       <div className="touch-pad" role="group" aria-label="移動タッチパッド" {...pointerEvents('move')}><span className="thumb" style={{transform:'translate('+stickPosition.x*32+'px,'+stickPosition.z*32+'px)'}}><Move size={22}/></span></div>
-      <div className="touch-right"><button className="sprint" aria-label="押している間ダッシュ" {...pointerEvents('sprint')}><Footprints size={24}/></button><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
+      <div className="touch-right"><div className="touch-actions"><button className="sprint" aria-label="バースト：近くの敵を9秒スタン" onClick={burst}><Sparkles size={23}/></button><button className="sprint" aria-label="押している間ダッシュ" {...pointerEvents('sprint')}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
     </div>
     <Dialog open={menu} onOpenChange={setMenuOpen}>
-      <DialogContent ref={dialog} className="settings-dialog" showCloseButton={false}>
+      <DialogContent ref={dialog} className="settings-dialog" showCloseButton={false} finalFocus={false}>
         <header className="settings-heading"><div><span className="eyebrow">YŪKYŌ</span><DialogTitle>幽境<span>祭殿回廊</span></DialogTitle></div><button className="close-button" aria-label="回廊に戻る" onClick={()=>setMenuOpen(false)}><X size={20}/></button></header>
         <DialogDescription className="sr-only">視点と画質の設定。設定を閉じると探索を再開します。</DialogDescription>
         <Tabs defaultValue="view"><TabsList className="settings-tabs"><TabsTrigger value="view">視点</TabsTrigger><TabsTrigger value="graphics">画質</TabsTrigger><TabsTrigger value="controls">操作</TabsTrigger></TabsList>
@@ -202,7 +220,7 @@ export default function Shrine(){
           </TabsContent>
           <TabsContent value="controls" className="settings-panel controls-panel">
             <div className="connection"><Gamepad2 size={17}/><span>{connected?'コントローラー接続中':'接続後、コントローラーのボタンを押してください'}</span></div>
-            <dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div></dl>
+            <dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>〇 / R2</dt><dd>ふすま開閉 / 9秒スタン</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま開閉 / バースト</dd></div></dl>
             <p className="setting-note">設定内：方向キーで選択・調整、×で決定、○で戻る。<br/>タッチは左右のパッドで移動・視点、足跡ボタンでダッシュ。<br/>カーソルを固定するには、画面右上の矢印をクリック。Escで解除。</p>
             {calStep>=0?<div className="calibration"><span>{['Lスティックを右へ','Lスティックを下へ','Rスティックを右へ','Rスティックを下へ','L1ボタンを押す'][Math.min(calStep,4)]}</span><small>操作ごとにスティック・ボタンを離してください。</small><button className="text-button" onClick={()=>{calibration.current=null;setCalStep(-1);}}>中止</button></div>:<button className="text-button" disabled={!connected} onClick={()=>{const p=lastPad.current;if(p){calibration.current=new PadCalibration(mappingKey(p),p);setCalStep(0);}}}>スティックが反応しない場合：手動調整</button>}
           </TabsContent>
