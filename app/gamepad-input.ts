@@ -53,6 +53,7 @@ export class GamepadSession {
   mappings = new Map<string,PadMapping|null>();
   private samples = new Map<number,number[]>();
   private controllerActive=false;
+  allowsMenuPointer() { return !this.controllerActive; }
   useTouch() {
     // A controller/OS can emit mouse events while a stick is held. Those events
     // must not reveal the on-screen controls or cursor during navigation.

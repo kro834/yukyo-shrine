@@ -74,6 +74,11 @@ test('emulated pointer events cannot reveal touch controls during held controlle
 test('disconnect recovers touch and selects an active second controller',()=>{
  const s=new GamepadSession();s.poll([pad()]);assert.equal(s.poll([pad(),pad([1,0,0,0],[],2)]).pad?.index,2);assert.equal(s.poll([]).mode,'touch');assert.ok(s.useTouch());
 });
+test('opening settings with a mouse preserves controller mode after sensitivity changes',()=>{
+ const s=new GamepadSession();s.poll([pad([0,-1,0,0])]);assert.equal(s.allowsMenuPointer(),false);
+ s.poll([pad()]);assert.equal(s.allowsMenuPointer(),true);assert.equal(s.mode,'gamepad');
+ sanitizePreferences({...DEFAULTS,stickSensitivity:2});assert.equal(s.mode,'gamepad');assert.equal(allowMouseLook(s.mode,false,true),false);
+});
 test('mouse look requires pointer lock and stops in menus',()=>{
  assert.equal(allowMouseLook('touch',false,true),true);assert.equal(allowMouseLook('touch',false,false),false);assert.equal(allowMouseLook('touch',true,true),false);assert.equal(allowMouseLook('gamepad',false,true),false);
 });
