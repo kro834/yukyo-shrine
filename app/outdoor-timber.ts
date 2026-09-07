@@ -19,7 +19,8 @@ export function outdoorTimberBay(variation:number){
   }
   g.setAttribute('color',new THREE.BufferAttribute(colors,3));timber.push(g);
  };
- for(const [i,x] of [-1.85,1.85].entries())member(chamferedBox(.12,1.25,.12,.006).translate(x,.64,0),i);
+ // Sink the foot below exposed soil while retaining the previous top height.
+ for(const [i,x] of [-1.85,1.85].entries())member(chamferedBox(.12,1.28,.12,.006).translate(x,.625,0),i);
  for(const [i,y] of [.55,1.05].entries()){
   member(chamferedBox(4,.085,.08,.005).translate(0,y,0),i+2);
   for(const x of [-1.85,1.85]){

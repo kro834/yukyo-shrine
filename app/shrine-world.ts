@@ -18,6 +18,8 @@ import {createWallPostCollector} from './wall-posts.ts';
 import {boardFacing} from './board-facing.ts';
 import {shrubPlacements} from './shrub-placement.ts';
 import {ShrubMeshes} from './shrub-meshes.ts';
+import {bankShoreFinish} from './bank-shore-finish.ts';
+import {installBankPathFinish} from './bank-path-finish.ts';
 import {outdoorTimberBay,outdoorTimberFinish} from './outdoor-timber.ts';
 import {prepareNightSky} from './night-sky.ts';
 import {plankFloor} from './plank-floor.ts';
@@ -96,7 +98,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const circusPlan=circus?createCircusPlan(seed,layout):undefined,circusRuntime=circusPlan?new CircusRuntime(circusPlan):undefined;
   const visualKind=(kind:string,x:number,z:number)=>{if(stage==='outer')return kind;const patch=((Math.floor((x+200)/20)+Math.floor((z+300)/20)*3+(seed%5))%5+5)%5;if(['factory','bath','cistern','shop'].includes(kind))return patch===0?'stone':patch===2?'hall':kind;return kind;};
   const cave=createCaveSurfaces(layout.cells,layout.walls,seed,{detail:budget.mobile?'low':'high',ceilingLimit:caveDeckLimit(SECOND_DECK.cells)});
-  const landforms=stage==='outer'?createOuterLandformSurfaces(layout.grid,layout.landforms,{belowUpperDeck}):undefined;
+  const landforms=stage==='outer'?createOuterLandformSurfaces(layout.grid,layout.landforms,{belowUpperDeck,subdivisions:budget.mobile?4:6}):undefined;
   const civicSites=createCivicSites(layout);
   const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2);
   const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5},.7);
@@ -156,7 +158,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   fabricFinish(mats.tatamiTrim,false,true);mats.tatamiTrim.color.set('#243421');
   agedFinish(mats.concreteWall,'plaster');agedFinish(mats.civicPaint,'lacquer');agedFinish(mats.civicEnamel,'lacquer');
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
-  terrainFinish(mats.earth);terrainFinish(mats.rock);terrainFinish(mats.bank);
+  terrainFinish(mats.earth);terrainFinish(mats.rock);terrainFinish(mats.bank);bankShoreFinish(mats.bank);
+  const syncBankPath=installBankPathFinish(mats.bank,mats.earth);
   const waterClock={value:0};waterFinish(mats.water,waterClock);
   const waterReflection=waterReflectionUniforms();
   if(stage==='outer'&&!budget.mobile&&!rendererOverride)reflectedWaterFinish(mats.water,waterReflection);
@@ -350,7 +353,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     if(kind==='field'){
       if(w.h<2){
         const identity=landforms?.regionAt(w.x,w.z)?.identity,metal=identity==='underpass'||identity==='floodgate'||identity==='riverside';
-        box(w.x,.16,w.z,w.alongX?4:.36,.32,w.alongX?.36:4,metal?'concrete':'earth');
+        if(metal||!landforms)box(w.x,.16,w.z,w.alongX?4:.36,.32,w.alongX?.36:4,metal?'concrete':'earth');
         if(w.h>1){
           if(!metal){
             const bay=outdoorTimberBay(seed+w.x*.73+w.z*1.13),yaw=w.alongX?0:Math.PI/2;
@@ -835,6 +838,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       effects?.configure(quality);glowMat.opacity=quality==='low'?.26:.12;
     },
     render(time:number){waterClock.value=environmentTime/1000;
+      syncBankPath();
       if(circusRuntime)circusMeshes?.update(circusRuntime.snapshot(),environmentTime/1000,camera.position);
       const area=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind;
       moodTarget.copy(area==='shop'||area==='factory'||area==='bath'||area==='cistern'||area==='cave'||area==='field'?moods[area]:moods.shrine);

@@ -6,7 +6,7 @@ type Region={sectorId:string;identity:Identity;cx:number;cz:number;rotation:numb
 type Material='bank'|'concrete'|'water';
 type Options={
  belowUpperDeck?:(minX:number,maxX:number,minZ:number,maxZ:number)=>boolean;
- /** 4 is recommended. 6 is accepted only if the full mesh remains below the cap. */
+ /** 4 for mobile; 6 retains curved detail if the full mesh fits the cap. */
  subdivisions?:4|6;
  baseHeight?:number;
  triangleLimit?:number;
@@ -74,8 +74,16 @@ export function createOuterLandformSurfaces(grid:Map<string,Cell>,regions:readon
  // Every terrain tile is retained. Prefer 4 subdivisions if 6 would exceed budget.
  let segments=options.subdivisions??4;
  const estimate=(s:number)=>tiles.size*s*s*2+boundaryCount*s*2+waterCount*2;
- if(segments===6&&estimate(6)>limit)segments=4;
- if(estimate(segments)>limit)throw new Error(`Outer terrain budget exceeded: ${estimate(segments)} triangles for ${tiles.size} tiles`);
+ const sampleCache=new Map<string,number[]>(),flatTiles=new Set<string>();
+ if(segments===6)for(const t of tiles.values()){
+  const values:number[]=[];
+  for(let z=0;z<=6;z++)for(let x=0;x<=6;x++)values.push(analyticalHeight(t.x*4-2+x*4/6,t.z*4-2+z*4/6));
+  const k=key(t.x,t.z);sampleCache.set(k,values);
+  if(Math.max(...values)-Math.min(...values)<1e-9)flatTiles.add(k);
+ }
+ const cost=()=>estimate(segments)-(segments===6?flatTiles.size*48:0);
+ if(segments===6&&cost()>limit){segments=4;sampleCache.clear();flatTiles.clear();}
+ if(cost()>limit)throw new Error(`Outer terrain budget exceeded: ${cost()} triangles for ${tiles.size} tiles`);
  const step=4/segments;
  const surfaces:{x:number;z:number;geometry:THREE.BufferGeometry;material:Material;regionId:string;identity:Identity;water:boolean}[]=[];
  const tilemetadata:{x:number;z:number;regionId:string;identity:Identity;removed:boolean;minY:number;maxY:number;waterY:number|null;segments:number;triangles:number}[]=[];
@@ -86,10 +94,19 @@ export function createOuterLandformSurfaces(grid:Map<string,Cell>,regions:readon
   const x0=t.x*4-2,z0=t.z*4-2;
   let minY=Infinity,maxY=-Infinity;
   for(let iz=0;iz<=segments;iz++)for(let ix=0;ix<=segments;ix++){
-   const x=x0+ix*step,z=z0+iz*step,y=analyticalHeight(x,z),n=normalAt(x,z);
+   const x=x0+ix*step,z=z0+iz*step,y=sampleCache.get(key(t.x,t.z))?.[iz*(segments+1)+ix]??analyticalHeight(x,z),n=normalAt(x,z);
    positions.push(x,y,z);normals.push(n.x,n.y,n.z);uvs.push(x/3,z/3);minY=Math.min(minY,y);maxY=Math.max(maxY,y);
   }
-  for(let iz=0;iz<segments;iz++)for(let ix=0;ix<segments;ix++){
+  if(flatTiles.has(key(t.x,t.z))){
+   // All boundary samples remain: neighbouring curved tiles meet exactly.
+   // Only coplanar interior triangles are replaced by a smaller centre fan.
+   const boundary:number[]=[],center=(segments/2)*(segments+1)+segments/2;
+   for(let x=0;x<=segments;x++)boundary.push(x);
+   for(let z=1;z<=segments;z++)boundary.push(z*(segments+1)+segments);
+   for(let x=segments-1;x>=0;x--)boundary.push(segments*(segments+1)+x);
+   for(let z=segments-1;z>0;z--)boundary.push(z*(segments+1));
+   for(let i=0;i<boundary.length;i++)indices.push(center,boundary[(i+1)%boundary.length],boundary[i]);
+  }else for(let iz=0;iz<segments;iz++)for(let ix=0;ix<segments;ix++){
    const a=iz*(segments+1)+ix,b=a+1,c=a+segments+1,d=c+1;
    indices.push(a,c,b,b,c,d);
   }
@@ -108,6 +125,7 @@ export function createOuterLandformSurfaces(grid:Map<string,Cell>,regions:readon
    }
   }
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geometry.setIndex(indices);geometry.computeBoundingBox();geometry.computeBoundingSphere();
+  geometry.userData.flatTerrain=flatTiles.has(key(t.x,t.z));
   renderedPositions.set(key(t.x,t.z),geometry.getAttribute('position') as THREE.BufferAttribute);
   const material=t.region.identity==='underpass'||t.region.identity==='floodgate'?'concrete':'bank';
   surfaces.push({x:t.x,z:t.z,geometry,material,regionId:t.region.sectorId,identity:t.region.identity,water:false});
@@ -121,6 +139,29 @@ export function createOuterLandformSurfaces(grid:Map<string,Cell>,regions:readon
   }
   const triangles=indices.length/3+(waterY===null?0:2);triangleCount+=triangles;
   tilemetadata.push({x:t.x,z:t.z,regionId:t.region.sectorId,identity:t.region.identity,removed:t.removed,minY,maxY,waterY,segments,triangles});
+ }
+ // Material wetness references actual rendered water, never the global y=0
+ // floor or a guessed nearest landscape. Dry halos retain a zero reach value.
+ const activeWater=new Map(tilemetadata.filter(t=>t.waterY!==null).map(t=>[key(t.x,t.z),t]));
+ const earthPaths=new Set([...grid.values()].filter(c=>c.kind==='field'&&['levee','paddy'].includes(regionAt(c.x*4,c.z*4)?.identity??'')).map(c=>key(c.x,c.z)));
+ for(const surface of surfaces)if(surface.material==='bank'){
+  const p=surface.geometry.getAttribute('position'),data=new Float32Array(p.count*2),pathDistance=new Float32Array(p.count);
+  for(let i=0;i<p.count;i++){
+   const x=p.getX(i),z=p.getZ(i),cx=Math.round(x/4),cz=Math.round(z/4);let distance=Infinity,level=0;
+   for(let dx=-3;dx<=3;dx++)for(let dz=-3;dz<=3;dz++){
+    const tile=activeWater.get(key(cx+dx,cz+dz));if(!tile)continue;
+    const d=boxDistance(x,z,tile.x*4,tile.z*4,2);
+    if(d<distance){distance=d;level=tile.waterY!;}
+   }
+   data[i*2]=level;data[i*2+1]=1-smooth(distance/1.2);
+   let earthDistance=4;
+   for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)if(earthPaths.has(key(cx+dx,cz+dz)))earthDistance=Math.min(earthDistance,boxDistance(x,z,(cx+dx)*4,(cz+dz)*4,2));
+   pathDistance[i]=earthDistance;
+  }
+  surface.geometry.setAttribute('bankWater',new THREE.BufferAttribute(data,2));
+  // A matching path sample at the crest removes the hard albedo boundary.
+  // Urban footpaths and interior floors never contribute an earth transition.
+  surface.geometry.setAttribute('bankPathDistance',new THREE.BufferAttribute(pathDistance,1));
  }
  /** Exact barycentric interpolation on the rendered terrain triangles (including
   * float32 Y quantization); deliberately returns soil height rather than water Y.
