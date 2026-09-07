@@ -3,7 +3,7 @@ export type SurfaceFinish='paper'|'plaster'|'tatami'|'lacquer'|'stone'|'tile'|'w
 /** Metre-scale detail. Local fibres follow moving doors; only actual ground-level walls get damp hems. */
 export function agedFinish(material:MeshStandardMaterial,kind:SurfaceFinish){
  const previous=material.onBeforeCompile,previousKey=material.customProgramCacheKey();
- material.customProgramCacheKey=()=> 'aged-interior-v3-'+kind+'-'+previousKey;
+ material.customProgramCacheKey=()=> 'aged-interior-v4-'+kind+'-'+previousKey;
  material.onBeforeCompile=(shader,renderer)=>{
   previous.call(material,shader,renderer);
   shader.vertexShader='varying vec3 agedPosition;\nvarying vec3 agedSurfaceNormal;\nvarying float agedWorldY;\n'+shader.vertexShader;
@@ -11,8 +11,9 @@ export function agedFinish(material:MeshStandardMaterial,kind:SurfaceFinish){
   shader.fragmentShader=`varying vec3 agedPosition;
 varying vec3 agedSurfaceNormal;
 varying float agedWorldY;
-float agedNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);float a=dot(i,vec2(127.1,311.7));return mix(mix(fract(sin(a)*43758.54),fract(sin(a+127.1)*43758.54),f.x),mix(fract(sin(a+311.7)*43758.54),fract(sin(a+438.8)*43758.54),f.x),f.y);}
-vec2 agedNoiseGradient(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.0-2.0*f),du=6.0*f*(1.0-f);float a=dot(i,vec2(127.1,311.7)),v0=fract(sin(a)*43758.54),v1=fract(sin(a+127.1)*43758.54),v2=fract(sin(a+311.7)*43758.54),v3=fract(sin(a+438.8)*43758.54);return vec2(mix(v1-v0,v3-v2,u.y)*du.x,mix(v2-v0,v3-v1,u.x)*du.y);}
+float agedHash(vec2 p){vec3 q=fract(vec3(p.xyx)*.1031);q+=dot(q,q.yzx+33.33);return fract((q.x+q.y)*q.z);}
+float agedNoise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(agedHash(i),agedHash(i+vec2(1.0,0.0)),f.x),mix(agedHash(i+vec2(0.0,1.0)),agedHash(i+vec2(1.0)),f.x),f.y);}
+vec2 agedNoiseGradient(vec2 p){vec2 i=floor(p),f=fract(p),u=f*f*(3.0-2.0*f),du=6.0*f*(1.0-f);float v0=agedHash(i),v1=agedHash(i+vec2(1.0,0.0)),v2=agedHash(i+vec2(0.0,1.0)),v3=agedHash(i+vec2(1.0));return vec2(mix(v1-v0,v3-v2,u.y)*du.x,mix(v2-v0,v3-v1,u.x)*du.y);}
 float agedVisibility(vec2 p){return 1.0-smoothstep(.15,.5,max(fwidth(p.x),fwidth(p.y)));}
 float agedFilteredNoise(vec2 p){return mix(.5,agedNoise(p),agedVisibility(p));}
 float agedWave(float cycles){return sin(6.2831853*cycles)*(1.0-smoothstep(.15,.5,fwidth(cycles)));}

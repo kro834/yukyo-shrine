@@ -1,11 +1,12 @@
+import type {GraphicsQuality} from './preferences.ts';
 export type DeviceHints={touch?:boolean;cores?:number;memory?:number};
 export class PerformanceBudget {
  readonly mobile:boolean;readonly constrained:boolean;
  scale=1;private elapsed=0;private frames=0;private settled=0;
  constructor(hints:DeviceHints={}){this.mobile=!!hints.touch;this.constrained=this.mobile&&((hints.cores??4)<=4||(hints.memory??4)<=4);}
- quality(selected:'low'|'medium'|'high'){return this.constrained&&selected==='medium'?'low':selected;}
- pixelRatio(selected:'low'|'medium'|'high',width:number,height:number,dpr:number){
-  const quality=this.quality(selected),cap=quality==='low'?1:quality==='high'?2:1.5,pixels=this.mobile?700000:3200000;
+ quality(selected:GraphicsQuality){return this.constrained&&selected==='medium'?'low':selected;}
+ pixelRatio(selected:GraphicsQuality,width:number,height:number,dpr:number){
+  const quality=this.quality(selected),cap=quality==='low'?1:quality==='medium'?1.5:2,pixels=this.mobile?700000:quality==='ultra'?6400000:3200000;
   return Math.max(.45,Math.min(dpr,cap,Math.sqrt(pixels/Math.max(1,width*height)))*this.scale);
  }
  observe(ms:number,active=true){

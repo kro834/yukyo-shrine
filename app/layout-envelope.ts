@@ -1,6 +1,6 @@
 import type {Cell,Wall,DoorSpec,Room} from './shrine-layout.ts';
 const CELL=4;const key=(x:number,z:number)=>x+','+z;
-export function encloseLayout(grid:Map<string,Cell>,rooms:Room[],paddies:{x1:number;x2:number;z1:number;z2:number}[]=[]){
+export function encloseLayout(grid:Map<string,Cell>,rooms:Room[],paddies:{x1:number;x2:number;z1:number;z2:number}[]=[],openFields=false){
   const walls:Wall[]=[];
   const doors:DoorSpec[]=[];
   const obstacles:{minX:number;maxX:number;minZ:number;maxZ:number;maxY?:number}[]=[];
@@ -9,7 +9,7 @@ export function encloseLayout(grid:Map<string,Cell>,rooms:Room[],paddies:{x1:num
     const x=c.x*CELL+dx*CELL/2,z=c.z*CELL+dz*CELL/2,alongX=!!dz;
     const basin=false;
     const paddy=c.kind==='field'&&paddies.some(p=>c.x+dx>=p.x1&&c.x+dx<=p.x2&&c.z+dz>=p.z1&&c.z+dz<=p.z2);
-    const height=basin?1.1:paddy?.48:c.h;
+    const height=basin?1.1:paddy?.48:openFields&&c.kind==='field'?1.25:c.h;
     walls.push({x,z,alongX,h:height,insideX:-dx,insideZ:-dz,kind:c.kind});
     obstacles.push({minX:x-(alongX?2:.18),maxX:x+(alongX?2:.18),minZ:z-(alongX?.18:2),maxZ:z+(alongX?.18:2),maxY:height});
   }

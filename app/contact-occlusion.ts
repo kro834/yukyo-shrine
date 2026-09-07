@@ -40,8 +40,10 @@ void main(){
 /** Half-resolution contact detail on High only; no additional scene pass. */
 export class ContactOcclusion extends SSAOPass {
  private excluded:THREE.Object3D[]=[];
- constructor(scene:THREE.Scene,camera:THREE.PerspectiveCamera,width:number,height:number){
-  super(scene,camera,Math.max(1,Math.ceil(width/2)),Math.max(1,Math.ceil(height/2)),16);
+ private resolutionScale:number;
+ constructor(scene:THREE.Scene,camera:THREE.PerspectiveCamera,width:number,height:number,ultra=false){
+  const scale=ultra?.75:.5;
+  super(scene,camera,Math.max(1,Math.ceil(width*scale)),Math.max(1,Math.ceil(height*scale)),ultra?32:16);this.resolutionScale=scale;
   scene.traverse(object=>{
    const mesh=object as THREE.Mesh,materials=mesh.isMesh?(Array.isArray(mesh.material)?mesh.material:[mesh.material]):[];
    if(object instanceof THREE.Points||object instanceof THREE.Line||object instanceof THREE.Sprite||'isReflector' in object||materials.length&&materials.every(m=>m.transparent||!m.depthWrite))this.excluded.push(object);
@@ -67,7 +69,7 @@ export class ContactOcclusion extends SSAOPass {
   this.ssaoMaterial.uniforms.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
   this.blurMaterial.uniforms.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
  }
- override setSize(w:number,h:number){super.setSize(Math.max(1,Math.ceil(w/2)),Math.max(1,Math.ceil(h/2)));}
+ override setSize(w:number,h:number){super.setSize(Math.max(1,Math.ceil(w*this.resolutionScale)),Math.max(1,Math.ceil(h*this.resolutionScale)));}
  override render(renderer:THREE.WebGLRenderer,writeBuffer:THREE.WebGLRenderTarget,readBuffer:THREE.WebGLRenderTarget){
   this.syncCamera();
   const hidden=this.excluded.filter(o=>o.visible),override=this.scene.overrideMaterial;

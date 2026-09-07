@@ -12,10 +12,10 @@ test('all sectors and every expansion room have one matching-floor patrol owner'
   const l=createLayout(seed),e=new Enemies(l.cells,l.obstacles);
   e.addPatrolTargets(l.expansionAreas.map(r=>({id:r.id,position:{x:(r.x1+r.x2)*2,z:(r.z1+r.z2)*2},floor:0})));
   e.update(.05,{x:-1000,z:-1000},l.obstacles,0,undefined,false);
-  assert.equal(e.actors.length,8);assert.equal(e.patrolOwners.size,e.patrolTargets.length);
+  assert.equal(e.actors.length,12);assert.equal(e.patrolOwners.size,e.patrolTargets.length);
   assert.equal(e.patrolTargets.filter(t=>t.id.startsWith('expansion-')).length,87);
   for(const target of e.patrolTargets)assert.equal(e.actors.find(a=>a.id===e.patrolOwners.get(target.id))!.homeFloor,target.floor);
-  assert.equal(new Set(e.patrolOwners.values()).size,8);
+  assert.equal(new Set(e.patrolOwners.values()).size,e.actors.length);
  }
 });
 test('each patrol owner visits its complete target set before repeating nearby rooms',()=>{

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import {GOAL,type ShrineGoal} from './shrine-goal.ts';
+import {BEAD_REQUIREMENTS} from './goal-rules.ts';
 export function createGoalMeshes(scene:THREE.Scene,goal:ShrineGoal){
  const root=new THREE.Group();root.scale.set(goal.horizontalScale,.94,1);root.position.set(GOAL.x+goal.offset.x,0,GOAL.z+goal.offset.z);scene.add(root);
  const wood=new THREE.MeshStandardMaterial({color:'#261c19',roughness:.68}),gold=new THREE.MeshStandardMaterial({color:'#967343',metalness:.75,roughness:.32}),jade=new THREE.MeshStandardMaterial({color:'#497d65',emissive:'#497d65',emissiveIntensity:.15,roughness:.3});
@@ -15,7 +16,7 @@ export function createGoalMeshes(scene:THREE.Scene,goal:ShrineGoal){
  const gems=Array.from({length:goal.required},(_,i)=>{const gem=new THREE.Mesh<THREE.OctahedronGeometry,THREE.Material>(new THREE.OctahedronGeometry(.09),dark);gem.position.set((i-(goal.required-1)/2)*.24,3.69,-.34);root.add(gem);return gem;});
  const seal=new THREE.Mesh(new THREE.TorusGeometry(.47,.035,8,40),jade);seal.position.set(0,1.78,-.18);root.add(seal);
  const altar=new THREE.Group();altar.scale.x=goal.horizontalScale;altar.position.set(goal.altar.x,0,goal.altar.z);scene.add(altar);box(altar,0,.45,0,1.7,.9,.8,wood);box(altar,0,.92,0,1.8,.12,.9,gold);box(altar,0,1,0,1.7,.05,.85,wood);
- const offerings=Array.from({length:5},(_,i)=>{const m=new THREE.Mesh<THREE.SphereGeometry,THREE.Material>(new THREE.SphereGeometry(.085,10,8),dark);m.position.set((i-2)*.25,1.1,0);altar.add(m);return m;});
- const redOffering=new THREE.Mesh<THREE.OctahedronGeometry,THREE.Material>(new THREE.OctahedronGeometry(.13),dark);redOffering.position.set(0,1.27,.18);altar.add(redOffering);
- return {update(){for(const {leaf,side} of leaves)leaf.position.x=side*(.9+goal.progress*1.78);gems.forEach((g,i)=>g.material=goal.goldOffered?goldLit:goal.redOffered?red:i<goal.blueOffered?lit:dark);offerings.forEach((g,i)=>g.material=i<goal.blueOffered?lit:dark);redOffering.material=goal.goldOffered?goldLit:goal.redOffered?red:dark;seal.visible=goal.progress===0;jade.emissiveIntensity=goal.unlocked?.6:.15;},dispose(){for(const m of [wood,gold,jade,lit,red,goldLit,dark])m.dispose();}};
+ const offerings=Array.from({length:BEAD_REQUIREMENTS.blue},(_,i)=>{const m=new THREE.Mesh<THREE.SphereGeometry,THREE.Material>(new THREE.SphereGeometry(.085,10,8),dark);m.position.set((i-(BEAD_REQUIREMENTS.blue-1)/2)*.24,1.1,0);altar.add(m);return m;});
+ const redOfferings=Array.from({length:BEAD_REQUIREMENTS.red},(_,i)=>{const m=new THREE.Mesh<THREE.OctahedronGeometry,THREE.Material>(new THREE.OctahedronGeometry(.11),dark);m.position.set((i-.5)*.35,1.27,.18);altar.add(m);return m;});
+ return {update(){for(const {leaf,side} of leaves)leaf.position.x=side*(.9+goal.progress*1.78);gems.forEach((g,i)=>g.material=goal.goldOffered?goldLit:goal.redOffered>=BEAD_REQUIREMENTS.red?red:i<goal.blueOffered?lit:dark);offerings.forEach((g,i)=>g.material=i<goal.blueOffered?lit:dark);redOfferings.forEach((g,i)=>g.material=goal.goldOffered?goldLit:i<goal.redOffered?red:dark);seal.visible=goal.progress===0;jade.emissiveIntensity=goal.unlocked?.6:.15;},dispose(){for(const m of [wood,gold,jade,lit,red,goldLit,dark])m.dispose();}};
 }

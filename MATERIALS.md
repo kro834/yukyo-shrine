@@ -31,3 +31,11 @@ Each contains1K diffuse, OpenGL normal and roughness JPGs. Retrieved2026-09-07. 
 Curved fixtures retain their native continuous UVs, scaled to circumference and length. Cedar is cropped to a single board on slim timber and its grain follows each member before batching; photographic floorboards run along the floor's Z axis at the documented1.5m repeat. Legacy timber room overlays now use the same photographic floor material.
 
 High uses half-resolution16-sample contact occlusion with metre-based depth limits (18mm–550mm), a nine-tap depth/normal-aware blur, and restrained strength. Transparent overlays and reflections are excluded from the normal pass. This replaces the existing AO pass rather than adding a scene render. Low allocates no post-processing pipeline. These are implementation and automated-test results; GPU appearance still requires visual verification.
+
+## Ultra and outer stage
+
+Ultra lazily loads 2048px diffuse, OpenGL normal and roughness maps for `wood_planks`, `clay_plaster`, `rust_coarse_01`, and `cobblestone_floor_001`. These 12 official CC0 JPGs total 30,257,397 bytes; source URLs, authors and verified MD5 hashes are retained in `public/materials/ultra/provenance.json`. High retains the 1K maps and Low does not request these detail maps. Ultra uses 32-sample contact occlusion at three-quarter resolution, up to4096px flashlight shadows, and a1024px reflection target. Multisampling is recalculated after rendering resolution changes. Phones retain their pixel budget and omit planar reflections.
+
+The outer stage uses the official CC0 [Qwantani Moonrise PureSky](https://polyhaven.com/a/qwantani_moonrise_puresky) 1K HDR by Greg Zaal and Jarod Guest, plus Rob Tuytel's [Grass Path2](https://polyhaven.com/a/grass_path_2) 1K albedo/normal/roughness at a1m repeat. The four files total3,156,026 bytes. Verified metadata is in `public/materials/outer/provenance.json`. HDR brightness is reduced for the night setting; it is not requested on Low.
+
+Visual QA in installed Chrome covered High wall shading, the Ultra storefront, cave and outdoor field, and desktop/mobile settings. This found and corrected discontinuities in the procedural noise, overbright flashlight highlights, and excessive sky exposure. The result is an improved realtime rendering, not a claim of photographic equivalence or physical-device performance.

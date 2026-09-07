@@ -84,6 +84,6 @@ test('mouse look requires pointer lock and stops in menus',()=>{
 });
 test('stored preference corruption is bounded without losing safe defaults',()=>{
  assert.deepEqual(sanitizePreferences(null),DEFAULTS);
- const p=sanitizePreferences({fov:900,brightness:-50,quality:'ultra',stickSensitivity:NaN,touchSensitivity:.1,invertY:'yes'});
+ const p=sanitizePreferences({fov:900,brightness:-50,quality:'invalid',stickSensitivity:NaN,touchSensitivity:.1,invertY:'yes'});
  assert.equal(p.fov,95);assert.equal(p.brightness,.7);assert.equal(p.quality,'high');assert.equal(p.stickSensitivity,1);assert.equal(p.touchSensitivity,.25);assert.equal(p.invertY,false);
 });

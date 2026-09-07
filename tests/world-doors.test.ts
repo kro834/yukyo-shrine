@@ -60,8 +60,8 @@ test('furnished random worlds collect and offer either route, then allow entry t
    const actual=actualEnemies!,start=actual.nodes.keys().next().value!,seen=new Set([start]),queue=[start];
    for(let i=0;i<queue.length;i++)for(const n of actual.graph.get(queue[i])??[])if(!seen.has(n)){seen.add(n);queue.push(n);}
    assert.equal(seen.size,actual.nodes.size,`seed ${seed}: furniture-inclusive navigation`);
-   const targets=points.filter(p=>p.floor===0&&(p.id.includes('red-')===(color==='red'))).slice(0,color==='red'?1:5);
-   assert.equal(targets.length,color==='red'?1:5);
+   const targets=points.filter(p=>p.floor===0&&(p.id.includes('red-')===(color==='red'))).slice(0,color==='red'?2:6);
+   assert.equal(targets.length,color==='red'?2:6);
    for(const p of targets){world.camera.position.set(p.position.x,1.68,p.position.z);world.step(.05);}
    assert.equal(world.collection()[color],targets.length);assert.equal(world.collection().unlocked,false);
    world.camera.position.set(world.altarPosition.x,1.68,world.altarPosition.z-2);world.camera.rotation.y=Math.PI;

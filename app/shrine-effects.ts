@@ -4,6 +4,7 @@ import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {ContactOcclusion} from './contact-occlusion.ts';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
+import type {GraphicsQuality} from './preferences.ts';
 // AO and the blurred light halo have low spatial frequency. Keep geometry and
 // textures at the selected full resolution, sampling only these effects at half size.
 class HalfBloom extends UnrealBloomPass {override setSize(w:number,h:number){super.setSize(Math.max(1,Math.ceil(w/2)),Math.max(1,Math.ceil(h/2)));}}
@@ -15,21 +16,27 @@ export function renderEnemyEcho(renderer:THREE.WebGLRenderer,scene:THREE.Scene,c
 }
 
 /** Render the architecture in HDR; keep through-wall enemy echoes outside AO. */
-export function createEffects(renderer:THREE.WebGLRenderer,scene:THREE.Scene,camera:THREE.PerspectiveCamera,mobile=false){
+export function createEffects(renderer:THREE.WebGLRenderer,scene:THREE.Scene,camera:THREE.PerspectiveCamera,mobile=false,ultra=false){
   const composer=new EffectComposer(renderer);
-  composer.renderTarget1.samples=mobile?0:2;composer.renderTarget2.samples=mobile?0:2;
-  const base=new RenderPass(scene,camera),ao=new ContactOcclusion(scene,camera,innerWidth,innerHeight);
+  const drawingSize=new THREE.Vector2();
+  const syncTargets=()=>{
+    renderer.getDrawingBufferSize(drawingSize);
+    const samples=mobile?0:Math.min(ultra&&drawingSize.x*drawingSize.y<=3200000?4:2,renderer.capabilities.maxSamples);
+    for(const target of [composer.renderTarget1,composer.renderTarget2])if(target.samples!==samples){target.dispose();target.samples=samples;}
+    composer.setPixelRatio(renderer.getPixelRatio());composer.setSize(innerWidth,innerHeight);
+  };
+  const base=new RenderPass(scene,camera),ao=new ContactOcclusion(scene,camera,innerWidth,innerHeight,ultra);
   const bloom=new HalfBloom(new THREE.Vector2(innerWidth,innerHeight),.16,.55,1.15);
   const output=new OutputPass();
   for(const pass of [base,ao,bloom,output])composer.addPass(pass);
   let enabled=true;
   return {
-    configure(quality:'low'|'medium'|'high'){
-      enabled=quality!=='low';ao.enabled=quality==='high';
-      bloom.strength=quality==='high'?.18:.14;
-      composer.setPixelRatio(renderer.getPixelRatio());composer.setSize(innerWidth,innerHeight);
+    configure(quality:GraphicsQuality){
+      enabled=quality!=='low';ao.enabled=quality==='high'||quality==='ultra';
+      bloom.strength=ao.enabled?.12:.1;
+      syncTargets();
     },
-    resize(){composer.setPixelRatio(renderer.getPixelRatio());composer.setSize(innerWidth,innerHeight);},
+    resize(){syncTargets();},
     render(reveal=false){
       ao.ssaoMaterial.uniforms.cameraProjectionMatrix.value.copy(camera.projectionMatrix);
       ao.ssaoMaterial.uniforms.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);

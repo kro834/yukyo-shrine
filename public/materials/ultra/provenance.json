@@ -1,0 +1,263 @@
+{
+  "verifiedAtUtc": "2026-09-07T11:38:47.6482630Z",
+  "method": "Official Poly Haven API URLs; downloaded bytes and MD5 matched metadata; decoded dimensions verified",
+  "count": 12,
+  "totalBytes": 30257397,
+  "assets": [
+    {
+      "filename": "wood_planks_diff_2k.jpg",
+      "bytes": 2387732,
+      "width": 2048,
+      "height": 2048,
+      "md5": "29f2d08d585433fb54034a0e8fa79adc",
+      "id": "wood_planks",
+      "map": "Diffuse",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/wood_planks/wood_planks_diff_2k.jpg",
+      "source": "https://polyhaven.com/a/wood_planks",
+      "metadata": "https://api.polyhaven.com/files/wood_planks",
+      "tileMillimetres": [
+        1499.999761581421,
+        1499.999761581421
+      ],
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "wood_planks_nor_gl_2k.jpg",
+      "bytes": 2906326,
+      "width": 2048,
+      "height": 2048,
+      "md5": "61c0a752deaa8fda789a31e4fc1427d8",
+      "id": "wood_planks",
+      "map": "nor_gl",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/wood_planks/wood_planks_nor_gl_2k.jpg",
+      "source": "https://polyhaven.com/a/wood_planks",
+      "metadata": "https://api.polyhaven.com/files/wood_planks",
+      "tileMillimetres": [
+        1499.999761581421,
+        1499.999761581421
+      ],
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "wood_planks_rough_2k.jpg",
+      "bytes": 1151798,
+      "width": 2048,
+      "height": 2048,
+      "md5": "461754cb0181e562be384e2acc2fc8d2",
+      "id": "wood_planks",
+      "map": "Rough",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/wood_planks/wood_planks_rough_2k.jpg",
+      "source": "https://polyhaven.com/a/wood_planks",
+      "metadata": "https://api.polyhaven.com/files/wood_planks",
+      "tileMillimetres": [
+        1499.999761581421,
+        1499.999761581421
+      ],
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "clay_plaster_diff_2k.jpg",
+      "bytes": 1621557,
+      "width": 2048,
+      "height": 2048,
+      "md5": "8e16660ba21ffad2e5fb93282b28015b",
+      "id": "clay_plaster",
+      "map": "Diffuse",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/clay_plaster/clay_plaster_diff_2k.jpg",
+      "source": "https://polyhaven.com/a/clay_plaster",
+      "metadata": "https://api.polyhaven.com/files/clay_plaster",
+      "tileMillimetres": [
+        1999.9996423721313,
+        1999.9996423721313
+      ],
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "clay_plaster_nor_gl_2k.jpg",
+      "bytes": 3241213,
+      "width": 2048,
+      "height": 2048,
+      "md5": "f4f2819724ee89c7aaa189d11fd7cb88",
+      "id": "clay_plaster",
+      "map": "nor_gl",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/clay_plaster/clay_plaster_nor_gl_2k.jpg",
+      "source": "https://polyhaven.com/a/clay_plaster",
+      "metadata": "https://api.polyhaven.com/files/clay_plaster",
+      "tileMillimetres": [
+        1999.9996423721313,
+        1999.9996423721313
+      ],
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "clay_plaster_rough_2k.jpg",
+      "bytes": 1238299,
+      "width": 2048,
+      "height": 2048,
+      "md5": "0989adc153821c0cb94eb8c3c123a656",
+      "id": "clay_plaster",
+      "map": "Rough",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/clay_plaster/clay_plaster_rough_2k.jpg",
+      "source": "https://polyhaven.com/a/clay_plaster",
+      "metadata": "https://api.polyhaven.com/files/clay_plaster",
+      "tileMillimetres": [
+        1999.9996423721313,
+        1999.9996423721313
+      ],
+      "authors": {
+        "Amal Kumar": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "cobblestone_floor_001_diff_2k.jpg",
+      "bytes": 2394580,
+      "width": 2048,
+      "height": 2048,
+      "md5": "273c075d7e7cab056a36a23969924c6a",
+      "id": "cobblestone_floor_001",
+      "map": "Diffuse",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_001/cobblestone_floor_001_diff_2k.jpg",
+      "source": "https://polyhaven.com/a/cobblestone_floor_001",
+      "metadata": "https://api.polyhaven.com/files/cobblestone_floor_001",
+      "tileMillimetres": [
+        2400.0000953674316,
+        2400.0000953674316
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "cobblestone_floor_001_nor_gl_2k.jpg",
+      "bytes": 3683849,
+      "width": 2048,
+      "height": 2048,
+      "md5": "aed89d8cd1200f4e01055c62c83ce75d",
+      "id": "cobblestone_floor_001",
+      "map": "nor_gl",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_001/cobblestone_floor_001_nor_gl_2k.jpg",
+      "source": "https://polyhaven.com/a/cobblestone_floor_001",
+      "metadata": "https://api.polyhaven.com/files/cobblestone_floor_001",
+      "tileMillimetres": [
+        2400.0000953674316,
+        2400.0000953674316
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "cobblestone_floor_001_rough_2k.jpg",
+      "bytes": 1581274,
+      "width": 2048,
+      "height": 2048,
+      "md5": "61d580da0cc46795151065c4776b6aba",
+      "id": "cobblestone_floor_001",
+      "map": "Rough",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/cobblestone_floor_001/cobblestone_floor_001_rough_2k.jpg",
+      "source": "https://polyhaven.com/a/cobblestone_floor_001",
+      "metadata": "https://api.polyhaven.com/files/cobblestone_floor_001",
+      "tileMillimetres": [
+        2400.0000953674316,
+        2400.0000953674316
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "rust_coarse_01_diff_2k.jpg",
+      "bytes": 3519719,
+      "width": 2048,
+      "height": 2048,
+      "md5": "c1f3d0f3e8ea08bfed17bd27a5bb4a45",
+      "id": "rust_coarse_01",
+      "map": "Diffuse",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rust_coarse_01/rust_coarse_01_diff_2k.jpg",
+      "source": "https://polyhaven.com/a/rust_coarse_01",
+      "metadata": "https://api.polyhaven.com/files/rust_coarse_01",
+      "tileMillimetres": [
+        2199.9998092651367,
+        2200.000286102295
+      ],
+      "authors": {
+        "Dimitrios Savva": "Photography",
+        "Rico Cilliers": "Processing"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "rust_coarse_01_nor_gl_2k.jpg",
+      "bytes": 3685688,
+      "width": 2048,
+      "height": 2048,
+      "md5": "70e8ba5a8244cffb052b9ba194610867",
+      "id": "rust_coarse_01",
+      "map": "nor_gl",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rust_coarse_01/rust_coarse_01_nor_gl_2k.jpg",
+      "source": "https://polyhaven.com/a/rust_coarse_01",
+      "metadata": "https://api.polyhaven.com/files/rust_coarse_01",
+      "tileMillimetres": [
+        2199.9998092651367,
+        2200.000286102295
+      ],
+      "authors": {
+        "Dimitrios Savva": "Photography",
+        "Rico Cilliers": "Processing"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "rust_coarse_01_rough_2k.jpg",
+      "bytes": 2845362,
+      "width": 2048,
+      "height": 2048,
+      "md5": "10a240a8a6e841e9667497377df90f72",
+      "id": "rust_coarse_01",
+      "map": "Rough",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/rust_coarse_01/rust_coarse_01_rough_2k.jpg",
+      "source": "https://polyhaven.com/a/rust_coarse_01",
+      "metadata": "https://api.polyhaven.com/files/rust_coarse_01",
+      "tileMillimetres": [
+        2199.9998092651367,
+        2200.000286102295
+      ],
+      "authors": {
+        "Dimitrios Savva": "Photography",
+        "Rico Cilliers": "Processing"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    }
+  ]
+}

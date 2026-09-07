@@ -18,7 +18,7 @@ test('six distinct stage wings contain distinct materials and join the existing 
 });
 test('exactly one danger enemy detects farther, moves faster, but can be outrun and stunned',()=>{
  const l=createLayout(),enemies=new Enemies(l.cells,l.obstacles);
- assert.equal(enemies.actors.length,8);assert.equal(enemies.actors.filter(e=>e.kind==='danger').length,1);
+ assert.equal(enemies.actors.length,12);assert.equal(enemies.actors.filter(e=>e.kind==='danger').length,1);
  const boss=enemies.actors.find(e=>e.kind==='danger')!;
  assert.ok(ENEMY_PROFILES.danger.sight>ENEMY_PROFILES.normal.sight*2);
  assert.ok(ENEMY_PROFILES.danger.chase>ENEMY_PROFILES.normal.chase);

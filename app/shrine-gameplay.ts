@@ -1,3 +1,4 @@
+import {EXTRA_ENEMY_PROFILES,isFinale,traitSpeed,type FinaleKind} from './enemy-traits.ts';
 import {movePlayer,SPRINT_SPEED,RADIUS,type Position,type Obstacle} from './movement.ts';
 import type {Cell,DoorSpec} from './shrine-layout.ts';
 import {nearbyObstacles} from './spatial.ts';
@@ -66,10 +67,10 @@ export class EnemyBrain {
     }
   }
 }
-export const ENEMY_PROFILES={normal:{sight:25,nearSight:4,cone:.05,chase:8.1,patrol:3.5,hearing:88},danger:{sight:56,nearSight:7,cone:-.3,chase:9.1,patrol:4,hearing:150},listener:{sight:16,nearSight:2.5,cone:.2,chase:7.7,patrol:2.9,hearing:145},watcher:{sight:44,nearSight:3.8,cone:.6,chase:7.9,patrol:2.5,hearing:72},stalker:{sight:22,nearSight:4.8,cone:-.15,chase:8.95,patrol:3.8,hearing:65}};
+export const ENEMY_PROFILES={...EXTRA_ENEMY_PROFILES,normal:{sight:25,nearSight:4,cone:.05,chase:8.1,patrol:3.5,hearing:88},danger:{sight:56,nearSight:7,cone:-.3,chase:9.1,patrol:4,hearing:150},listener:{sight:16,nearSight:2.5,cone:.2,chase:7.7,patrol:2.9,hearing:145},watcher:{sight:44,nearSight:3.8,cone:.6,chase:7.9,patrol:2.5,hearing:72},stalker:{sight:22,nearSight:4.8,cone:-.15,chase:8.95,patrol:3.8,hearing:65}};
 export type EnemyKind=keyof typeof ENEMY_PROFILES;
 type PatrolTarget={id:string;point:Position;floor:number;visits:number;lastVisited?:number};
-export type Enemy={id:number;kind:EnemyKind;position:Position;home:Position;homeFloor:number;searchBranches:number;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number;patrol:PatrolTarget|null};
+export type Enemy={traitTime:number;flankPoint:Position|null;id:number;kind:EnemyKind;position:Position;home:Position;homeFloor:number;searchBranches:number;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number;patrol:PatrolTarget|null};
 export function openPursuedDoor(doors:Doors,e:Enemy,walls:Obstacle[],dt:number){
   const d=(e.brain.mode==='chase'||e.investigate||e.patrol)&&e.brain.mode!=='stunned'?doors.nearest(e.position,e.facing+Math.PI,walls,floorBand(e.floor)):null;
   const close=d&&!d.open&&Math.hypot(d.spec.x-e.position.x,d.spec.z-e.position.z)<1.65;
@@ -83,7 +84,7 @@ export class Enemies {
   actors:Enemy[];
   pressure=0;
   difficulty={enemies:true,sense:1,speed:1,search:1};
-  patrolClock=0;
+  patrolClock=0;finalKind:FinaleKind|null=null;private regularActors:Enemy[]|null=null;
   readonly patrolOwners=new Map<string,number>();
   private ownerSignature='';
   private squadCooldown=0;
@@ -112,7 +113,7 @@ export class Enemies {
     for(const [deck,nodes,walls,upper] of [[SECOND_DECK,this.upperNodes,this.upperWalls,false],[THIRD_DECK,this.thirdNodes,this.thirdWalls,true]] as const)for(const c of deck.cells){const p={x:c.x*4,z:c.z*4};if(HIGH_STAIRS.some(s=>p.x>=s.minX&&p.x<=s.maxX&&p.z>=s.minZ&&p.z<=s.maxZ)||walls.some(o=>p.x>o.minX-RADIUS&&p.x<o.maxX+RADIUS&&p.z>o.minZ-RADIUS&&p.z<o.maxZ+RADIUS))continue;nodes.set(c.x+','+c.z,p);}
     for(const [key,p] of this.thirdNodes){const [x,z]=key.split(',').map(Number);this.thirdGraph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.thirdNodes.has(k)&&!segmentBlocked(p,this.thirdNodes.get(k)!,this.thirdWalls)));}
     for(const [key,p] of this.upperNodes){const [x,z]=key.split(',').map(Number);this.upperGraph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.upperNodes.has(k)&&!segmentBlocked(p,this.upperNodes.get(k)!,this.upperWalls)));}
-    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:44,z:148},{x:132,z:172},{x:128,z:-116},{x:-144,z:-100},{x:-52,z:76}].map((p,id)=>{const homeFloor=id===3?4.8:id===7?9.6:0,homeNodes=homeFloor>9?this.thirdNodes:homeFloor?this.upperNodes:this.nodes;const home=[...homeNodes.values()].reduce((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)<Math.hypot(b.x-p.x,b.z-p.z)?a:b);return {id,kind:id===4?'danger':(['normal','listener','watcher','stalker'] as EnemyKind[])[id%4],home:{...home},homeFloor,searchBranches:0,position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map<string,number>(),doorWait:0,floor:homeFloor,destinationFloor:homeFloor,lastSeenFloor:homeFloor,patrol:null};});
+    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:44,z:148},{x:132,z:172},{x:128,z:-116},{x:-144,z:-100},{x:-52,z:76},{x:-120,z:100},{x:100,z:-36},{x:-28,z:124},{x:92,z:148}].map((p,id)=>{const homeFloor=id===3||id===10?4.8:id===7||id===11?9.6:0,homeNodes=homeFloor>9?this.thirdNodes:homeFloor?this.upperNodes:this.nodes;const home=[...homeNodes.values()].reduce((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)<Math.hypot(b.x-p.x,b.z-p.z)?a:b);return {traitTime:0,flankPoint:null,id,kind:id>=8?(['mire','warden','fox','pilgrim'] as const)[id-8]:id===4?'danger':(['normal','listener','watcher','stalker'] as EnemyKind[])[id%4],home:{...home},homeFloor,searchBranches:0,position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map<string,number>(),doorWait:0,floor:homeFloor,destinationFloor:homeFloor,lastSeenFloor:homeFloor,patrol:null};});
   }
   addPatrolTargets(points:{id:string;position:Position;floor:number}[]){
     if(!this.patrolTargets.length){
@@ -178,14 +179,25 @@ export class Enemies {
       if(e.brain.mode==='stunned'||e.brain.mode==='chase'||Math.hypot(e.position.x-position.x,e.position.z-position.z)>ENEMY_PROFILES[e.kind].hearing*balance.sense*this.difficulty.sense)continue;
       const nextFloor=floor>7.2?9.6:floor>2.4?UPPER_HEIGHT:0;
       if(!e.investigate||e.destinationFloor!==nextFloor){e.planIn=Math.min(e.planIn,.03*e.id);e.route=[];}
-      e.investigate={...position};e.destinationFloor=nextFloor;e.searchBranches=e.kind==='listener'?3:2;e.searchTime=Math.max(45*balance.search,Math.hypot(e.position.x-position.x,e.position.z-position.z)/(3.3*balance.speed)+8*balance.search);count++;
+      e.investigate={...position};e.destinationFloor=nextFloor;e.searchBranches=e.kind==='warden'?5:e.kind==='listener'?3:2;e.searchTime=Math.max((e.kind==='warden'?65:45)*balance.search*this.difficulty.search,Math.hypot(e.position.x-position.x,e.position.z-position.z)/(3.3*balance.speed)+8*balance.search);count++;
     }return count;
   }
-  burst(player:Position&{y?:number},blockers:Obstacle[],floor=0,yaw=0,pitch=0){let count=0;for(const e of this.actors)if(flashHits({x:player.x,z:player.z,y:player.y??floor+1.5},e.position,floor,e.floor,yaw,pitch,blockers)){e.brain.stun();e.route=[];e.investigate=null;e.searchBranches=0;e.searchTime=0;count++;}return count;}
-  reset(){this.squadCooldown=0;this.patrolClock=0;for(const t of this.patrolTargets){t.visits=0;t.lastVisited=0;}for(const e of this.actors){e.position={...e.home};e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;e.route=[];e.investigate=null;e.searchTime=0;e.doorWait=0;e.floor=e.homeFloor;e.destinationFloor=e.homeFloor;e.searchBranches=0;e.patrol=null;}}
-  update(dt:number,player:Position,groundBlockers:Obstacle[],playerFloor=0,upperBlockers:Obstacle[]=this.upperWalls,detectable=true,thirdBlockers:Obstacle[]=this.thirdWalls){
+  burst(player:Position&{y?:number},blockers:Obstacle[],floor=0,yaw=0,pitch=0){let count=0;for(const e of this.actors)if(flashHits({x:player.x,z:player.z,y:player.y??floor+1.5},e.position,floor,e.floor,yaw,pitch,blockers,e.kind==='mire'?[.22,.42,.58]:undefined)){e.brain.stun();e.route=[];e.investigate=null;e.searchBranches=0;e.searchTime=0;count++;}return count;}
+  beginFinale(player:Position,floor:number,random:()=>number){
+    if(this.finalKind)return this.finalKind;
+    this.finalKind=random()<.5?'hatred':'wrath';this.regularActors=this.actors;
+    const level=floorBand(floor),nodes=level>9?this.thirdNodes:level>4?this.upperNodes:this.nodes;
+    const candidates=[...nodes.values()].filter(p=>Math.hypot(p.x-player.x,p.z-player.z)>=22&&Math.hypot(p.x-player.x,p.z-player.z)<=38);
+    const home=candidates[Math.min(candidates.length-1,Math.floor(random()*candidates.length))]??[...nodes.values()].reduce((a,b)=>Math.hypot(a.x-player.x,a.z-player.z)>Math.hypot(b.x-player.x,b.z-player.z)?a:b);
+    const boss:Enemy={...this.actors[0],id:12,kind:this.finalKind,home:{...home},position:{...home},homeFloor:level,floor:level,destinationFloor:level,lastSeenFloor:level,brain:new EnemyBrain(),route:[],waypoint:null,investigate:null,searchTime:0,searchBranches:0,planIn:0,traitTime:0,flankPoint:null,visits:new Map(),patrol:null};
+    this.actors=[boss];this.patrolOwners.clear();this.ownerSignature='';return this.finalKind;
+  }
+  reset(){if(this.regularActors){this.actors=this.regularActors;this.regularActors=null;}this.finalKind=null;this.squadCooldown=0;this.patrolClock=0;for(const t of this.patrolTargets){t.visits=0;t.lastVisited=0;}for(const e of this.actors){e.position={...e.home};e.traitTime=0;e.flankPoint=null;e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;e.route=[];e.investigate=null;e.searchTime=0;e.doorWait=0;e.floor=e.homeFloor;e.destinationFloor=e.homeFloor;e.searchBranches=0;e.patrol=null;}}
+  update(dt:number,player:Position,groundBlockers:Obstacle[],playerFloor=0,upperBlockers:Obstacle[]=this.upperWalls,detectable=true,thirdBlockers:Obstacle[]=this.thirdWalls,lightOn=detectable){
     let caught=false;this.patrolClock+=dt;this.squadCooldown=Math.max(0,this.squadCooldown-dt);
     let sighting:{source:Enemy;point:Position;floor:number}|null=null;
+    const transits=[...STAIRS.map(s=>({...s,footprint:s,low:0,high:4.8})),...HIGH_STAIRS.map(s=>({...s,footprint:s,low:4.8,high:9.6}))];
+    const rampAt=(p:Position,height:number)=>transits.find(s=>p.x>=s.minX&&p.x<=s.maxX&&p.z>=s.minZ&&p.z<=s.maxZ&&Math.abs(height-(s.low+(p.z-s.minZ)/(s.maxZ-s.minZ)*(s.high-s.low)))<.05);
     for(const e of this.actors){
       const upstairs=floorBand(e.floor),blockers=upstairs>9?thirdBlockers:upstairs?upperBlockers:groundBlockers;
       const dx=player.x-e.position.x,dz=player.z-e.position.z,distance=Math.hypot(dx,dz);
@@ -194,22 +206,36 @@ export class Enemies {
       const dangerScale=this.wingAt(e.position)==='yokocho'?1.3:1,pressureScale=1+Math.max(0,Math.min(1,this.pressure))*.18;
       const movementScale=Math.max(.9,balance.speed);
       const profile={...base,sight:base.sight*balance.sense*dangerScale*pressureScale*this.difficulty.sense,nearSight:base.nearSight*balance.sense,chase:Math.min(8.9,base.chase*movementScale*dangerScale*pressureScale*this.difficulty.speed),patrol:Math.max(2.6,base.patrol*movementScale*pressureScale*this.difficulty.speed)};
-      const sees=detectable&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+2.05},{...player,y:playerFloor+1.5},blockers);
+      const omniscient=isFinale(e.kind);
+      const targetStair=omniscient?rampAt(player,playerFloor):undefined;
+      const currentStair=omniscient?rampAt(e.position,e.floor):transits.find(s=>e.floor>s.low+1e-6&&e.floor<s.high-1e-6&&e.position.x>=s.minX&&e.position.x<=s.maxX&&e.position.z>=s.minZ&&e.position.z<=s.maxZ),onStair=!!currentStair;
+      // A ramp footprint blocks ground navigation, but not sight along its surface.
+      const sightBlockers=targetStair&&currentStair===targetStair?blockers.filter(o=>o!==targetStair.footprint):blockers;
+      const sees=(omniscient||detectable&&(e.kind!=='mire'||lightOn))&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+(e.kind==='mire'?.52:2.05)},{...player,y:playerFloor+1.5},sightBlockers);
       const previousMode=e.brain.mode,lastSeen=e.brain.lastSeen?{...e.brain.lastSeen}:null;e.brain.update(dt,sees,player);
-      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.searchBranches=e.kind==='danger'?3:e.kind==='watcher'?1:2;e.searchTime=14*balance.search*this.difficulty.search;e.waypoint=null;e.route=[];e.planIn=0;}
+      if(omniscient&&e.brain.mode!=='stunned'){e.brain.mode='chase';e.brain.lastSeen={...player};e.destinationFloor=playerFloor>7.2?9.6:playerFloor>2.4?UPPER_HEIGHT:0;e.lastSeenFloor=e.destinationFloor;}
+      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.flankPoint=null;e.searchBranches=e.kind==='warden'?5:e.kind==='danger'?3:e.kind==='watcher'?1:2;e.searchTime=14*balance.search*this.difficulty.search;e.waypoint=null;e.route=[];e.planIn=0;}
       if(sees&&e.brain.mode==='chase'){e.searchBranches=0;e.investigate=null;e.searchTime=0;e.lastSeenFloor=playerFloor>7.2?9.6:playerFloor>2.4?UPPER_HEIGHT:0;e.destinationFloor=e.lastSeenFloor;if(!sighting&&this.squadCooldown===0)sighting={source:e,point:{...e.brain.lastSeen!},floor:e.lastSeenFloor};}
       if(e.brain.mode==='stunned')continue;
-      if(e.brain.mode==='chase'&&distance<.8&&sees){caught=true;continue;}
+      e.traitTime=e.brain.mode==='chase'?e.traitTime+dt:0;
+      if(e.brain.mode==='chase'&&distance<.8&&Math.abs(playerFloor-e.floor)<.6&&sees){caught=true;continue;}
       e.searchTime=Math.max(0,e.searchTime-dt);if(e.searchTime===0){e.investigate=null;e.searchBranches=0;}
       if(e.brain.mode==='patrol'&&!e.investigate){
         if(e.patrol&&Math.abs(e.floor-e.patrol.floor)<.3&&Math.hypot(e.position.x-e.patrol.point.x,e.position.z-e.patrol.point.z)<.45){e.patrol.visits++;e.patrol.lastVisited=this.patrolClock;e.patrol=null;}
         if(!e.patrol)this.assignPatrol(e);else e.destinationFloor=e.patrol.floor;
       }
       let goal=e.brain.mode==='chase'?e.brain.lastSeen:e.investigate??e.patrol?.point??null;
-      const transits=[...STAIRS.map(s=>({...s,low:0,high:4.8})),...HIGH_STAIRS.map(s=>({...s,low:4.8,high:9.6}))];
-      const currentStair=transits.find(s=>e.floor>s.low+1e-6&&e.floor<s.high-1e-6&&e.position.x>=s.minX&&e.position.x<=s.maxX&&e.position.z>=s.minZ&&e.position.z<=s.maxZ),onStair=!!currentStair;
+      if(e.kind==='fox'&&distance<=7)e.flankPoint=null;
+      if(e.kind==='fox'&&e.brain.mode==='chase'&&sees&&goal&&distance>7){
+        if(!e.flankPoint&&e.planIn<=0){const side=e.id%2?1:-1,target={x:goal.x-dz/Math.max(1,distance)*4*side,z:goal.z+dx/Math.max(1,distance)*4*side};const flank=this.closest(target,upstairs);if(flank&&flank.distance<3)e.flankPoint={...flank.point};e.planIn=1.8;}
+        if(e.flankPoint){if(Math.hypot(e.flankPoint.x-e.position.x,e.flankPoint.z-e.position.z)>.65)goal=e.flankPoint;else e.flankPoint=null;}
+      }
       let stairTravel=false;
-      if(goal&&(onStair||e.destinationFloor!==upstairs)){
+      if(goal&&targetStair&&(currentStair===targetStair||!onStair&&(upstairs===targetStair.low||upstairs===targetStair.high))){
+        const x=(targetStair.minX+targetStair.maxX)/2,ascending=upstairs===targetStair.low,entry={x,z:ascending?targetStair.minZ-1:targetStair.maxZ+1};
+        stairTravel=currentStair===targetStair||(Math.hypot(e.position.x-entry.x,e.position.z-entry.z)<1.4&&Math.abs(e.position.x-x)<.6);
+        goal=stairTravel?{...player}:entry;
+      }else if(goal&&(onStair||e.destinationFloor!==upstairs)){
         const ascending=currentStair?e.destinationFloor>=currentStair.high:e.destinationFloor>upstairs;
         const stair=currentStair??transits.filter(s=>ascending?s.low===upstairs:s.high===upstairs).sort((a,b)=>Math.hypot((a.minX+a.maxX)/2-e.position.x,(ascending?a.minZ:a.maxZ)-e.position.z)-Math.hypot((b.minX+b.maxX)/2-e.position.x,(ascending?b.minZ:b.maxZ)-e.position.z))[0];
         const x=(stair.minX+stair.maxX)/2,entry={x,z:ascending?stair.minZ-1:stair.maxZ+1};
@@ -251,7 +277,8 @@ export class Enemies {
       }
       if(goal){
         const gx=goal.x-e.position.x,gz=goal.z-e.position.z,len=Math.hypot(gx,gz);
-        const speed=e.brain.mode==='chase'?profile.chase:e.investigate?Math.max(3.6,3.3*movementScale):profile.patrol;
+        const baseSpeed=e.brain.mode==='chase'?profile.chase:e.investigate?(e.kind==='warden'?5.1:Math.max(3.6,3.3*movementScale)):profile.patrol;
+        const speed=traitSpeed(e.kind,e.brain.mode==='chase',e.traitTime,baseSpeed);
         if(len>.03){e.facing=Math.atan2(gx,gz);const movementWalls=stairTravel?blockers.filter(o=>!STAIRS.includes(o)&&!HIGH_STAIRS.includes(o)):blockers;e.position=movePlayer(e.position,gx/len,gz/len,0,true,Math.min(dt,len/speed)*speed/SPRINT_SPEED,movementWalls);e.floor=floorHeightAt(e.position,e.floor);}
       }
     }

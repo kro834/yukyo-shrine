@@ -25,9 +25,9 @@ test('every room has one collectible, with wall and floor separation and no dupl
  assert.equal(collectMagatama(beads,p,4.8,[]),0);
  assert.equal(collectMagatama(beads,p,0,[]),1);assert.equal(collectMagatama(beads,p,0,[]),0);
 });
-test('five enemy types have different sensing roles and all can be outrun',()=>{
+test('nine enemy types have different sensing roles and all can be outrun',()=>{
  const l=createLayout(),enemies=new Enemies(l.cells,l.obstacles);
- assert.equal(new Set(enemies.actors.map(e=>e.kind)).size,5);
+ assert.equal(new Set(enemies.actors.map(e=>e.kind)).size,9);
  assert.ok(ENEMY_PROFILES.listener.hearing>ENEMY_PROFILES.normal.hearing);
  assert.ok(ENEMY_PROFILES.watcher.sight>ENEMY_PROFILES.normal.sight);
  assert.ok(ENEMY_PROFILES.stalker.chase>ENEMY_PROFILES.normal.chase);

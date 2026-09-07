@@ -1,0 +1,94 @@
+{
+  "verifiedAtUtc": "2026-09-07T11:58:54.8475572Z",
+  "method": "Official API URLs; file lengths and MD5 hashes matched metadata; JPEG dimensions decoded and HDR Radiance header parsed",
+  "count": 4,
+  "totalBytes": 3156026,
+  "assets": [
+    {
+      "filename": "qwantani_moonrise_puresky_1k.hdr",
+      "bytes": 1272812,
+      "width": 1024,
+      "height": 512,
+      "md5": "8d4bec4de92078db61192f9caa7c2a72",
+      "id": "qwantani_moonrise_puresky",
+      "map": "hdri",
+      "description": "Free 24K HDRI, unclipped. Clear moonrise night with crisp stars and high-contrast cool-blue light, ideal for night renders, reflections, and cinematic work.",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/qwantani_moonrise_puresky_1k.hdr",
+      "source": "https://polyhaven.com/a/qwantani_moonrise_puresky",
+      "metadata": "https://api.polyhaven.com/files/qwantani_moonrise_puresky",
+      "tileMillimetres": null,
+      "authors": {
+        "Greg Zaal": "Photography",
+        "Jarod Guest": "Processing"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "grass_path_2_diff_1k.jpg",
+      "bytes": 716010,
+      "width": 1024,
+      "height": 1024,
+      "md5": "48cebe95af233211c9469a9bfe2f42f2",
+      "id": "grass_path_2",
+      "map": "Diffuse",
+      "description": "Free 8K texture of a compacted dirt path with scattered stones and small grass tufts, rough, grainy earth with subtle displacement and worn, patchy areas.",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_path_2/grass_path_2_diff_1k.jpg",
+      "source": "https://polyhaven.com/a/grass_path_2",
+      "metadata": "https://api.polyhaven.com/files/grass_path_2",
+      "tileMillimetres": [
+        1000,
+        1000
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "grass_path_2_nor_gl_1k.jpg",
+      "bytes": 831959,
+      "width": 1024,
+      "height": 1024,
+      "md5": "aa04d930b6af2bd7e3252e31776822bd",
+      "id": "grass_path_2",
+      "map": "nor_gl",
+      "description": "Free 8K texture of a compacted dirt path with scattered stones and small grass tufts, rough, grainy earth with subtle displacement and worn, patchy areas.",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_path_2/grass_path_2_nor_gl_1k.jpg",
+      "source": "https://polyhaven.com/a/grass_path_2",
+      "metadata": "https://api.polyhaven.com/files/grass_path_2",
+      "tileMillimetres": [
+        1000,
+        1000
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    },
+    {
+      "filename": "grass_path_2_rough_1k.jpg",
+      "bytes": 335245,
+      "width": 1024,
+      "height": 1024,
+      "md5": "a3f245c716d0f2bbdece65a38b1bcd4a",
+      "id": "grass_path_2",
+      "map": "Rough",
+      "description": "Free 8K texture of a compacted dirt path with scattered stones and small grass tufts, rough, grainy earth with subtle displacement and worn, patchy areas.",
+      "downloadUrl": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/grass_path_2/grass_path_2_rough_1k.jpg",
+      "source": "https://polyhaven.com/a/grass_path_2",
+      "metadata": "https://api.polyhaven.com/files/grass_path_2",
+      "tileMillimetres": [
+        1000,
+        1000
+      ],
+      "authors": {
+        "Rob Tuytel": "All"
+      },
+      "license": "CC0-1.0",
+      "licenseSource": "https://polyhaven.com/license"
+    }
+  ]
+}
