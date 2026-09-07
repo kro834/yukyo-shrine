@@ -26,12 +26,11 @@ test('outer buildings have continuous indoor floors and room-height ceilings; ot
 
 test('alert meter follows small distance changes in both directions and clears on safety',()=>{
  const r=new RunProgress(),s={chasing:true,searching:false,hidden:false,frozen:false,burden:0};
- const value=(distance:number)=>{r.step(.016,{...s,distance});return r.pressure;};
+ const value=(distance:number,searching=false)=>{for(let i=0;i<240;i++)r.step(.016,{...s,chasing:!searching,searching,distance});return r.pressure;};
  const a=value(20),b=value(20.1),c=value(19.9);
  assert.ok(b<a&&c>a);assert.ok(a<1&&a>0);
  assert.equal(value(20),a,'no accumulated or random drift');
- r.step(.016,{...s,chasing:false,searching:true,distance:20});const search=r.pressure;
- r.step(.016,{...s,chasing:false,searching:true,distance:20.1});assert.ok(r.pressure<search);
+ const search=value(20,true);assert.ok(value(20.1,true)<search);
  r.step(.016,{...s,chasing:false,distance:0});assert.equal(r.pressure,0);
  r.step(.016,{...s,frozen:true,distance:0});assert.equal(r.pressure,0);
  r.step(.016,{...s,stunned:true,distance:0});assert.equal(r.pressure,0);

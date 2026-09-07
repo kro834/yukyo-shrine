@@ -86,6 +86,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
   // Bake a fixed hand or foot assembly into its animated parent before merging.
   const absorb=(parent:THREE.Group,assembly:THREE.Group)=>{
     assembly.updateMatrix();
+    // oxlint-disable-next-line unicorn/no-useless-spread -- Reparenting removes children from this group while iterating.
     for(const child of [...assembly.children])if(child instanceof THREE.Mesh){
       child.updateMatrix();child.geometry.applyMatrix4(new THREE.Matrix4().multiplyMatrices(assembly.matrix,child.matrix));
       child.position.set(0,0,0);child.quaternion.identity();child.scale.set(1,1,1);parent.add(child);
@@ -159,9 +160,12 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
       {y:neck,rx:.082,rz:.073,z:.012},
     ];
     const outerMat=isFox?m.black:isHatred?m.paleCloth:m.cloth;
+    // The tall finale robe gets deeper, inward-only pleats. They add readable
+    // vertical shadow breaks without adding geometry, draw calls, or radius.
+    const outerFolds=isHatred?.13:.075,outerHem=isHatred?.035:.022;
     // Under-kimono first, then an open haori with an actual front opening.
     garment(upper,jacket.map(s=>({...s,rx:s.rx*.92,rz:s.rz*.90})),isHatred?m.cloth:m.paleCloth,{folds:.035});
-    garment(upper,jacket,outerMat,{open:isFox?.32:.17,hem:.022});
+    garment(upper,jacket,outerMat,{open:isFox?.32:.17,hem:outerHem,folds:outerFolds});
     const wrapPath:[number,number][]=[];
     for(let j=0;j<=10;j++){const t=j/10;wrapPath.push([-.045+.135*t,neck-(neck-waist+.08)*t]);}
     band(upper,jacket,wrapPath,.048,isHatred?m.cloth:outerMat,.012);
@@ -177,7 +181,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
       }
     }else{
       const skirt:Section[]=[{y:.063,rx:isHatred?.285:.259,rz:.174},{y:.29,rx:isHatred?.278:.25,rz:.169},{y:.65,rx:.233,rz:.154},{y:waist-.10,rx:.208,rz:.137},{y:waist+.04,rx:.181,rz:.128}];
-      garment(lower,skirt,isHatred?m.paleCloth:m.cloth,{open:.095,hem:.018});
+      garment(lower,skirt,isHatred?m.paleCloth:m.cloth,{open:.095,hem:isHatred?.030:.018,folds:isHatred?.12:.075});
       // The wrap under-panel closes the slit with a second overlapping cloth layer.
       band(lower,skirt,[[0,waist+.02],[0,.75],[.018,.40],[.018,.080]],.085,isHatred?m.cloth:m.paleCloth,.002);
       if(isHatred){
@@ -191,7 +195,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
       foot(lower,side*.113,.030,side,isWarden?m.paleCloth:m.black);
       const arm=new THREE.Group();arm.name='tailored-arm';arm.position.set(side*(shoulderWidth-.020),shoulders-.045,0);upper.add(arm);arms.push(arm);
       const sleeveLength=isWarden?.62:isHatred?.67:.45;
-      const sleeve=garment(arm,[{y:-sleeveLength-.065,rx:.064,rz:.073,z:.020},{y:-sleeveLength+.07,rx:.091,rz:.091,z:.005},{y:-.17,rx:.092,rz:.097},{y:.015,rx:.081,rz:.092}],outerMat,{hem:.019,folds:.06,segments:20});
+      const sleeve=garment(arm,[{y:-sleeveLength-.065,rx:.064,rz:.073,z:.020},{y:-sleeveLength+.07,rx:.091,rz:.091,z:.005},{y:-.17,rx:.092,rz:.097},{y:.015,rx:.081,rz:.092}],outerMat,{hem:isHatred?.028:.019,folds:isHatred?.10:.06,segments:20});
       sleeve.rotation.z=side*.055;
       // A turned cuff exposes the lining without adding disconnected forearms.
       const cuff=garment(arm,[{y:-sleeveLength-.060,rx:.065,rz:.075,z:.020},{y:-sleeveLength-.025,rx:.067,rz:.076,z:.020}],isHatred?m.cloth:m.paleCloth,{folds:.02,hem:0,segments:20});cuff.rotation.z=side*.055;
@@ -220,7 +224,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
       cord(upper,[[-.075,1.84,.098],[-.11,1.56,.145],[-.16,1.11,.143]],.009);
       cord(upper,[[.075,1.84,.098],[.11,1.52,.145],[.15,1.17,.143]],.009);
     }else{
-      headAt(isHatred?2.46:isFox?1.755:isWrath?1.975:2.06,isHatred?.058:isWrath?.076:.026,isHatred?1.03:isWrath?1.10:.96);
+      headAt(isHatred?2.46:isFox?1.755:isWrath?1.975:2.06,isHatred?.058:isWrath?.076:.026,isHatred?1.03:isWrath?.88:.96);
       if(isFox){
         for(const side of [-1,1]){
           const ear=put(head,new THREE.ConeGeometry(.055,.207,5),m.mask,side*.095,.227,-.027);ear.rotation.z=-side*.20;
@@ -252,9 +256,9 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     if(kind==='pilgrim')lean=chasing?(phase==='windup'?.035:phase==='rush'?.100:.018):0;
     // Hatred follows the actor's facing toward the player, then makes a small
     // delayed head correction while its two-segment arms reach ahead.
-    if(isHatred&&chasing)lean=-.022-.018*pressure-.008*Math.sin(e.traitTime*1.75);
+    if(isHatred&&chasing)lean=.022+.018*pressure+.008*Math.sin(e.traitTime*1.75);
     // Wrath has a readable three-beat threat: gather back, lunge, then settle.
-    if(isWrath&&chasing)lean=phase==='windup'?.055:phase==='rush'?-.060:.022;
+    if(isWrath&&chasing)lean=phase==='windup'?-.055:phase==='rush'?.12:.022;
     if(stunned)lean=0;
     const pivot=isMire?.29:waist+.055;
     upper.rotation.x=lean;upper.rotation.z=isFox&&e.flankPoint?.026:0;
@@ -270,7 +274,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
         return;
       }
       if(isWrath&&chasing){
-        arm.rotation.x=phase==='windup'?.045:phase==='rush'?-.060:.020;
+        arm.rotation.x=phase==='windup'?.045:phase==='rush'?(i?-.12:-.14):.020;
         arm.rotation.z=(i?1:-1)*(phase==='rush'?.024:.012);
         return;
       }
@@ -279,6 +283,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     const headScan=isHatred&&chasing?Math.sin(e.traitTime*1.75)*(.060+.070*pressure):0;
     head.rotation.y=headY+(stunned?0:headScan);
     head.rotation.z=headZ+(stunned?.10:isWarden&&e.investigate?.10:Math.sin(time*.00085)*.018);
-    head.rotation.x=headX+(stunned?.035:isHatred&&chasing?.055:Math.sin(time*.0007)*.012);
+    const wrathHead=isWrath&&chasing?(phase==='rush'?.055:phase==='windup'?-.022:.012):null;
+    head.rotation.x=headX+(stunned?.035:isHatred&&chasing?.055:wrathHead??Math.sin(time*.0007)*.012);
   }};
 }

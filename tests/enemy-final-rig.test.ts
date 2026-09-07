@@ -21,7 +21,7 @@ test('Hatred keeps its multi-mask frame but advances head and articulated hands 
  try{
   item.enemy.traitTime=.85;item.rig.animate(item.enemy,850);item.root.updateMatrixWorld(true);
   const upper=item.named('tailored-upper'),head=item.named('tailored-head'),forearms=item.root.getObjectsByProperty('name','hatred-articulated-forearm'),arms=item.root.getObjectsByProperty('name','tailored-arm');
-  assert.ok(upper.rotation.x<-.015,'Hatred leans into its target direction');
+  assert.ok(upper.rotation.x>.015,'Hatred leans into its local +Z target direction');
   assert.ok(Math.abs(head.rotation.y)>.04,'Hatred turns its head after the body has faced the target');
   assert.equal(forearms.length,2);assert.ok(forearms.every(arm=>arm.rotation.x<-.02),'both elbows extend as separate articulated joints');
   assert.ok(arms.every(arm=>arm.rotation.x<-.01));
@@ -32,12 +32,14 @@ test('Wrath has visibly distinct windup, rush, and recovery poses',()=>{
  const item=make('wrath');
  try{
   const upper=item.named('tailored-upper'),arm=()=>item.root.getObjectByName('tailored-arm')!;
-  item.enemy.traitTime=.25;item.rig.animate(item.enemy,250);const windup={lean:upper.rotation.x,arm:arm().rotation.x};
-  item.enemy.traitTime=1.1;item.rig.animate(item.enemy,1100);const rush={lean:upper.rotation.x,arm:arm().rotation.x};
+  const headZ=()=>{item.root.updateMatrixWorld(true);return item.named('tailored-head').getWorldPosition(new THREE.Vector3()).z;};
+  item.enemy.traitTime=.25;item.rig.animate(item.enemy,250);const windup={lean:upper.rotation.x,arm:arm().rotation.x,headZ:headZ()};
+  item.enemy.traitTime=1.1;item.rig.animate(item.enemy,1100);const rush={lean:upper.rotation.x,arm:arm().rotation.x,headZ:headZ()};
   item.enemy.traitTime=2.5;item.rig.animate(item.enemy,2500);const recover={lean:upper.rotation.x,arm:arm().rotation.x};
-  assert.ok(windup.lean>.04&&windup.arm>.035,'windup draws the torso and hands back');
-  assert.ok(rush.lean<-.045&&rush.arm<-.05,'rush throws torso and hands forward');
-  assert.ok(recover.lean>0&&recover.lean<windup.lean&&recover.arm>0&&recover.arm<windup.arm,'recovery settles without repeating the windup');
+  assert.ok(windup.lean<-.04&&windup.arm>.035,'windup draws the torso and hands away from local +Z');
+  assert.ok(rush.lean>.09&&rush.arm<-.10,'rush throws torso and hands toward local +Z');
+  assert.ok(rush.headZ>windup.headZ+.10,'the actual head moves at least 10 cm toward the player between windup and rush');
+  assert.ok(recover.lean>0&&recover.lean<rush.lean&&recover.arm>0&&recover.arm<windup.arm,'recovery settles without repeating the windup');
  }finally{item.dispose();}
 });
 

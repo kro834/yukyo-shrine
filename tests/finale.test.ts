@@ -39,8 +39,8 @@ test('the final pursuer climbs both physical staircase levels and remains stoppe
  boss.brain.stun();const frozen={...boss.position};for(let i=0;i<179;i++)enemies.update(.05,{x:0,z:14},[],0,[],false,[]);assert.deepEqual(boss.position,frozen);assert.equal(boss.brain.mode,'stunned');enemies.update(.051,{x:0,z:14},[],0,[],false,[]);assert.equal(boss.brain.mode,'chase');
 });
 test('threat meter follows live danger, clears with safety/stun/freeze, and never counts a final boss as escaped',()=>{
- const r=new RunProgress(),state={chasing:true,searching:false,hidden:false,frozen:false,burden:1};r.step(.05,state);assert.equal(r.pressure,1);
- r.step(.05,{...state,chasing:false,searching:true});assert.equal(r.pressure,.45);r.step(.05,{...state,chasing:false,hidden:true});assert.equal(r.pressure,0);assert.equal(r.state,'hidden');
+ const r=new RunProgress(),state={chasing:true,searching:false,hidden:false,frozen:false,burden:1};r.step(.05,state);assert.ok(r.pressure>0&&r.pressure<1);
+ r.step(.05,{...state,chasing:false,searching:true});assert.ok(r.pressure>0&&r.pressure<.45);r.step(.05,{...state,chasing:false,hidden:true});assert.equal(r.pressure,0);assert.equal(r.state,'hidden');
  r.beginFinale();for(let i=0;i<120;i++)r.step(.05,{...state,chasing:false,stunned:true,finale:true});assert.equal(r.escapes,0);assert.equal(r.pressure,0);assert.equal(r.state,'stunned');
  r.step(.05,{...state,frozen:true,finale:true});assert.equal(r.pressure,0);r.defeated();assert.equal(r.state,'quiet');
  const mirror=new MirrorInventory([]);mirror.grant(2);assert.equal(mirror.count,2);assert.equal(mirror.use(),true);mirror.step(12);assert.equal(mirror.use(),true);mirror.step(12);assert.equal(mirror.use(),false);mirror.reset();assert.equal(mirror.count,0);

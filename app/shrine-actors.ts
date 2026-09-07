@@ -8,6 +8,7 @@ import {surfaceUV} from './surface-uv.ts';
 import {chamferedBox} from './chamfered-box.ts';
 import {finiteFixture} from './finite-fixture.ts';
 import {fabricFinish} from './fabric-finish.ts';
+import {enemyFabricFinish} from './enemy-fabric.ts';
 import {organicFinish} from './organic-finish.ts';
 import {slidingDoorLeaf} from './sliding-door-leaf.ts';
 import type {Preferences} from './preferences.ts';
@@ -61,15 +62,20 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const cloth=new THREE.MeshStandardMaterial({color:'#302822',metalness:0,roughness:.97});
   const skin=new THREE.MeshStandardMaterial({color:'#928477',roughness:.94});
   const mask=new THREE.MeshStandardMaterial({color:'#bdbaa9',roughness:.82});
-  const sculpt=new THREE.MeshStandardMaterial({color:'#b5ab96',roughness:.92,vertexColors:true});
+  const sculpt=new THREE.MeshStandardMaterial({name:'carved-ritual-mask',color:'#b5ab96',roughness:.92,vertexColors:true});
   const paleCloth=new THREE.MeshStandardMaterial({color:'#ded6c6',roughness:1});
+  const tailoredCloth=new THREE.MeshStandardMaterial({name:'tailored-dark-linen',roughness:.97});
+  const tailoredPale=new THREE.MeshStandardMaterial({name:'tailored-pale-linen',roughness:1});
   fabricFinish(cloth);fabricFinish(paleCloth,true);
+  enemyFabricFinish(tailoredCloth);enemyFabricFinish(tailoredPale,true);
   organicFinish(skin,'skin');organicFinish(mask,'mask');organicFinish(sculpt,'mask');
   const black=new THREE.MeshStandardMaterial({color:'#0c0a09',roughness:.98});
   const cord=new THREE.MeshStandardMaterial({color:'#6a5c40',roughness:1});
   const aura=new THREE.MeshBasicMaterial({color:'#a7c4c0',transparent:true,opacity:.23,depthWrite:false,depthTest:false,fog:false});
   let enabled=true;
-  const surfaces=new SurfaceLibrary([cloth,paleCloth,skin,mask,sculpt],4);surfaces.setLightingFinish(finiteFixture);surfaces.preserveBaseFinish(cloth,paleCloth);surfaces.add('/horror-hemp.png',[cloth,paleCloth],{bump:.0015});
+  const surfaces=new SurfaceLibrary([cloth,paleCloth,tailoredCloth,tailoredPale,skin,mask,sculpt],4);surfaces.setLightingFinish(finiteFixture);surfaces.preserveBaseFinish(cloth,paleCloth,tailoredCloth,tailoredPale);surfaces.add('/horror-hemp.png',[cloth,paleCloth],{bump:.0015});
+  surfaces.add('/materials/textile/rough_linen_diff_1k.jpg',[tailoredCloth,tailoredPale],{normal:'/materials/textile/rough_linen_nor_gl_1k.jpg',roughness:'/materials/textile/rough_linen_rough_1k.jpg',repeat:[.30/.2707081393,.30/.2712999880],normalStrength:.32,preserveFinish:true,lowSize:256,ultra:{full:'/materials/textile/rough_linen_diff_2k.jpg',normal:'/materials/textile/rough_linen_nor_gl_2k.jpg',roughness:'/materials/textile/rough_linen_rough_2k.jpg'}});
+  surfaces.add('/materials/enemies/ritual-mask-v60.png',[sculpt],{tint:'#f3eee5',bump:.00035,lowSize:256});
   const part=(parent:THREE.Group,g:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z:number)=>{const mesh=new THREE.Mesh(g,m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=m!==aura;parent.add(mesh);return mesh;};
   const robe=(top:number,bottom:number,height:number)=>{const g=new THREE.CylinderGeometry(top,bottom,height,24,8);const p=g.getAttribute('position');for(let i=0;i<p.count;i++){const a=Math.atan2(p.getZ(i),p.getX(i)),fold=1+Math.sin(a*11+p.getY(i)*1.6)*.065;p.setX(i,p.getX(i)*fold);p.setZ(i,p.getZ(i)*fold*.72);}g.computeVertexNormals();return g;};
   const echoRig=(root:THREE.Group)=>{
@@ -78,7 +84,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   };
   const createActor=(e:Enemy)=>{const i=e.id;
     const root=new THREE.Group();root.name='horror-'+e.kind;scene.add(root);
-    if(e.kind in EXTRA_ENEMY_PROFILES){const rig=specialEnemyRig(root,e.kind,{cloth,paleCloth,sculpt,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
+    if(e.kind in EXTRA_ENEMY_PROFILES){const rig=specialEnemyRig(root,e.kind,{cloth:tailoredCloth,paleCloth:tailoredPale,sculpt,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
     const crawler=e.kind==='stalker',tall=e.kind==='watcher',large=e.kind==='danger';
     root.scale.set(large?1.13:1,tall?1.17:large?1.1:1,1);
     const body=new THREE.Group();root.add(body);body.rotation.x=crawler?.72:e.kind==='normal'?.13:large?.2:0;body.position.y=crawler?-.55:0;
@@ -116,5 +122,5 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
       a.root.visible=enabled&&(!viewer||Math.hypot(e.position.x-viewer.x,e.position.z-viewer.z)<range);a.echoGroup.visible=reveal;if(!a.root.visible)continue;
       a.root.position.set(e.position.x,e.floor,e.position.z);a.root.rotation.y=e.facing;a.animate(e,time);a.sync();
     }
-  },dispose(){surfaces.dispose();for(const m of [cloth,paleCloth,sculpt,skin,mask,black,cord,aura])m.dispose();}};
+  },dispose(){surfaces.dispose();for(const m of [cloth,paleCloth,tailoredCloth,tailoredPale,sculpt,skin,mask,black,cord,aura])m.dispose();}};
 }
