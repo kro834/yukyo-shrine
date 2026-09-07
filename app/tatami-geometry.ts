@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {interlockedTatami} from './tatami-layout.ts';
 
 /**
  * A visual-only tatami surface for floors that already own movement and collision.
@@ -11,7 +12,7 @@ export const TATAMI = {
   length: 1.8,
   border: 0.035,
   maxRise: 0.02,
-  trianglesPerMat: 106,
+  trianglesPerMat: 102,
 } as const;
 
 export type TatamiPlacement = {
@@ -27,9 +28,9 @@ export type TatamiPlacement = {
 };
 
 export type TatamiGeometry = {
-  /** 90 triangles per mat: woven-surface material with a photographic normal/roughness set. */
+  /** 94 triangles per mat: straw top and the two exposed short ends. */
   reed: THREE.BufferGeometry;
-  /** 16 triangles per mat: dark cloth edging plus thin visible side bands. */
+  /** 8 triangles per mat: cloth on the two long edges only. */
   border: THREE.BufferGeometry;
   /** The remaining 0 triangles are intentionally reserved: no collision or hidden slab. */
   triangles: number;
@@ -66,6 +67,15 @@ export function tatamiPlacementsForRectangle(rect: TatamiRectangle): TatamiPlace
   const firstX = rect.x - occupiedWidth / 2 + TATAMI.width / 2;
   const firstZ = rect.z - occupiedDepth / 2 + TATAMI.length / 2;
   const placements: TatamiPlacement[] = [];
+  const interlocked=interlockedTatami(columns,rows*2);
+  if(interlocked){
+    const mirror=Math.floor(rect.variation??0)%2===0?1:-1;
+    return interlocked.map(([a,b],index)=>({
+      x:rect.x+mirror*((a%columns+b%columns+1)*TATAMI.width/2-occupiedWidth/2),
+      z:rect.z+(Math.floor(a/columns)+Math.floor(b/columns)+1)*TATAMI.width/2-occupiedDepth/2,
+      floorY:rect.floorY,rotation:b-a===1?Math.PI/2:0,variation:(rect.variation??0)+index*31,
+    }));
+  }
   for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) placements.push({
     x: firstX + column * TATAMI.width,
     z: firstZ + row * TATAMI.length,
@@ -140,8 +150,8 @@ export function createTatamiGeometry(placements: readonly TatamiPlacement[]): Ta
     for (let row = 0; row < rows; row++) for (let column = 0; column < columns; column++) {
       const x0 = -hw + b + (TATAMI.width - 2 * b) * column / columns;
       const x1 = -hw + b + (TATAMI.width - 2 * b) * (column + 1) / columns;
-      const z0 = -hl + b + (TATAMI.length - 2 * b) * row / rows;
-      const z1 = -hl + b + (TATAMI.length - 2 * b) * (row + 1) / rows;
+      const z0 = -hl + .001 + (TATAMI.length - .002) * row / rows;
+      const z1 = -hl + .001 + (TATAMI.length - .002) * (row + 1) / rows;
       const a = transform(x0, top(x0, z0), z0), b0 = transform(x1, top(x1, z0), z0);
       const c = transform(x1, top(x1, z1), z1), d = transform(x0, top(x0, z1), z1);
       // Source U is the 1.8 m axis; source V .028-.475 is the upper panel's straw only.
@@ -155,23 +165,21 @@ export function createTatamiGeometry(placements: readonly TatamiPlacement[]): Ta
       const a = transform(x0, y, z0), b0 = transform(x1, y, z0), c = transform(x1, y, z1), d = transform(x0, y, z1);
       quad(border, a, b0, c, d, [0, 1, 0], [u0, v0, u1, v0, u1, v1, u0, v1]);
     };
-    // The corner overlap is deliberate: a single continuous heri cloth frame reads better than open mitres at this scale.
-    topRect(-hw, -hl, hw, -hl + b, 0, 0, 1, .14);
-    topRect(-hw, hl - b, hw, hl, 0, .86, 1, 1);
-    topRect(-hw, -hl + b, -hw + b, hl - b, 0, .14, .14, .86);
-    topRect(hw - b, -hl + b, hw, hl - b, .86, .14, 1, .86);
+    // Heri runs down the long edges; short edges expose the folded straw surface.
+    topRect(-hw, -hl, -hw + b, hl, 0, 0, b, TATAMI.length);
+    topRect(hw - b, -hl, hw, hl, 0, 0, b, TATAMI.length);
 
     // Four thin side bands supply a real edge in grazing flashlight light without making a walk collision ridge.
-    const side = (a: readonly [number, number], b0: readonly [number, number], outward: readonly [number, number], u0: number, u1: number) => {
+    const side = (a: readonly [number, number], b0: readonly [number, number], outward: readonly [number, number], u0: number, u1: number,straw=false) => {
       const ta = transform(a[0], y, a[1]), tb = transform(b0[0], y, b0[1]);
       const ba = transform(a[0], sideY, a[1]), bb = transform(b0[0], sideY, b0[1]);
       const normal: Normal = [outward[0] * cosine - outward[1] * sine, 0, outward[0] * sine + outward[1] * cosine];
-      quad(border, ta, tb, bb, ba, normal, [u0, 0, u1, 0, u1, 1, u0, 1]);
+      quad(straw?reed:border, ta, tb, bb, ba, normal, straw?[.025,.028,.025,.475,.03,.475,.03,.028]:[u0, 0, u1, 0, u1, .0123, u0, .0123]);
     };
-    side([-hw, -hl], [hw, -hl], [0, -1], 0, 1);
-    side([hw, -hl], [hw, hl], [1, 0], 0, 1);
-    side([hw, hl], [-hw, hl], [0, 1], 0, 1);
-    side([-hw, hl], [-hw, -hl], [-1, 0], 0, 1);
+    side([-hw, -hl], [hw, -hl], [0, -1], 0, 1,true);
+    side([hw, -hl], [hw, hl], [1, 0], 0, TATAMI.length);
+    side([hw, hl], [-hw, hl], [0, 1], 0, 1,true);
+    side([-hw, hl], [-hw, -hl], [-1, 0], 0, TATAMI.length);
   }
 
   return { reed: finish(reed), border: finish(border), triangles: placements.length * TATAMI.trianglesPerMat };
