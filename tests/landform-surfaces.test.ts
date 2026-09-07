@@ -32,3 +32,17 @@ test('lowered banks join exactly, cover new landscape voids, and match planting 
   terrain.surfaces.forEach(s=>s.geometry.dispose());
  }
 });
+
+test('organic bank relief leaves paths level and concrete drainage slopes unwarped',()=>{
+ const grid=new Map([['0,0',{x:0,z:0,kind:'field'}]]);
+ for(const identity of ['levee','underpass'] as const){
+  const terrain=createOuterLandformSurfaces(grid,[{sectorId:'bank',identity,cx:0,cz:0,rotation:0,removed:[{x:1,z:0,kind:'field'}]}]);
+  try{
+   for(const z of [-1,0,1])assert.equal(terrain.analyticalHeight(2,z),0,'path edge must meet the bank exactly');
+   const depth=identity==='levee'?1.8:1.25;
+   const residuals=[-.8,0,.8].map(z=>terrain.analyticalHeight(4,z)+depth*2/4.8);
+   if(identity==='underpass')assert.ok(residuals.every(r=>Math.abs(r)<1e-10));
+   else {assert.ok(residuals.some(r=>Math.abs(r)>.005));assert.ok(residuals.every(r=>Math.abs(r)<.175));}
+  }finally{terrain.surfaces.forEach(s=>s.geometry.dispose());}
+ }
+});

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 type Identity='levee'|'riverside'|'underpass'|'greenway'|'floodgate'|'paddy';
 type Cell={x:number;z:number;kind:string};
 type Region={sectorId:string;identity:Identity;cx:number;cz:number;rotation:number;removed:readonly Cell[]};
-type Material='earth'|'concrete'|'water';
+type Material='bank'|'concrete'|'water';
 type Options={
  belowUpperDeck?:(minX:number,maxX:number,minZ:number,maxZ:number)=>boolean;
  /** 4 is recommended. 6 is accepted only if the full mesh remains below the cap. */
@@ -44,19 +44,26 @@ export function createOuterLandformSurfaces(grid:Map<string,Cell>,regions:readon
  // Blend depth only across the 8 m gap between neighbouring region footprints.
  // Within a sector each identity retains its authored depth. This sample is world
  // continuous even if two different identities share a terrain tile edge.
- const depthAt=(x:number,z:number)=>{
-  if(!regions.length)return 0;
+ const profileAt=(x:number,z:number)=>{
+  if(!regions.length)return {depth:0,organic:0};
   const distances=regions.map(r=>boxDistance(x,z,r.cx*4,r.cz*4,34)),near=Math.min(...distances);
-  let total=0,weight=0;
-  for(let i=0;i<regions.length;i++){const w=1-smooth((distances[i]-near)/8);total+=LANDFORM_DEPTH[regions[i].identity]*w;weight+=w;}
-  return total/weight;
+  let total=0,weight=0,organic=0;
+  for(let i=0;i<regions.length;i++){const w=1-smooth((distances[i]-near)/8);total+=LANDFORM_DEPTH[regions[i].identity]*w;weight+=w;if(!['underpass','floodgate'].includes(regions[i].identity))organic+=w;}
+  return {depth:total/weight,organic:organic/weight};
  };
  const distanceToWalk=(x:number,z:number)=>{
   const cx=Math.round(x/4),cz=Math.round(z/4);let d=SLOPE;
   for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++)if(grid.has(key(cx+dx,cz+dz)))d=Math.min(d,boxDistance(x,z,(cx+dx)*4,(cz+dz)*4,2));
   return d;
  };
- const analyticalHeight=(x:number,z:number)=>-depthAt(x,z)*clamp(distanceToWalk(x,z)/SLOPE);
+ const analyticalHeight=(x:number,z:number)=>{
+  const d=distanceToWalk(x,z),profile=profileAt(x,z);
+  // Broad erosion undulations, sampled continuously across tile/sector seams.
+  // Fade to zero at the path edge and basin floor; concrete channels stay planar.
+  const noise=Math.sin(x*.83+Math.sin(z*.31)*1.7)*Math.sin(z*.69+x*.19)*.12+Math.sin(x*.37-z*.47)*.055;
+  const relief=noise*profile.organic*smooth(d/1.3)*(1-smooth((d-3.4)/1.4));
+  return Math.min(0,-profile.depth*clamp(d/SLOPE)+relief);
+ };
  const normalAt=(x:number,z:number)=>{
   const dx=(analyticalHeight(x+EPS,z)-analyticalHeight(x-EPS,z))/(2*EPS),dz=(analyticalHeight(x,z+EPS)-analyticalHeight(x,z-EPS))/(2*EPS);
   return new THREE.Vector3(-dx,1,-dz).normalize();
@@ -101,7 +108,7 @@ export function createOuterLandformSurfaces(grid:Map<string,Cell>,regions:readon
   }
   const geometry=new THREE.BufferGeometry();geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('normal',new THREE.Float32BufferAttribute(normals,3));geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));geometry.setIndex(indices);geometry.computeBoundingBox();geometry.computeBoundingSphere();
   renderedPositions.set(key(t.x,t.z),geometry.getAttribute('position') as THREE.BufferAttribute);
-  const material=t.region.identity==='underpass'||t.region.identity==='floodgate'?'concrete':'earth';
+  const material=t.region.identity==='underpass'||t.region.identity==='floodgate'?'concrete':'bank';
   surfaces.push({x:t.x,z:t.z,geometry,material,regionId:t.region.sectorId,identity:t.region.identity,water:false});
   const waterY=WATER.has(t.region.identity)?-LANDFORM_DEPTH[t.region.identity]+.12:null;
   if(waterY!==null){

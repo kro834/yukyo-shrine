@@ -134,6 +134,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     glass:new THREE.MeshPhysicalMaterial({color:'#80a99e',roughness:.12,metalness:0,transparent:true,opacity:.55}),
     rock:new THREE.MeshStandardMaterial({color:'#525b59',roughness:.91}),
     earth:new THREE.MeshStandardMaterial({color:'#443d2b',roughness:1}),
+    bank:new THREE.MeshStandardMaterial({color:'#b0b8a4',roughness:1}),
     grass:new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.94,vertexColors:true,side:THREE.DoubleSide}),
   };
   for(const [name,material] of Object.entries(mats))material.name=name;
@@ -141,7 +142,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   fabricFinish(mats.tatamiTrim,false,true);mats.tatamiTrim.color.set('#243421');
   agedFinish(mats.concreteWall,'plaster');agedFinish(mats.civicPaint,'lacquer');agedFinish(mats.civicEnamel,'lacquer');
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
-  terrainFinish(mats.earth);terrainFinish(mats.rock);
+  terrainFinish(mats.earth);terrainFinish(mats.rock);terrainFinish(mats.bank);
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
   lampFinish(mats.circusGlow,'diffuser');
   for(const m of [mats.circusRed,mats.circusIvory])circusFabric(m);
@@ -680,6 +681,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const wallRoot='/materials/urban/concrete_wall_007';
   if(!gothic)surfaces.add(wallRoot+'_diff_1k.jpg',[mats.concreteWall],{tint:'#b4b6ad',normal:wallRoot+'_nor_gl_1k.jpg',roughness:wallRoot+'_rough_1k.jpg',normalStrength:.65,preserveFinish:true,ultra:{full:wallRoot+'_diff_2k.jpg',normal:wallRoot+'_nor_gl_2k.jpg',roughness:wallRoot+'_rough_2k.jpg'}});
   surfaces.add('/materials/outer/grass_path_2_diff_1k.jpg',[mats.earth],{tint:'#a4a38c',normal:'/materials/outer/grass_path_2_nor_gl_1k.jpg',roughness:'/materials/outer/grass_path_2_rough_1k.jpg',normalStrength:.7,preserveFinish:true});
+  if(landforms)surfaces.add('/materials/bank/aerial_grass_rock_diff_1k.jpg',[mats.bank],{normal:'/materials/bank/aerial_grass_rock_nor_gl_1k.jpg',roughness:'/materials/bank/aerial_grass_rock_rough_1k.jpg',normalStrength:.8,preserveFinish:true,lowSize:256,repeat:[.2,.2],ultra:{full:'/materials/bank/aerial_grass_rock_diff_2k.jpg',normal:'/materials/bank/aerial_grass_rock_nor_gl_2k.jpg',roughness:'/materials/bank/aerial_grass_rock_rough_2k.jpg'}});
   mats.concrete.roughness=1;mats.stone.roughness=.78;mats.stone.metalness=0;
   mats.rock.roughness=1;mats.plaster.roughness=1;mats.rust.roughness=1;mats.rust.metalness=0;mats.steel.roughness=.7;
   const floorLevel=()=>floorBand(elevation);

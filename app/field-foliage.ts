@@ -106,13 +106,13 @@ export function makeFoliageGeometry(kind: FoliageKind, seed = 1) {
     }
   } else {
     const low = kind === 'short', height = low ? .06 + random() * .07 : .28 + random() * .34;
-    const blades = low ? 4 : 5, spread = low ? .021 : .070, phase = random() * Math.PI * 2;
+    const blades = low ? 4 : 7, spread = low ? .021 : .095, phase = random() * Math.PI * 2;
     for (let index = 0; index < blades; index++) {
       const angle = phase + index * Math.PI * 2 / blades + (random() - .5) * .65;
       const start = { x: (random() - .5) * spread, y: 0, z: (random() - .5) * spread };
       const h = height * (.62 + random() * .38), dry = random() < (low ? .14 : .23);
       blade(buffers, start, angle, h, low ? .006 + random() * .008 : .009 + random() * .012,
-        h * (.20 + random() * .25), low, palette(dry), .9 + random() * .16);
+        h * (.20 + random() * .25), low||index>=2, palette(dry), .9 + random() * .16);
     }
   }
   const geometry = new THREE.BufferGeometry();
