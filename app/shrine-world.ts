@@ -16,6 +16,7 @@ import {waterFinish} from './water-finish.ts';
 import {exteriorRoofSites,exteriorRoof} from './exterior-roofs.ts';
 import {outdoorTimberBay,outdoorTimberFinish} from './outdoor-timber.ts';
 import {prepareNightSky} from './night-sky.ts';
+import {plankFloor} from './plank-floor.ts';
 import {finiteFixture,finiteSceneFixtures,pendingFixtureFinish} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -185,6 +186,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     if(!batches.has(key))batches.set(key,{material:m,geometries:[]});batches.get(key)!.geometries.push(g);
   };
   const box=(x:number,y:number,z:number,w:number,h:number,d:number,m:MaterialKey)=>{
+    const finishedY=y+h/2;
+    if(m==='planks'&&w>=1.5&&d>=1.5&&h<=.30&&finishedY>=-.001&&Math.abs(finishedY/4.8-Math.round(finishedY/4.8))<.003){
+      add(plankFloor(x,z,w,d,finishedY),'planks');
+      add(new THREE.BoxGeometry(w,Math.max(.001,h-.004),d).translate(x,y-.002,z),'dark');return;
+    }
     if(m==='tatami'&&!gothic&&!circus&&h<=.065&&w>=1.5&&d>=1.5){
       const placements=tatamiPlacementsForRectangle({x,z,width:w,depth:d,floorY:y+h/2-TATAMI.maxRise,inset:.08,variation:seed+x*.7+z});
       if(placements.length){
@@ -271,7 +277,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       continue;
     }
     if(kind==='shop'){
-      box(x,-.14,z,4,.28,4,'planks');box(x,c.h+.1,z,4,.2,4,'dark');box(x,.008,z,.025,.016,4,'dark');box(x,c.h-.12,z,4,.18,.15,'wood');
+      box(x,-.14,z,4,.28,4,'planks');box(x,c.h+.1,z,4,.2,4,'dark');box(x,c.h-.12,z,4,.18,.15,'wood');
       if((c.x+c.z)%4===0){lantern(x,3.4,z);box(x,4,z,.03,1,.03,'dark');}
       continue;
     }
@@ -295,7 +301,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     box(x,-.14,z,4,.28,4,kind==='stone'?'stone':'planks');
     box(x,c.h+.12,z,4,.24,4,'dark');
     if(kind==='stone'){box(x,.004,z,.022,.008,4,'black');box(x,.004,z,4,.008,.022,'black');}
-    else {for(let j=-3;j<=3;j++)box(x+j*.5,.006,z,.014,.009,4,'dark');if((c.x+c.z)%2===0){box(x,Math.max(2.9,c.h-.32),z,.12,.14,4,'dark');box(x,c.h-.22,z+1.15,4,.11,.1,'wood');box(x,c.h-.22,z-1.15,4,.11,.1,'wood');}}
+    else {if((c.x+c.z)%2===0){box(x,Math.max(2.9,c.h-.32),z,.12,.14,4,'dark');box(x,c.h-.22,z+1.15,4,.11,.1,'wood');box(x,c.h-.22,z-1.15,4,.11,.1,'wood');}}
     box(x,c.h-.12,z,4,.22,.18,'red');
     for(const [dx,dz] of [[1,0],[0,1]]){
       const n=layout.grid.get((c.x+dx)+','+(c.z+dz));
