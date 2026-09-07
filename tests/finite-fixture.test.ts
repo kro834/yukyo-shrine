@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {finiteFixture,FIXTURE_RADIUS} from '../app/finite-fixture.ts';
+import {finiteFixture,FIXTURE_RADIUS,pendingFixtureFinish} from '../app/finite-fixture.ts';
 import {SurfaceLibrary} from '../app/surface-library.ts';
 import {FixtureShadow} from '../app/fixture-shadow.ts';
 
@@ -37,4 +37,12 @@ test('fixture shadow transfer respects a small lamp power instead of restoring f
  shadow.configure('ultra',false);
  for(let i=0;i<30;i++)shadow.update([{current:lamp,target:lamp,gain:1}],new THREE.Vector3(0,1.68,2),.02,i*20,false);
  assert.ok(Math.abs(shadow.light.intensity-1.65)<1e-8);shadow.dispose();
+});
+
+test('disposing a world cancels late scene access while live model completion receives lighting',async()=>{
+ const scene=new THREE.Scene(),material=new THREE.MeshStandardMaterial();scene.add(new THREE.Mesh(new THREE.BoxGeometry(),material));
+ let resolve!:()=>void;const ready=new Promise<void>(r=>resolve=r),pending=pendingFixtureFinish(ready,scene),before=material.onBeforeCompile;
+ pending.cancel();resolve();await pending.ready;assert.equal(material.onBeforeCompile,before);
+ await pendingFixtureFinish(Promise.resolve(),scene).ready;assert.notEqual(material.onBeforeCompile,before);
+ scene.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});material.dispose();
 });

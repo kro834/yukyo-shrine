@@ -118,4 +118,3 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
     }
   },dispose(){surfaces.dispose();for(const m of [cloth,paleCloth,sculpt,skin,mask,black,cord,aura])m.dispose();}};
 }
-

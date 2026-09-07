@@ -28,3 +28,10 @@ export function finiteSceneFixtures(scene:THREE.Object3D){
   }
  });
 }
+
+/** Keep delayed model completion outside the world factory's large closure.
+ * Disposal releases the scene immediately, even before this microtask runs. */
+export function pendingFixtureFinish(ready:Promise<void>,scene:THREE.Object3D){
+ let target:THREE.Object3D|null=scene;
+ return {ready:ready.then(()=>{if(target)finiteSceneFixtures(target);target=null;}),cancel(){target=null;}};
+}
