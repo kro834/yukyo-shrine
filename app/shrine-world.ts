@@ -140,6 +140,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
   terrainFinish(mats.earth);terrainFinish(mats.rock);
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
+  lampFinish(mats.circusGlow,'diffuser');
   for(const m of [mats.circusRed,mats.circusIvory]){const color=m.color.clone();fabricFinish(m,true);m.color.copy(color);circusFabric(m);}
   agedFinish(mats.circusDark,'wood');agedFinish(mats.circusMetal,'lacquer');
   circusPaint(mats.circusPaint);
@@ -193,6 +194,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const fixtureColors=new Map<THREE.Vector3,string>();
   const fixtureShadowPositions=new Map<THREE.Vector3,THREE.Vector3>();
   const fixture=(x:number,y:number,z:number,color:string,floor=fixtureFloor,shadowDrop=0)=>{if(groundGeometry&&y>4.5&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5))return;const p=new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z);lanterns.push(p);fixtureColors.set(p,color);fixtureFloors.set(p,floor);if(shadowDrop&&p.y-shadowDrop>floor+1.9)fixtureShadowPositions.set(p,p.clone().add(new THREE.Vector3(0,-shadowDrop,0)));};
+  // Put the pooled shadow emitter below the fitted cap so the housing cannot
+  // eclipse its own light. Reuse the existing single desktop shadow atlas.
+  const circusFixture=(x:number,y:number,z:number,color:string)=>fixture(x,y,z,color,fixtureFloor,.31);
   const lanternTemplates=[lanternBody(),lanternBody(true)];
   const lantern=(x:number,y:number,z:number,large=false)=>{
     const r=large?.42:.22,h=large?.95:.6;if(groundGeometry&&y+h/2>4.5&&belowUpperDeck(x-r,x+r,z-r,z+r))return;
@@ -210,7 +214,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const fieldCells=new Set(layout.cells.filter(c=>c.kind==='field'&&!belowUpperDeck(c.x*4-2,c.x*4+2,c.z*4-2,c.z*4+2)).map(c=>c.x+','+c.z));
   const isFieldCell=(x:number,z:number)=>fieldCells.has(x+','+z);
   for(const c of layout.cells){
-    if(circus){buildCircusCell(c,add,fixture);continue;}
+    if(circus){buildCircusCell(c,add,circusFixture);continue;}
     const x=c.x*CELL,z=c.z*CELL,kind=visualKind(c.kind,x,z);
     if(gothic){
       box(x,-.14,z,4,.28,4,kind==='shop'||kind==='yokocho'?'planks':'concrete');
@@ -435,7 +439,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const scannedPlacements:ScannedPlacement[]=[];
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
-    if(circus){buildCircusRoom(room,add,block,fixture,room.id===altarRoom.id);continue;}
+    if(circus){buildCircusRoom(room,add,block,circusFixture,room.id===altarRoom.id);continue;}
     if(room.themeId){gothicRoomProps=room.themeId.startsWith('orchestra-');buildHorrorArea(room,{box,cylinder,fixture,block},room.id===altarRoom.id);gothicRoomProps=false;continue;}
     if(room.id===altarRoom.id)continue;
     const cx=(room.x1+room.x2)*2,cz=(room.z1+room.z2)*2;
@@ -514,7 +518,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const a=s.quarterTurns*Math.PI/2;fixture(s.x+1.58*Math.cos(a),2.78,s.z+1.58*Math.sin(a),'#a0b6b8');
     }
   }
-  if(circusPlan)buildCircusScenery(circusPlan,layout,add,fixture);
+  if(circusPlan)buildCircusScenery(circusPlan,layout,add,circusFixture);
   if(!circus)buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height);
   groundGeometry=false;fixtureFloor=4.8;
   for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
@@ -644,7 +648,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
-  surfaces.preserveBaseFinish(mats.light,mats.washiLit,mats.coolLight,mats.circusRed,mats.circusIvory);
+  surfaces.preserveBaseFinish(mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory);
   if(circus)surfaces.add('/horror-hemp.png',[mats.circusRed,mats.circusIvory],{bump:.0015,preserveFinish:true});
   surfaces.add('/cedar.png',[mats.red],{bump:.003,tint:gothic?'#462129':undefined});
   surfaces.add('/weathered-concrete.png',[mats.stone],{bump:.014,tint:'#aaa9a2'});

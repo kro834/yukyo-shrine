@@ -1,6 +1,7 @@
 // Outside-Site import for verification. Root integration: import * as THREE from 'three'.
 import * as THREE from 'three';
 import {hangingCanvas} from './circus-cloth.ts';
+import {buildCircusLamp} from './circus-lamp.ts';
 import type {CircusPlan,CircusPoint} from './circus-types.ts';
 
 export const CIRCUS_MATERIALS={
@@ -10,7 +11,8 @@ export const CIRCUS_MATERIALS={
  circusPaint:{color:'#51232a',roughness:.43,metalness:.08},
  circusMetal:{color:'#62666a',roughness:.61,metalness:.72},
  circusBrass:{color:'#947047',roughness:.48,metalness:.66},
- circusGlow:{color:'#a47c4d',emissive:'#e5aa5d',emissiveIntensity:.30,roughness:.96},
+ // Luminous frosted glass, independent of the unchanged room-light intensity.
+ circusGlow:{color:'#9a927e',emissive:'#ffd5a0',emissiveIntensity:1.05,roughness:.74},
 } as const;
 export type CircusMaterial=keyof typeof CIRCUS_MATERIALS|'wood'|'planks'|'rope';
 export type CircusAdd=(g:THREE.BufferGeometry,material:CircusMaterial)=>void;
@@ -39,9 +41,8 @@ export function buildCircusCell(c:Cell,add:CircusAdd,fixture?:(x:number,y:number
  const central=circusCentral(x,z),lit=central?(c.x===0||c.z===0)&&(c.x+c.z)%4===0:(c.x+c.z)%7===0;
  if(lit){
   const ceiling=central?circusRoofHeight(x,z):Math.min(c.h,4.25),y=Math.min(3.38,ceiling-.48);
-  cylinder(add,x,y,z,.14,.32,'circusGlow',.14,8);
-  cylinder(add,x,y-.18,z,.175,.045,'circusMetal');cylinder(add,x,y+.18,z,.175,.045,'circusMetal');
-  rod(add,new THREE.Vector3(x,y+.205,z),new THREE.Vector3(x,ceiling-.05,z),.012,'rope');
+  buildCircusLamp(add,x,y,z);
+  rod(add,new THREE.Vector3(x,y+.282,z),new THREE.Vector3(x,ceiling-.05,z),.012,'rope');
   fixture?.(x,y-.04,z,'#cda16d');
  }
  return true;
@@ -110,10 +111,10 @@ export function buildCircusScenery(plan:CircusPlan,layout:Layout,add:CircusAdd,f
   const normal={x:(station.exit.x-station.position.x)/1.25,z:(station.exit.z-station.position.z)/1.25};
   const yaw=Math.atan2(tangent.x,tangent.z);
   add(new THREE.BoxGeometry(.30,.012,2.8).rotateY(yaw).translate(station.exit.x,.011,station.exit.z),'circusIvory');
-  // A small suspended four-sided lantern marks each station, leaving track/crossings clear.
+  // A larger caged lantern marks each station, leaving track/crossings clear.
   const x=station.position.x+normal.x*1.30,z=station.position.z+normal.z*1.30;
-  cylinder(add,x,3.22,z,.23,.43,'circusGlow',.23,8);cylinder(add,x,2.985,z,.26,.055,'circusDark');cylinder(add,x,3.455,z,.26,.055,'circusDark');
-  rod(add,new THREE.Vector3(x,3.49,z),new THREE.Vector3(x,circusRoofHeight(x,z)-.05,z),.014,'rope');fixture(x,3.05,z,'#d4a269');
+  buildCircusLamp(add,x,3.22,z,true);
+  rod(add,new THREE.Vector3(x,3.63,z),new THREE.Vector3(x,circusRoofHeight(x,z)-.05,z),.014,'rope');fixture(x,3.05,z,'#d4a269');
  }
  for(const device of plan.devices){
   // Mark the user's safe operating point without placing a pedestal in that point.

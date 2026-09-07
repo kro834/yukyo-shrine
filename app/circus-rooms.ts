@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import {buildCircusLamp} from './circus-lamp.ts';
 import type {Room} from './shrine-layout.ts';
 import type {CircusAdd,CircusMaterial} from './circus-scenery.ts';
 
@@ -13,7 +14,8 @@ export function buildCircusRoom(room:Room,add:CircusAdd,block:(x:number,z:number
  const box=(x:number,y:number,z:number,w:number,h:number,d:number,m:CircusMaterial)=>add(new THREE.BoxGeometry(w,h,d).translate(x,y,z),m);
  const rod=(x:number,y:number,z:number,r:number,h:number,m:CircusMaterial)=>add(new THREE.CylinderGeometry(r,r,h,8).translate(x,y,z),m);
  const hoop=(x:number,y:number,z:number,r:number,m:CircusMaterial)=>add(new THREE.TorusGeometry(r,.025,6,24).translate(x,y,z),m);
- const lampY=Math.min(3.3,room.h-.5);rod(cx,lampY,cz,.13,.24,'circusGlow');fixture(cx,lampY-.1,cz,'#ba936e');
+ const lampY=Math.min(3.3,room.h-.5);buildCircusLamp(add,cx,lampY,cz);fixture(cx,lampY-.1,cz,'#ba936e');
+ rod(cx,(lampY+.282+room.h)/2,cz,.009,Math.max(.01,room.h-lampY-.282),'circusMetal');
  if(reserved)return;
  for(const side of [-1,1]){
   const x=cx+side*(hw-1.25),z=cz+side*(hd-1.25);
