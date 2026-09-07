@@ -89,12 +89,12 @@ test('burst ignores the rear and blocked front while applying nine seconds of st
  assert.ok(enemies.actors.slice(1).every(e=>e.brain.stunRemaining===0));
 });
 
-test('red-zone chase speeds rise but remain below sprint speed; blue zone applies the sixty percent reduction',()=>{
+test('red-zone chase speeds rise but remain below sprint speed; blue pursuit also requires sprinting to escape',()=>{
  const l=createLayout(),enemies=new Enemies(l.cells,l.obstacles),boss=enemies.actors.find(e=>e.kind==='danger')!;enemies.actors=[boss];
  const p={x:108,z:-80};boss.position={x:108,z:-92};boss.facing=0;
  enemies.update(.05,p,[]);assert.equal(boss.brain.mode,'chase');
  assert.ok(Math.abs(boss.position.z-(-92+8.9*.05))<1e-6);assert.ok(8.9<SPRINT_SPEED);
  boss.position={x:0,z:0};boss.facing=0;
  enemies.update(.05,{x:0,z:12},[]);
- assert.ok(Math.abs(boss.position.z-ENEMY_PROFILES.danger.chase*.4*.05)<1e-6);
+ assert.ok(Math.abs(boss.position.z-ENEMY_PROFILES.danger.chase*.9*.05)<1e-6);
 });

@@ -37,3 +37,6 @@ export class TouchInput {
 }
 
 
+
+/** Only controller navigation requires a confined cursor; touch never does. */
+export const needsControllerLock=(mode:string,paused:boolean,locked:boolean)=>mode==='gamepad'&&!paused&&!locked;

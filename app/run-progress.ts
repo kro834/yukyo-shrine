@@ -7,7 +7,7 @@ export class RunProgress {
   this.elapsed+=Math.max(0,Math.min(.15,dt));
   this.pressure=Math.max(0,Math.min(1,status.burden));
   if(status.chasing){this.wasChased=true;this.safeFor=0;}else if(this.wasChased&&!status.frozen){this.safeFor+=dt;if(this.safeFor>=2){this.escapes++;this.wasChased=false;this.safeFor=0;}}
-  this.state=status.frozen?'frozen':status.hidden?'hidden':status.chasing?'chase':status.searching?'search':'quiet';
+  this.state=status.frozen?'frozen':status.chasing?'chase':status.searching?'search':status.hidden?'hidden':'quiet';
  }
  pickup(color:'blue'|'red'|'gold'){this.pickups++;this.lastPickup=color;}
  defeated(){this.deaths++;this.pressure=0;this.wasChased=false;this.safeFor=0;this.state='quiet';}

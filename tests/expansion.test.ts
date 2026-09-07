@@ -25,7 +25,7 @@ test('exactly one danger enemy detects farther, moves faster, but can be outrun 
  assert.ok(ENEMY_PROFILES.danger.chase<SPRINT_SPEED);
  boss.position={x:0,z:0};boss.facing=0;
  enemies.update(.05,{x:0,z:12},[]);assert.equal(boss.brain.mode,'chase');
- assert.ok(Math.abs(boss.position.z-ENEMY_PROFILES.danger.chase*.4*.05)<1e-6,'blue area reduces chase speed by sixty percent');
+ assert.ok(Math.abs(boss.position.z-ENEMY_PROFILES.danger.chase*.9*.05)<1e-6,'blue pursuit is faster than walking while remaining outrunnable');
  const wall={minX:-5,maxX:5,minZ:3,maxZ:4};
  enemies.update(.7,{x:0,z:12},[wall]);assert.equal(boss.brain.mode,'patrol');
  enemies.burst({x:boss.position.x,z:boss.position.z},[]);

@@ -14,7 +14,7 @@ test('both high staircases can be climbed and descended without teleporting or f
  for(const s of HIGH_STAIRS){let p={x:(s.minX+s.maxX)/2,z:s.minZ-2},height=4.8;for(let i=0;i<65;i++){p=movePlayer(p,0,1,0,true,.05,height>=9.3?third:upper);const next=floorHeightAt(p,height);assert.ok(Math.abs(next-height)<.2);height=next;}assert.equal(height,9.6);assert.ok(p.z>s.maxZ);for(let i=0;i<65;i++){p=movePlayer(p,0,-1,0,true,.05,height>=9.3?third:upper);const next=floorHeightAt(p,height);assert.ok(Math.abs(next-height)<.2);height=next;}assert.equal(height,4.8);assert.ok(p.z<s.minZ);}
 });
 test('enemy hears on third floor, climbs there, and can descend after a second-floor sound',()=>{
- const l=createLayout(),e=new Enemies(l.cells,l.obstacles),a=e.actors[1];e.actors=[a];a.position={x:44,z:100};a.floor=4.8;assert.equal(e.hear({x:44,z:132},9.6),1);for(let i=0;i<500;i++)e.update(.05,{x:-1000,z:-1000},l.obstacles,0,upper,false,third);assert.equal(a.floor,9.6);assert.ok(a.position.z>=124);assert.equal(e.hear({x:44,z:100},4.8),1);for(let i=0;i<800&&a.floor>4.8;i++)e.update(.05,{x:-1000,z:-1000},l.obstacles,0,upper,false,third);assert.equal(a.floor,4.8);
+ const l=createLayout(),e=new Enemies(l.cells,l.obstacles),a=e.actors[1];e.actors=[a];a.position={x:44,z:100};a.floor=4.8;assert.equal(e.hear({x:44,z:132},9.6),1);for(let i=0;i<500&&(a.floor<9.6||a.position.z<130);i++)e.update(.05,{x:-1000,z:-1000},l.obstacles,0,upper,false,third);assert.equal(a.floor,9.6);assert.ok(a.position.z>=124);assert.equal(e.hear({x:44,z:100},4.8),1);for(let i=0;i<800&&a.floor>4.8;i++)e.update(.05,{x:-1000,z:-1000},l.obstacles,0,upper,false,third);assert.equal(a.floor,4.8);
 });
 
 

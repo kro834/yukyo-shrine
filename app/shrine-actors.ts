@@ -1,25 +1,35 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
+import {agedFinish} from './surface-finish.ts';
 import type {Doors,Enemies} from './shrine-gameplay';
 export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
-  const wood=new THREE.MeshStandardMaterial({color:'#211815',roughness:.8});
-  const paper=new THREE.MeshStandardMaterial({color:'#c8b58e',roughness:.85});
+  const wood=new THREE.MeshStandardMaterial({color:'#251914',roughness:.88});
+  const paper=new THREE.MeshStandardMaterial({color:'#aa9370',roughness:.97});
+  agedFinish(paper,'paper');
   const metal=new THREE.MeshStandardMaterial({color:'#352e23',metalness:.65,roughness:.45});
-  const panels:THREE.Group[]=[];
-  for(const door of doors.states){
-    const group=new THREE.Group();group.position.set(door.spec.x,door.spec.floor??0,door.spec.z);if(!door.spec.alongX)group.rotation.y=Math.PI/2;scene.add(group);
-    const box=(parent:THREE.Group,x:number,y:number,z:number,w:number,h:number,d:number,m:THREE.Material)=>{const mesh=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=true;parent.add(mesh);};
-    for(const x of [-1.76,1.76])box(group,x,1.7,0,.48,3.4,.36,wood);
-    box(group,0,3.17,0,4,.48,.34,wood);box(group,0,.035,0,4,.07,.35,wood);
-    const leaf=new THREE.Group();group.add(leaf);panels.push(leaf);
-    box(leaf,0,1.48,0,2.97,2.88,.1,paper);
-    for(const x of [-1.48,1.48])box(leaf,x,1.48,0,.05,2.92,.13,wood);
-    for(const y of [.04,.52,2.94])box(leaf,0,y,0,2.99,.05,.13,wood);
-    // Subtle grain bands and a low wood kick-panel, with no writing.
-    box(leaf,0,.28,0,2.96,.46,.12,wood);
-    for(const side of [-1,1]){const pull=new THREE.Mesh(new THREE.CylinderGeometry(.07,.07,.018,20),metal);pull.rotation.x=Math.PI/2;pull.position.set(1.05,1.3,side*.065);leaf.add(pull);}
+  const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+  const merged=(parts:THREE.BufferGeometry[])=>{const geometry=mergeGeometries(parts)!;parts.forEach(g=>g.dispose());return geometry;};
+  const frameGeometry=merged([box(-1.76,1.7,0,.48,3.4,.36),box(1.76,1.7,0,.48,3.4,.36),box(0,3.17,0,4,.48,.34),box(0,.035,0,4,.07,.35)]);
+  const paperGeometry=box(0,1.48,0,2.97,2.88,.1);
+  const leafWoodGeometry=merged([...[-1.48,1.48].map(x=>box(x,1.48,0,.05,2.92,.13)),...[.04,.52,2.94].map(y=>box(0,y,0,2.99,.05,.13)),box(0,.28,0,2.96,.46,.12)]);
+  const pullGeometry=merged([-1,1].map(side=>new THREE.CylinderGeometry(.07,.07,.018,16).rotateX(Math.PI/2).translate(1.05,1.3,side*.065)));
+  const chunks=new Map<string,number[]>();
+  doors.states.forEach(({spec:d},i)=>{const key=Math.floor(d.x/24)+':'+Math.floor(d.z/24)+':'+(d.floor??0);if(!chunks.has(key))chunks.set(key,[]);chunks.get(key)!.push(i);});
+  const frames:THREE.InstancedMesh[]=[],matrix=new THREE.Matrix4();
+  for(const indices of chunks.values()){
+    const mesh=new THREE.InstancedMesh(frameGeometry,wood,indices.length);mesh.name='fusuma-frames';mesh.castShadow=mesh.receiveShadow=true;
+    indices.forEach((id,i)=>{const d=doors.states[id].spec;matrix.makeRotationY(d.alongX?0:Math.PI/2);matrix.setPosition(d.x,d.floor??0,d.z);mesh.setMatrixAt(i,matrix);});
+    mesh.computeBoundingSphere();mesh.matrixAutoUpdate=false;scene.add(mesh);frames.push(mesh);
   }
-  return {update(){doors.states.forEach((d,i)=>panels[i].position.x=d.progress*3.02);},dispose(){wood.dispose();paper.dispose();metal.dispose();}};
+  const panels=doors.states.map(({spec:d})=>{
+    const root=new THREE.Group(),leaf=new THREE.Group();root.name='fusuma';leaf.name='fusuma-leaf';root.position.set(d.x,d.floor??0,d.z);if(!d.alongX)root.rotation.y=Math.PI/2;
+    for(const [g,m] of [[paperGeometry,paper],[leafWoodGeometry,wood],[pullGeometry,metal]] as const){const mesh=new THREE.Mesh(g,m);mesh.castShadow=mesh.receiveShadow=true;mesh.matrixAutoUpdate=false;leaf.add(mesh);}
+    root.add(leaf);root.updateMatrix();root.matrixAutoUpdate=false;scene.add(root);return {root,leaf,progress:0};
+  });
+  return {update(viewer?:{x:number;y?:number;z:number},range=110){
+    for(const frame of frames){const b=frame.boundingSphere!;frame.visible=!viewer||Math.hypot(b.center.x-viewer.x,b.center.z-viewer.z)<range+b.radius;}
+    doors.states.forEach((d,i)=>{const p=panels[i];p.root.visible=!viewer||Math.hypot(d.spec.x-viewer.x,d.spec.z-viewer.z)<range;if(d.progress!==p.progress){p.progress=d.progress;p.leaf.position.x=d.progress*3.02;}});
+  },dispose(disposeGeometry=true){for(const m of [wood,paper,metal])m.dispose();if(disposeGeometry)for(const g of [frameGeometry,paperGeometry,leafWoodGeometry,pullGeometry])g.dispose();}};
 }
 export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const mergeFixed=(group:THREE.Group,animated=new Set<THREE.Object3D>())=>{
