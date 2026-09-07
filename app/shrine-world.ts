@@ -14,6 +14,7 @@ import {chamferedBox} from './chamfered-box.ts';
 import {wainscot} from './wainscot.ts';
 import {waterFinish} from './water-finish.ts';
 import {exteriorRoofSites,exteriorRoof} from './exterior-roofs.ts';
+import {outdoorTimberBay,outdoorTimberFinish} from './outdoor-timber.ts';
 import {finiteFixture,finiteSceneFixtures,pendingFixtureFinish} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -138,6 +139,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     earth:new THREE.MeshStandardMaterial({color:'#443d2b',roughness:1}),
     bank:new THREE.MeshStandardMaterial({color:'#b0b8a4',roughness:1}),
     roofMetal:new THREE.MeshStandardMaterial({color:'#616e6a',roughness:.88,metalness:.12}),
+    outdoorTimber:new THREE.MeshStandardMaterial({color:'#b3b4ad',roughness:.98,vertexColors:true}),
     grass:new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.94,vertexColors:true,side:THREE.DoubleSide}),
   };
   for(const [name,material] of Object.entries(mats))material.name=name;
@@ -151,6 +153,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
   lampFinish(mats.circusGlow,'diffuser');
   for(const m of [mats.circusRed,mats.circusIvory])circusFabric(m);
+  outdoorTimberFinish(mats.outdoorTimber);
   agedFinish(mats.circusDark,'wood');agedFinish(mats.circusMetal,'lacquer');
   circusPaint(mats.circusPaint);
   agedFinish(mats.circusIvoryPaint,'lacquer');
@@ -329,8 +332,14 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         const identity=landforms?.regionAt(w.x,w.z)?.identity,metal=identity==='underpass'||identity==='floodgate'||identity==='riverside';
         box(w.x,.16,w.z,w.alongX?4:.36,.32,w.alongX?.36:4,metal?'concrete':'earth');
         if(w.h>1){
-          for(const t of [-1.85,1.85])box(w.x+(w.alongX?t:0),.64,w.z+(w.alongX?0:t),metal?.065:.12,1.25,metal?.065:.12,metal?'steel':'wood');
-          for(const y of [.55,1.05])box(w.x,y,w.z,w.alongX?4:.08,.085,w.alongX?.08:4,metal?'steel':'wood');
+          if(!metal){
+            const bay=outdoorTimberBay(seed+w.x*.73+w.z*1.13),yaw=w.alongX?0:Math.PI/2;
+            add(bay.wood.rotateY(yaw).translate(w.x,0,w.z),'outdoorTimber');
+            add(bay.metal.rotateY(yaw).translate(w.x,0,w.z),'steel');
+          }else{
+            for(const t of [-1.85,1.85])box(w.x+(w.alongX?t:0),.64,w.z+(w.alongX?0:t),.065,1.25,.065,'steel');
+            for(const y of [.55,1.05])box(w.x,y,w.z,w.alongX?4:.08,.085,w.alongX?.08:4,'steel');
+          }
         }
       }
       else {rock(w.x-w.insideX*2.2,w.h/2,w.z-w.insideZ*2.2,w.alongX?4.6:4.5,w.h+1.5,w.alongX?4.5:4.6);}
@@ -671,7 +680,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
   surfaces.setLightingFinish(finiteFixture);
-  surfaces.preserveBaseFinish(mats.water,mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory,mats.tatamiTrim);
+  surfaces.preserveBaseFinish(mats.water,mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory,mats.tatamiTrim,mats.outdoorTimber);
   const linenTargets=circus?[mats.circusRed,mats.circusIvory]:gothic?[]:[mats.tatamiTrim];
   if(linenTargets.length)surfaces.add('/materials/textile/rough_linen_diff_1k.jpg',linenTargets,{normal:'/materials/textile/rough_linen_nor_gl_1k.jpg',roughness:'/materials/textile/rough_linen_rough_1k.jpg',repeat:[1/.2707081393,1/.2712999880],normalStrength:.4,preserveFinish:true,lowSize:256,ultra:{full:'/materials/textile/rough_linen_diff_2k.jpg',normal:'/materials/textile/rough_linen_nor_gl_2k.jpg',roughness:'/materials/textile/rough_linen_rough_2k.jpg'}});
   surfaces.add('/cedar.png',[mats.red],{bump:.003,tint:gothic?'#462129':undefined});
@@ -679,7 +688,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   surfaces.add('/rusted-steel.png',[mats.steel],{bump:.008,tint:'#8a9292'});
   const photographic=(id:string,targets:THREE.MeshStandardMaterial[],tint:string|undefined,preserveFinish=false,normalStrength=1)=>surfaces.add('/materials/'+id+'_diff.jpg',targets,{tint,normal:'/materials/'+id+'_nor_gl.jpg',roughness:'/materials/'+id+'_rough.jpg',preserveFinish,normalStrength,ultra:['wood_planks','clay_plaster','rust_coarse_01','cobblestone_floor_001'].includes(id)?{full:'/materials/ultra/'+id+'_diff_2k.jpg',normal:'/materials/ultra/'+id+'_nor_gl_2k.jpg',roughness:'/materials/ultra/'+id+'_rough_2k.jpg'}:undefined});
   mats.planks.color.set('#d8c5ad');mats.wood.color.set('#d9d0c2');mats.dark.color.set('#afa596');
-  photographic('wood_planks',[mats.planks,mats.wood,mats.dark],gothic?'#847d74':undefined,true,.65);
+  photographic('wood_planks',[mats.planks,mats.wood,mats.dark,mats.outdoorTimber],gothic?'#847d74':undefined,true,.65);
   photographic('rock_face_03',[mats.rock],'#b6b2a7',true,.8);
   photographic('clay_plaster',[mats.plaster],'#c8b49b',true,.6);
   const interior=(id:string,targets:THREE.MeshStandardMaterial[],normalStrength:number,tint:string)=>surfaces.add('/materials/interior/'+id+'/'+id+'_diff_1k.jpg',targets,{tint,normal:'/materials/interior/'+id+'/'+id+'_nor_gl_1k.jpg',roughness:'/materials/interior/'+id+'/'+id+'_rough_1k.jpg',normalStrength,lowSize:256});
