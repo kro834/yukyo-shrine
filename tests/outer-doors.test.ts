@@ -11,7 +11,10 @@ test('nostalgic interiors allow actual door interaction and walking from both si
  const renderer={setPixelRatio(){},setSize(){},shadowMap:{},capabilities:{getMaxAnisotropy:()=>1},dispose(){}} as unknown as THREE.WebGLRenderer;
  const themes=new Set(OUTER_MEMORY_AREAS.map(t=>t.id));
  for(const seed of [17,71]){
-  const w=createWorld(canvas as unknown as HTMLCanvasElement,renderer,seed,'outer');try{
+  const w=createWorld(canvas as unknown as HTMLCanvasElement,renderer,seed,'outer');
+  const frames=w.scene.children.filter(o=>o.name==='fusuma-frames');let disposedFrames=0;
+  for(const frame of frames)(frame as THREE.InstancedMesh).addEventListener('dispose',()=>disposedFrames++);
+  try{
    w.setMode('gallery');w.scene.updateMatrixWorld(true);
    const rooms=new Set(w.layout.rooms.filter(r=>themes.has(r.themeId??'')).map(r=>r.id));
    const meshes=w.scene.children.filter((o):o is THREE.Mesh=>o instanceof THREE.Mesh&&!o.matrixAutoUpdate);
@@ -29,6 +32,6 @@ test('nostalgic interiors allow actual door interaction and walking from both si
     w.camera.position.set(d.x-nx,1.68,d.z-nz);w.camera.rotation.y=Math.atan2(-nx,-nz);assert.ok(w.interact());
     for(let i=0;i<12;i++)w.step(.05);
    }
-  }finally{w.dispose();}
+  }finally{w.dispose();assert.equal(disposedFrames,frames.length,'release all door instance buffers on stage change');}
  }
 });

@@ -12,13 +12,15 @@ Capture restores the ordinary roster, empties held/offered beads and mirrors, cl
 
 ## Modes and stages
 
-Start with Gallery, Normal or Hard. Gallery provides safe sightseeing with no active enemies. Only clearing on Hard unlocks **深淵 (Abyss)**, **外縁 (Outer Reach)** and **オーケストラ・ツー (Orchestra Two)**, or a new seed for the same stage. A stage change recreates the world and input lifecycle while retaining preferences.
+Choose **祭殿回廊 (Shrine)**, **深淵 (Abyss)**, **外縁 (Outer Reach)** or **オーケストラ・ツー (Orchestra Two)** from the initial screen, then start with Gallery, Normal or Hard. Every stage is available immediately, with no clear or unlock requirement. Gallery provides safe sightseeing with no active enemies. After clearing, select another stage or regenerate the same one. A stage change recreates the world and input lifecycle while retaining preferences.
 
 Abyss has lower cave ceilings, damp dark surfaces, fewer inter-sector links and longer enemy searches. Outer Reach emphasizes open fenced fields, moonlit sky, alleys and shops, with wider detection and faster pursuit. Both preserve all bead routes and tested ground navigation.
 
 Outer Reach also contains eight exclusive nostalgic interiors, placed in eight separate random sectors without replacing the original30 themes: 終電の去った木造駅, 夕暮れの廃校舎, 閉館した銀映館, 祭りのあとの縁日, 雨待ちの旧旅籠, 忘れ湯の浴場, 宛先のない郵便局 and 夕凪の蓄音室. Low timber ceilings, corner wall linings, shaded lamps and distinct furniture establish their identities. Room IDs, bead routes and altar selection are preserved; furnishings leave the offset entrance cross clear.
 
 Orchestra Two is a dark Gothic music complex: black stone walls, pointed arches, blind tracery windows, wooden sliding doors and sparse warm fixtures. Four exclusive rooms contain a pipe organ, abandoned string instruments, a closed curtained stage and old clocks. It retains the three-floor layout, all objective routes and the existing controls, with longer enemy searches and reduced ambient light. Dedicated rooms occupy four separate sectors and leave stair volumes and door approaches clear.
+
+Selected chambers contain CC0 scanned wooden chairs, stools and ceramic vases with shared local instancing, conservative collision bounds and soft contact shading. Scans load asynchronously with fitted local fallbacks; Low disables normal and ARM sampling, while higher settings restore material detail. Sources and licenses are recorded in `public/models/SOURCES.md`. Recessed fusuma panels, dished pulls and Gothic oak panels preserve the original sliding envelope. Stage changes dispose model textures, geometry and door instance buffers.
 
 ## Controls
 

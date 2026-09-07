@@ -13,6 +13,7 @@ import {createSectorLayout as createLayout} from './sector-layout.ts';
 import type {Preferences} from './preferences';
 import {Doors,Enemies,openPursuedDoor} from './shrine-gameplay.ts';
 import {createDoorMeshes,createEnemyMeshes} from './shrine-actors.ts';
+import {ScannedProps,propFootprint,type ScannedPlacement} from './scanned-props.ts';
 import {enemyDirection,enemyFloorHint} from './enemy-direction.ts';
 import {movePlayer} from './movement.ts';
 import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,floorHeightAt} from './annex.ts';
@@ -374,6 +375,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   };
   const cisternSector=layout.sectors.find(s=>s.kind==='cistern')!,poolPosition={x:(cisternSector.x1+cisternSector.x2)*2,z:(cisternSector.z1+cisternSector.z2)*2};
   const water=new THREE.Mesh(new THREE.PlaneGeometry(4.85,6.85),new THREE.MeshPhysicalMaterial({color:'#17332f',metalness:0,roughness:.13,ior:1.333,clearcoat:0}));water.rotation.x=-Math.PI/2;water.position.set(poolPosition.x,.024,poolPosition.z);scene.add(water);
+  const scannedPlacements:ScannedPlacement[]=[];
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
     if(room.themeId){gothicRoomProps=room.themeId.startsWith('orchestra-');buildHorrorArea(room,{box,cylinder,fixture,block},room.id===altarRoom.id);gothicRoomProps=false;continue;}
@@ -387,6 +389,12 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       box(cx,.012,cz,(room.x2-room.x1+1)*4-1,.024,(room.z2-room.z1+1)*4-1,theme===4?'tatami':theme===3?'stone':'planks');
       for(const side of [-1,1]){
         const x=cx+side*3,z=cz+side*3;
+        if([1,4,6,8].includes(theme)){
+          const kind=theme===4?'stool':theme===6?'vase':'chair',y=kind==='vase'?.82:.024;
+          if(kind==='vase'){box(x,.42,z,.46,.8,.46,'wood');block(x,z,.46,.46,.82);}
+          const placement:ScannedPlacement={kind,x,y,z,yaw:side<0?Math.PI/4:-Math.PI*3/4};
+          scannedPlacements.push(placement);obstacles.push(propFootprint(placement));continue;
+        }
         if(theme===0){box(x,1.55,z,1.7,2.8,.12,'steel');box(x,3,z,1.9,.13,.22,'gold');}
         else if(theme===2){cylinder(x,room.h/2,z,.28,room.h,'red');}
         else if(theme===5){box(x,.35,z,2,.7,1.5,'stone');box(x,.72,z,1.8,.03,1.3,'water');}
@@ -520,6 +528,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=!['lightSpill','light','coolLight','grass'].includes(m);mesh.receiveShadow=mesh.castShadow||m==='grass';mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
   for(const body of lanternTemplates){body.shade.dispose();body.caps.dispose();body.ribs.dispose();}
+  const scannedProps=new ScannedProps(scene,scannedPlacements,!rendererOverride);
   obstacles.push(...goal.walls);
   const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors,gothic),enemyMeshes=createEnemyMeshes(scene,enemies);
   const upperFixed=[...SECOND_DECK.walls,...deckFurnitureWalls(4.8),...highRails,...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
@@ -579,7 +588,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const floorLevel=()=>floorBand(elevation);
   const fixedFor=(level:number)=>level>9?thirdFixed:level>4?upperFixed:obstacles;
   const collisionFor=()=>elevation>9.3?thirdFixed:elevation>4.5?upperCollision:groundCollision;
-  return {renderer,scene,camera,layout,stage,
+  return {renderer,scene,camera,layout,stage,scannedReady:scannedProps.ready,
     setMode(mode:PlayMode){playMode=mode;if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=stageRules(stage,mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
     get playMode(){return playMode;},
     mirrorStatus(){return mirrorInventory.snapshot();},
@@ -649,7 +658,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       }
       if(configuredQuality===quality)return;
       const wasUltra=configuredQuality==='ultra',ultra=quality==='ultra',high=quality==='high'||ultra;
-      configuredQuality=quality;lastLight=-Infinity;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);
+      configuredQuality=quality;lastLight=-Infinity;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);scannedProps.setQuality(quality);
       if(quality==='low'||wasUltra!==ultra){effects?.dispose();effects=undefined;}
       if(quality!=='low'&&!effects&&!rendererOverride)effects=createEffects(renderer,scene,camera,budget.mobile,ultra);
       resizeTargets();
@@ -683,13 +692,14 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(gothic)fixtureShadow.light.intensity*=.55;
       lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=(gothic?3.8:7)*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
       doorMeshes.update(camera.position,configuredQuality==='low'?72:110);
+      scannedProps.update(camera.position);
       enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);
       beadMeshes.update(environmentTime);
       goalMeshes.update();
       if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;fixtureShadow.dispose();nightSky?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;scannedProps.dispose();fixtureShadow.dispose();nightSky?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
 

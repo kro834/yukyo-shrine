@@ -1,0 +1,27 @@
+{
+  "include": {
+    "textures/WoodenChair_01_nor_gl_1k.jpg": {
+      "size": 213336,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/WoodenChair_01/WoodenChair_01_nor_gl_1k.jpg",
+      "md5": "ff24ff3cd10f2ff20bea9bfd45bde7cb"
+    },
+    "textures/WoodenChair_01_arm_1k.jpg": {
+      "size": 169084,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/WoodenChair_01/WoodenChair_01_arm_1k.jpg",
+      "md5": "a47f6e96d5aca408f8adc5638c51f46b"
+    },
+    "WoodenChair_01.bin": {
+      "size": 546416,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/WoodenChair_01/WoodenChair_01.bin",
+      "md5": "37afa90d1d47ab37dfd8edb72aaefb44"
+    },
+    "textures/WoodenChair_01_diff_1k.jpg": {
+      "size": 147990,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/WoodenChair_01/WoodenChair_01_diff_1k.jpg",
+      "md5": "7de73aa8fef4c04d1e0d91acd3a8547d"
+    }
+  },
+  "size": 2705,
+  "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/WoodenChair_01/WoodenChair_01_1k.gltf",
+  "md5": "a540903a19cd0fd5afaaa21c4b772204"
+}

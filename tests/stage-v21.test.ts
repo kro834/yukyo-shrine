@@ -14,10 +14,10 @@ import {ContactOcclusion} from '../app/contact-occlusion.ts';
 import {buildYokochoFront} from '../app/yokocho-front.ts';
 import {MirrorInventory} from '../app/mirror-inventory.ts';
 
-test('only a completed Hard run unlocks another stage; cleared Normal runs can retry',()=>{
+test('completed runs can select any stage while an active run cannot transition',()=>{
  for(const current of Object.keys(STAGES) as StageId[])for(const next of Object.keys(STAGES) as StageId[])for(const mode of ['gallery','normal','hard'] as const){
   assert.equal(canTransitionStage(mode,false,current,next),false);
-  assert.equal(canTransitionStage(mode,true,current,next),mode==='hard'||current===next);
+  assert.equal(canTransitionStage(mode,true,current,next),true);
  }
 });
 
