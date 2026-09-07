@@ -1,5 +1,8 @@
 // Outside-Site imports for verification; use normal three/addons imports in the Site.
 import * as THREE from 'three';
+import {chamferedBox} from './chamfered-box.ts';
+import {surfaceUV} from './surface-uv.ts';
+import {hangingCanvas} from './circus-cloth.ts';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import type {CircusPlan,CircusSnapshot,CircusPoint} from './circus-types.ts';
 import {circusRoofHeight,type CircusMaterial,type CircusAdd} from './circus-scenery.ts';
@@ -12,6 +15,15 @@ export function createCircusDynamics(plan:CircusPlan,materials:Materials){
  const group=new THREE.Group();group.name='circus-mechanisms';
  const ownedGeometries=new Set<THREE.BufferGeometry>(),ownedMaterials=new Set<THREE.Material>();
  const box=(add:CircusAdd,x:number,y:number,z:number,w:number,h:number,d:number,m:CircusMaterial)=>add(new THREE.BoxGeometry(w,h,d).translate(x,y,z),m);
+ const finishedBox=(add:CircusAdd,x:number,y:number,z:number,w:number,h:number,d:number,m:CircusMaterial)=>{
+  const g=chamferedBox(w,h,d,Math.min(.007,w*.1,h*.1,d*.1));
+  surfaceUV(g,1,m==='wood'?'timber-photo':undefined);g.translate(x,y,z);add(g,m);
+ };
+ const bolt=(add:CircusAdd,x:number,y:number,z:number,axis:'x'|'z')=>{
+  const g=new THREE.CylinderGeometry(.013,.016,.011,6);
+  g.rotateZ(axis==='x'?Math.PI/2:0);if(axis==='z')g.rotateX(Math.PI/2);
+  g.translate(x,y,z);add(g,'circusMetal');
+ };
  const cyl=(add:CircusAdd,x:number,y:number,z:number,r:number,h:number,m:CircusMaterial,segments=16)=>add(new THREE.CylinderGeometry(r,r,h,segments).translate(x,y,z),m);
  const rod=(add:CircusAdd,a:THREE.Vector3,b:THREE.Vector3,r:number,m:CircusMaterial)=>{const delta=b.clone().sub(a),g=new THREE.CylinderGeometry(r,r,delta.length(),6);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize()));g.translate(...a.clone().add(b).multiplyScalar(.5).toArray());add(g,m);};
  const batch=(parent:THREE.Group,draw:(add:CircusAdd)=>void)=>{
@@ -24,22 +36,32 @@ export function createCircusDynamics(plan:CircusPlan,materials:Materials){
  const cart=new THREE.Group();cart.name='circus-rideable-cart';group.add(cart);
  batch(cart,add=>{
   box(add,0,.33,0,1.1,.13,1.76,'circusDark');
-  for(const x of [-.38,0,.38])box(add,x,.415,0,.36,.065,1.69,'wood');
+  for(const x of [-.38,0,.38])finishedBox(add,x,.415,0,.36,.065,1.69,'wood');
   for(const x of [-.57,.57]){
-   box(add,x,.58,0,.055,.35,1.65,'circusRed');
-   box(add,x,.79,0,.064,.065,1.75,'circusBrass');
+   finishedBox(add,x,.58,0,.055,.35,1.65,'circusPaint');
+   finishedBox(add,x,.79,0,.064,.065,1.75,'circusBrass');
+   for(const z of [-.65,0,.65]){
+    finishedBox(add,x+Math.sign(x)*.030,.585,z,.012,.29,.047,'circusMetal');
+    for(const y of [.47,.69])bolt(add,x+Math.sign(x)*.041,y,z,'x');
+   }
   }
   for(const z of [-.78,.78]){
-   box(add,0,.57,z,1.12,.32,.07,'circusRed');
-   box(add,0,1.00,z,1.10,.048,.05,'circusMetal');
+   finishedBox(add,0,.57,z,1.12,.32,.07,'circusPaint');
+   rod(add,new THREE.Vector3(-.52,1,z),new THREE.Vector3(.52,1,z),.024,'circusMetal');
+   for(const x of [-.46,.46])for(const y of [.46,.68])bolt(add,x,y,z+Math.sign(z)*.043,'z');
    for(const x of [-.49,.49])rod(add,new THREE.Vector3(x,.41,z),new THREE.Vector3(x,1.01,z),.023,'circusMetal');
   }
-  box(add,0,.63,-.30,.92,.07,.35,'wood');
+  for(const z of [-.40,-.20])finishedBox(add,0,.63,z,.92,.07,.185,'wood');
+  for(const x of [-.37,.37])finishedBox(add,x,.525,-.30,.035,.19,.28,'circusMetal');
   for(const z of [-.53,.53]){const axle=new THREE.CylinderGeometry(.035,.035,1.05,8);axle.rotateZ(Math.PI/2);axle.translate(0,.205,z);add(axle,'circusMetal');}
  });
  const wheels:THREE.Mesh[]=[];
  for(const x of [-.41,.41])for(const z of [-.53,.53]){
-  const wheelGeometry=new THREE.CylinderGeometry(.16,.16,.085,16);wheelGeometry.rotateZ(Math.PI/2);ownedGeometries.add(wheelGeometry);const wheel=new THREE.Mesh(wheelGeometry,materials.circusMetal);wheel.position.set(x,.205,z);wheel.castShadow=true;cart.add(wheel);wheels.push(wheel);
+  const pieces:THREE.BufferGeometry[]=[];
+  for(const [r,h,offset] of [[.16,.07,0],[.177,.015,-Math.sign(x)*.039],[.065,.10,0],[.03,.115,0]]){
+   const g=new THREE.CylinderGeometry(r,r,h,24);g.rotateZ(Math.PI/2);g.translate(offset,0,0);pieces.push(g);
+  }
+  const wheelGeometry=mergeGeometries(pieces)!;pieces.forEach(g=>g.dispose());ownedGeometries.add(wheelGeometry);const wheel=new THREE.Mesh(wheelGeometry,materials.circusMetal);wheel.position.set(x,.205,z);wheel.castShadow=true;cart.add(wheel);wheels.push(wheel);
  }
  const mechanisms=new Map<string,{root:THREE.Group;update:(progress:number,time:number)=>void}>();
  for(const device of plan.devices){
@@ -58,11 +80,8 @@ export function createCircusDynamics(plan:CircusPlan,materials:Materials){
    for(const side of [-1,1]){
     const panel=new THREE.Group();root.add(panel);panels.push(panel);
     batch(panel,add=>{
-     const p:number[]=[],uv:number[]=[],idx:number[]=[],segments=20;
-     for(let i=0;i<=segments;i++)for(const y of [.18,2.97]){const x=-.70+i*1.4/segments,z=Math.cos(i*Math.PI/2)*.055;p.push(x,y,z);uv.push(i/8,y/1.1);}
-     for(let i=0;i<segments;i++){const a=i*2;idx.push(a,a+2,a+1,a+1,a+2,a+3);}
-     const cloth=new THREE.BufferGeometry();cloth.setAttribute('position',new THREE.Float32BufferAttribute(p,3));cloth.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));cloth.setIndex(idx);cloth.computeVertexNormals();add(cloth,'circusRed');
-     box(add,0,.20,0,1.4,.065,.11,'circusBrass');
+     add(hangingCanvas(1.4,2.79,side,.052).translate(0,.18,0),'circusRed');
+     box(add,0,.20,0,1.4,.035,.06,'circusRed');
      for(const x of [-.60,0,.60]){const eye=new THREE.TorusGeometry(.033,.008,4,8);eye.translate(x,3.01,0);add(eye,'circusMetal');}
     });
     panel.position.x=side*.70;

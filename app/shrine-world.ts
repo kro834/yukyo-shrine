@@ -1,4 +1,5 @@
 import {circusFabric} from './circus-fabric.ts';
+import {circusPaint} from './circus-paint.ts';
 import {createCircusPlan} from './circus-plan.ts';
 import {CircusRuntime} from './circus-runtime.ts';
 import {CIRCUS_MATERIALS,buildCircusCell,buildCircusWall,buildCircusScenery} from './circus-scenery.ts';
@@ -92,6 +93,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     circusRed:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusRed),
     circusIvory:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusIvory),
     circusDark:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusDark),
+    circusPaint:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusPaint),
     circusMetal:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusMetal),
     circusBrass:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusBrass),
     circusGlow:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusGlow),
@@ -140,6 +142,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
   for(const m of [mats.circusRed,mats.circusIvory]){const color=m.color.clone();fabricFinish(m,true);m.color.copy(color);circusFabric(m);}
   agedFinish(mats.circusDark,'wood');agedFinish(mats.circusMetal,'lacquer');
+  circusPaint(mats.circusPaint);
   type MaterialKey=keyof typeof mats;
   const batches=new Map<string,{material:MaterialKey;geometries:THREE.BufferGeometry[]}>();
   let groundGeometry=true,gothicRoomProps=false;
@@ -281,7 +284,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     if(kind==='passage'&&!narrowKeys.has(c.x+','+c.z)&&(c.x+c.z)%3===0){lantern(x,c.h-.68,z);box(x,c.h-.12,z,.025,.65,.025,'gold');}
   }
   for(const w of layout.walls){
-    if(circus){buildCircusWall(w,add);continue;}
+    if(circus){buildCircusWall(w,add,budget.mobile);continue;}
     const kind=visualKind(w.kind??"hall",w.x+w.insideX*.2,w.z+w.insideZ*.2);
     if(gothic){
       box(w.x,w.h/2,w.z,w.alongX?4:.3,w.h,w.alongX?.3:4,'concrete');
@@ -790,4 +793,3 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     dispose(){disposed=true;circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();nightSky?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
-

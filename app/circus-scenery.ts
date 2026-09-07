@@ -1,11 +1,13 @@
 // Outside-Site import for verification. Root integration: import * as THREE from 'three'.
 import * as THREE from 'three';
+import {hangingCanvas} from './circus-cloth.ts';
 import type {CircusPlan,CircusPoint} from './circus-types.ts';
 
 export const CIRCUS_MATERIALS={
  circusRed:{color:'#53252b',roughness:.96,metalness:0,side:THREE.DoubleSide},
  circusIvory:{color:'#aa9676',roughness:.97,metalness:0,side:THREE.DoubleSide},
  circusDark:{color:'#30272b',roughness:.92,metalness:0},
+ circusPaint:{color:'#51232a',roughness:.43,metalness:.08},
  circusMetal:{color:'#62666a',roughness:.61,metalness:.72},
  circusBrass:{color:'#947047',roughness:.48,metalness:.66},
  circusGlow:{color:'#a47c4d',emissive:'#e5aa5d',emissiveIntensity:.30,roughness:.96},
@@ -48,16 +50,12 @@ export function buildCircusCell(c:Cell,add:CircusAdd,fixture?:(x:number,y:number
 /** Pleated canvas at the SAME footprint as the layout wall. No extra floor blockers.
  * A room partition keeps its old height. The big-top exterior reaches its canopy.
  */
-export function buildCircusWall(w:Wall,add:CircusAdd){
+export function buildCircusWall(w:Wall,add:CircusAdd,lightweight=false){
  const tentBoundary=!w.twoSided&&circusCentral(w.x,w.z)&&Math.max(Math.abs(w.x),Math.abs(w.z))>=33.9;
  const top=tentBoundary?circusRoofHeight(w.x,w.z):Math.min(w.h,4.25);
- const p:number[]=[],uv:number[]=[],indices:number[]=[],segments=12;
- for(let i=0;i<=segments;i++)for(const y of [0,top]){
-  const t=-2+i*4/segments,fold=Math.cos(i*Math.PI/2)*.07;
-  p.push(w.x+(w.alongX?t:fold),y,w.z+(w.alongX?fold:t));uv.push((t+2)/1.2,y/1.2);
- }
- for(let i=0;i<segments;i++){const a=i*2;indices.push(a,a+2,a+1,a+1,a+2,a+3);}
- const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(indices);g.computeVertexNormals();g.userData.surfaceUV='authored';
+ const g=hangingCanvas(4,top,w.x*.31+w.z*.17,.062,lightweight);
+ if(!w.alongX)g.rotateY(Math.PI/2);
+ g.translate(w.x,0,w.z);
  const stripe=((Math.round(w.x/4)+Math.round(w.z/4))%4+4)%4;add(g,stripe===0?'circusIvory':'circusRed');
  // Thin lacing/hem stays in the existing wall's collision thickness.
  for(const y of [.12,Math.max(.3,top-.16)])box(add,w.x,y,w.z,w.alongX?4:.10,.035,w.alongX?.10:4,'rope');
