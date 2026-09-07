@@ -50,9 +50,9 @@ export function createCircusPlan(_seed:number,layout:Layout):CircusPlan{
  ];
  for(const s of stations)if(!safe(s.exit,.46)||!safe(s.position,.74))throw Error(`Unsafe circus station ${s.id}`);
  const specs=[
-  {id:'circus-turntable',name:'回転舞台',kind:'turntable' as const,position:{x:0,z:0},control:{x:0,z:3.15},yaw:0},
-  {id:'circus-curtain',name:'からくり緞帳',kind:'curtain' as const,position:{x:0,z:-16},control:{x:0,z:-12.85},yaw:0},
-  {id:'circus-drawbridge',name:'跳ね上げ舞台橋',kind:'drawbridge' as const,position:{x:16,z:0},control:{x:12.85,z:0},yaw:Math.PI/2},
+  {id:'circus-turntable',name:'回転舞台',kind:'turntable' as const,position:{x:0,z:2},control:{x:0,z:5.15},yaw:0},
+  {id:'circus-curtain',name:'からくり緞帳',kind:'curtain' as const,position:{x:0,z:-18},control:{x:0,z:-14.85},yaw:0},
+  {id:'circus-drawbridge',name:'跳ね上げ舞台橋',kind:'drawbridge' as const,position:{x:18,z:0},control:{x:14.85,z:0},yaw:Math.PI/2},
   {id:'circus-lure',name:'呼び鈴の舞台',kind:'lure' as const,position:{x:-16,z:0},control:{x:-12.85,z:0},yaw:Math.PI/2},
  ];
  const devices:CircusDevice[]=specs.map(s=>{
