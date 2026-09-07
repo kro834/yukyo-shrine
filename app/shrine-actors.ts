@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {agedFinish} from './surface-finish.ts';
 import {SurfaceLibrary} from './surface-library.ts';
+import {surfaceUV} from './surface-uv.ts';
 import type {Preferences} from './preferences.ts';
 import type {Doors,Enemies} from './shrine-gameplay';
 export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
@@ -10,7 +11,7 @@ export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
   agedFinish(paper,'paper');
   const metal=new THREE.MeshStandardMaterial({color:'#352e23',metalness:.65,roughness:.45});
   const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.add('/cedar.png',[wood],{bump:.012,tint:'#685443'});
-  const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
+  const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>{const g=new THREE.BoxGeometry(w,h,d).translate(x,y,z);surfaceUV(g,.38,'timber');return g;};
   const merged=(parts:THREE.BufferGeometry[])=>{const geometry=mergeGeometries(parts)!;parts.forEach(g=>g.dispose());return geometry;};
   const frameGeometry=merged([box(-1.76,1.7,0,.48,3.4,.36),box(1.76,1.7,0,.48,3.4,.36),box(0,3.17,0,4,.48,.34),box(0,.035,0,4,.07,.35)]);
   const paperGeometry=box(0,1.48,0,2.97,2.88,.1);

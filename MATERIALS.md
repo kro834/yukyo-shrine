@@ -25,3 +25,9 @@ Retrieved2026-09-07 from the official dl.polyhaven.org1K texture collection.
 | public/materials/concrete_floor_worn_001 | https://polyhaven.com/a/concrete_floor_worn_001 | 3m |
 
 Each contains1K diffuse, OpenGL normal and roughness JPGs. Retrieved2026-09-07. The fully oxidized rust is a dielectric (metalness0), as in the source glTF; exposed steel remains a separate surface. Stone pavement and planks retain restrained material variation on High. Tatami reeds, washi fibres, lacquer wear and glazed-tile joints use scale-correct procedural shading; these extra shaders are disabled on Low and Medium.
+
+## Mapping and contact detail
+
+Curved fixtures retain their native continuous UVs, scaled to circumference and length. Cedar is cropped to a single board on slim timber and its grain follows each member before batching; photographic floorboards run along the floor's Z axis at the documented1.5m repeat. Legacy timber room overlays now use the same photographic floor material.
+
+High uses half-resolution16-sample contact occlusion with metre-based depth limits (18mm–550mm), a nine-tap depth/normal-aware blur, and restrained strength. Transparent overlays and reflections are excluded from the normal pass. This replaces the existing AO pass rather than adding a scene render. Low allocates no post-processing pipeline. These are implementation and automated-test results; GPU appearance still requires visual verification.

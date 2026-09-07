@@ -1,12 +1,11 @@
 import * as THREE from 'three';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
-import {SSAOPass} from 'three/addons/postprocessing/SSAOPass.js';
+import {ContactOcclusion} from './contact-occlusion.ts';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {OutputPass} from 'three/addons/postprocessing/OutputPass.js';
 // AO and the blurred light halo have low spatial frequency. Keep geometry and
 // textures at the selected full resolution, sampling only these effects at half size.
-class HalfAO extends SSAOPass {override setSize(w:number,h:number){super.setSize(Math.max(1,Math.ceil(w/2)),Math.max(1,Math.ceil(h/2)));}}
 class HalfBloom extends UnrealBloomPass {override setSize(w:number,h:number){super.setSize(Math.max(1,Math.ceil(w/2)),Math.max(1,Math.ceil(h/2)));}}
 export function renderEnemyEcho(renderer:THREE.WebGLRenderer,scene:THREE.Scene,camera:THREE.PerspectiveCamera){
  const background=scene.background,mask=camera.layers.mask,autoClear=renderer.autoClear,shadowUpdate=renderer.shadowMap.autoUpdate;
@@ -19,8 +18,7 @@ export function renderEnemyEcho(renderer:THREE.WebGLRenderer,scene:THREE.Scene,c
 export function createEffects(renderer:THREE.WebGLRenderer,scene:THREE.Scene,camera:THREE.PerspectiveCamera,mobile=false){
   const composer=new EffectComposer(renderer);
   composer.renderTarget1.samples=mobile?0:2;composer.renderTarget2.samples=mobile?0:2;
-  const base=new RenderPass(scene,camera),ao=new HalfAO(scene,camera,innerWidth,innerHeight,16);
-  ao.kernelRadius=.65;ao.minDistance=.001;ao.maxDistance=.025;
+  const base=new RenderPass(scene,camera),ao=new ContactOcclusion(scene,camera,innerWidth,innerHeight);
   const bloom=new HalfBloom(new THREE.Vector2(innerWidth,innerHeight),.16,.55,1.15);
   const output=new OutputPass();
   for(const pass of [base,ao,bloom,output])composer.addPass(pass);

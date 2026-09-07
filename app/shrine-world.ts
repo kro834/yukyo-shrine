@@ -25,6 +25,7 @@ import {horrorArea,buildHorrorArea} from './horror-areas.ts';
 import {AREA_THEMES} from './expansion-areas.ts';
 import {agedFinish} from './surface-finish.ts';
 import {SurfaceLibrary} from './surface-library.ts';
+import {surfaceUV} from './surface-uv.ts';
 import {FixtureLighting} from './fixture-lighting.ts';
 import {belowUpperDeck} from './ground-clearance.ts';
 import {RunProgress} from './run-progress.ts';
@@ -84,6 +85,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     earth:new THREE.MeshStandardMaterial({color:'#443d2b',roughness:1}),
     grass:new THREE.MeshStandardMaterial({color:'#46583b',roughness:1,side:THREE.DoubleSide}),
   };
+  for(const [name,material] of Object.entries(mats))material.name=name;
   agedFinish(mats.paper,'paper');agedFinish(mats.washiLit,'paper');agedFinish(mats.plaster,'plaster');agedFinish(mats.tatami,'tatami');
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
   type MaterialKey=keyof typeof mats;
@@ -97,12 +99,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       }
     }
     // World-scale UVs avoid stretched grain on walls, beams and long pipes.
-    if(['pavement','tile','planks','wood','red','concrete','rust','steel','stone','rock','earth','plaster','paper','tatami'].includes(m)){
-      const p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv'),scale=m==='pavement'?1/2.4:m==='rust'?1/2.2:m==='concrete'?1/3:m==='planks'?1/1.5:m==='rock'?1/2.7:m==='plaster'?1/2:m==='wood'||m==='red'?.38:.3;
-      for(let i=0;i<p.count;i++){
-        const ax=Math.abs(n.getX(i)),ay=Math.abs(n.getY(i)),az=Math.abs(n.getZ(i));
-        uv.setXY(i,(ax>ay&&ax>az?p.getZ(i):p.getX(i))*scale,(ay>ax&&ay>az?p.getZ(i):p.getY(i))*scale);
-      }
+    if(['pavement','tile','planks','wood','red','dark','concrete','rust','steel','stone','rock','earth','plaster','paper','tatami'].includes(m)){
+      const scale=m==='pavement'?1/2.4:m==='rust'?1/2.2:m==='concrete'?1/3:m==='planks'?1/1.5:m==='rock'?1/2.7:m==='plaster'?1/2:['wood','red','dark'].includes(m)?.38:.3;
+      surfaceUV(g,scale,['wood','red','dark'].includes(m)?'timber':m==='planks'?'floor':undefined);
     }
     g.computeBoundingBox();const center=g.boundingBox!.getCenter(new THREE.Vector3());
     const key=m+':'+Math.floor(center.x/24)+':'+Math.floor(center.z/24);
@@ -285,7 +284,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     for(const side of [-1,1]){cylinder(x+side*1.3*scale,1.8,z,.07,.65,'gold');cylinder(x+side*1.3*scale,2.16,z,.06,.12,'light');lantern(x+side*3*scale,2.5,z,true);cylinder(x+side*3*scale,1,z,.09,2,'dark');}
   };
   const cisternSector=layout.sectors.find(s=>s.kind==='cistern')!,poolPosition={x:(cisternSector.x1+cisternSector.x2)*2,z:(cisternSector.z1+cisternSector.z2)*2};
-  const water=new THREE.Mesh(new THREE.PlaneGeometry(4.85,6.85),new THREE.MeshPhysicalMaterial({color:'#17332f',metalness:.75,roughness:.13,clearcoat:1}));water.rotation.x=-Math.PI/2;water.position.set(poolPosition.x,.024,poolPosition.z);scene.add(water);
+  const water=new THREE.Mesh(new THREE.PlaneGeometry(4.85,6.85),new THREE.MeshPhysicalMaterial({color:'#17332f',metalness:0,roughness:.13,ior:1.333,clearcoat:0}));water.rotation.x=-Math.PI/2;water.position.set(poolPosition.x,.024,poolPosition.z);scene.add(water);
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
     if(room.themeId){buildHorrorArea(room,{box,cylinder,fixture,block},room.id===altarRoom.id);continue;}
@@ -296,7 +295,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const theme=(Number(room.id.slice(-2))-1)%9;
       const accents:MaterialKey[]=['steel','gold','red','stone','wood','water','paper','dark','gold'];
       const m=accents[theme];
-      box(cx,.012,cz,(room.x2-room.x1+1)*4-1,.024,(room.z2-room.z1+1)*4-1,theme===4?'tatami':theme===3?'stone':'wood');
+      box(cx,.012,cz,(room.x2-room.x1+1)*4-1,.024,(room.z2-room.z1+1)*4-1,theme===4?'tatami':theme===3?'stone':'planks');
       for(const side of [-1,1]){
         const x=cx+side*3,z=cz+side*3;
         if(theme===0){box(x,1.55,z,1.7,2.8,.12,'steel');box(x,3,z,1.9,.13,.22,'gold');}
@@ -468,7 +467,6 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const mirrorInventory=new MirrorInventory(mirrorPickups),mirrorMeshes=createMirrorMeshes(scene,mirrorPickups);
   let selectedQuality:Preferences['quality']='medium';
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
-  mats.light.color.multiplyScalar(1.35);mats.coolLight.color.multiplyScalar(1.15);
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
   surfaces.add('/cedar.png',[mats.wood],{bump:.018,tint:'#ad9782'});
@@ -547,6 +545,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       selectedQuality=p.quality;const quality=budget.quality(p.quality);
       if(configuredQuality===quality)return;
       configuredQuality=quality;lastLight=-Infinity;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);
+      mats.light.color.set('#ffc781').multiplyScalar(quality==='high'?2.1:1.35);mats.coolLight.color.set('#a3e7f1').multiplyScalar(quality==='high'?1.8:1.15);
       if(quality==='low'){effects?.dispose();effects=undefined;}else if(!effects&&!rendererOverride)effects=createEffects(renderer,scene,camera,budget.mobile);
       resizeTargets();
       renderer.shadowMap.enabled=quality!=='low';
