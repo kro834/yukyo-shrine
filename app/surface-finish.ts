@@ -3,7 +3,7 @@ export type SurfaceFinish='paper'|'plaster'|'tatami'|'lacquer'|'stone'|'tile'|'w
 /** Metre-scale detail. Local fibres follow moving doors; only actual ground-level walls get damp hems. */
 export function agedFinish(material:MeshStandardMaterial,kind:SurfaceFinish){
  const previous=material.onBeforeCompile,previousKey=material.customProgramCacheKey();
- material.customProgramCacheKey=()=> 'aged-interior-v4-'+kind+'-'+previousKey;
+ material.customProgramCacheKey=()=> 'aged-interior-v5-'+kind+'-'+previousKey;
  material.onBeforeCompile=(shader,renderer)=>{
   previous.call(material,shader,renderer);
   shader.vertexShader='varying vec3 agedPosition;\nvarying vec3 agedSurfaceNormal;\nvarying float agedWorldY;\n'+shader.vertexShader;
@@ -43,7 +43,13 @@ float agedWave(float cycles){return sin(6.2831853*cycles)*(1.0-smoothstep(.15,.5
     ${finishes[kind]}
     float vertical=1.0-smoothstep(.2,.65,agedN.y);
     float damp=vertical*(1.0-smoothstep(.12,1.05,max(agedWorldY,0.0)))*smoothstep(.25,.8,agedNoise(agedSurface*.7));
-    diffuseColor.rgb*=1.0-.13*damp;agedRoughnessDelta-=.04*damp;`;
+    diffuseColor.rgb*=1.0-.13*damp;agedRoughnessDelta-=.04*damp;
+    ${['wood','plaster'].includes(kind)?`float wallAlong=agedN.x>agedN.z?agedPosition.z:agedPosition.x;
+    float moistureHeight=.15+.40*agedNoise(vec2(wallAlong*1.15,13.7))+.09*agedNoise(vec2(wallAlong*8.3,7.1));
+    float groundMask=vertical*(1.0-smoothstep(1.0,1.1,agedWorldY))*step(-.02,agedWorldY);
+    float moisture=groundMask*(1.0-smoothstep(moistureHeight-.06,moistureHeight+.10,agedWorldY));
+    float tideDistance=(agedWorldY-moistureHeight)/.025;float tide=groundMask*exp(-tideDistance*tideDistance)*.08;
+    diffuseColor.rgb*=mix(vec3(1.0),vec3(.72,.74,.70),moisture);diffuseColor.rgb*=1.0-tide;agedRoughnessDelta-=.07*moisture;`:''}`;
   shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\n'+common);
   shader.fragmentShader=shader.fragmentShader.replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=clamp(roughnessFactor+agedRoughnessDelta,.08,1.0);');
   if(['tatami','paper'].includes(kind))shader.fragmentShader=shader.fragmentShader.replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
@@ -52,3 +58,5 @@ float agedWave(float cycles){return sin(6.2831853*cycles)*(1.0-smoothstep(.15,.5
     if(abs(agedDet)>1e-12)normal=normalize(abs(agedDet)*normal-sign(agedDet)*(agedReliefDx*agedR1+agedReliefDy*agedR2));`);
  };
 }
+
+

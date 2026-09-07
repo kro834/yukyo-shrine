@@ -148,7 +148,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     grass:new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.94,vertexColors:true,side:THREE.DoubleSide}),
   };
   for(const [name,material] of Object.entries(mats))material.name=name;
-  agedFinish(mats.paper,'paper');agedFinish(mats.plaster,'plaster');agedFinish(mats.tatami,'tatami');
+  agedFinish(mats.wood,'wood');agedFinish(mats.dark,'wood');agedFinish(mats.paper,'paper');agedFinish(mats.plaster,'plaster');agedFinish(mats.tatami,'tatami');
   fabricFinish(mats.tatamiTrim,false,true);mats.tatamiTrim.color.set('#243421');
   agedFinish(mats.concreteWall,'plaster');agedFinish(mats.civicPaint,'lacquer');agedFinish(mats.civicEnamel,'lacquer');
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
@@ -854,5 +854,6 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
+
 
 
