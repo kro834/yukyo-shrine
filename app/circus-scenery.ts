@@ -9,6 +9,7 @@ export const CIRCUS_MATERIALS={
  circusIvory:{color:'#aa9676',roughness:.97,metalness:0,side:THREE.DoubleSide},
  circusDark:{color:'#30272b',roughness:.92,metalness:0},
  circusPaint:{color:'#51232a',roughness:.43,metalness:.08},
+ circusIvoryPaint:{color:'#b4a68f',roughness:.57,metalness:.02},
  circusMetal:{color:'#62666a',roughness:.61,metalness:.72},
  circusBrass:{color:'#947047',roughness:.48,metalness:.66},
  // Luminous frosted glass, independent of the unchanged room-light intensity.
@@ -82,7 +83,7 @@ function buildCanopyPanels(add:CircusAdd){
    const t=radial/radialSteps,r=34/Math.max(Math.abs(Math.sin(angle)),Math.abs(Math.cos(angle))),x=Math.sin(angle)*r*t,z=Math.cos(angle)*r*t;
    // Sag is zero at every seam and at apex/eave, continuous across every panel.
    const sag=.14*Math.sin(Math.PI*t)*Math.sin(Math.PI*(angle-a0)/(a1-a0));
-   p.push(x,circusRoofHeight(x,z)-sag,z);uv.push(x/2,z/2);
+   p.push(x,circusRoofHeight(x,z)-sag,z);uv.push(x,z);
   }
   for(let radial=0;radial<radialSteps;radial++)for(let j=0;j<columns-1;j++){
    const a=radial*columns+j,b=a+columns;idx.push(a,b,b+1);if(radial>0)idx.push(a,b+1,a+1);
@@ -110,7 +111,7 @@ export function buildCircusScenery(plan:CircusPlan,layout:Layout,add:CircusAdd,f
   const tangent={x:station.position.z===0?0:1,z:station.position.x===0?0:1};
   const normal={x:(station.exit.x-station.position.x)/1.25,z:(station.exit.z-station.position.z)/1.25};
   const yaw=Math.atan2(tangent.x,tangent.z);
-  add(new THREE.BoxGeometry(.30,.012,2.8).rotateY(yaw).translate(station.exit.x,.011,station.exit.z),'circusIvory');
+  add(new THREE.BoxGeometry(.30,.012,2.8).rotateY(yaw).translate(station.exit.x,.011,station.exit.z),'circusIvoryPaint');
   // A larger caged lantern marks each station, leaving track/crossings clear.
   const x=station.position.x+normal.x*1.30,z=station.position.z+normal.z*1.30;
   buildCircusLamp(add,x,3.22,z,true);
@@ -120,7 +121,7 @@ export function buildCircusScenery(plan:CircusPlan,layout:Layout,add:CircusAdd,f
   // Mark the user's safe operating point without placing a pedestal in that point.
   const x=device.control.x,z=device.control.z;
   const ring=new THREE.RingGeometry(.29,.34,20);ring.rotateX(-Math.PI/2);ring.translate(x,.012,z);add(ring,'circusBrass');
-  const plaque=new THREE.RingGeometry(.12,.19,4);plaque.rotateX(-Math.PI/2);plaque.rotateY(device.yaw);plaque.translate(x,.014,z);add(plaque,'circusIvory');
+  const plaque=new THREE.RingGeometry(.12,.19,4);plaque.rotateX(-Math.PI/2);plaque.rotateY(device.yaw);plaque.translate(x,.014,z);add(plaque,'circusIvoryPaint');
  }
  // The central 68 m canopy stays clear of upper decks beginning at 50 m.
  buildCanopyPanels(add);

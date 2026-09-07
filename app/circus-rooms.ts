@@ -24,11 +24,11 @@ export function buildCircusRoom(room:Room,add:CircusAdd,block:(x:number,z:number
    // A dark tarnished mirror, with its own frame and individual exposed bulbs.
    box(x,1.50,z-.18,1.50,1.22,.09,'circusBrass');box(x,1.50,z-.12,1.35,1.08,.025,'circusMetal');
    for(const dx of [-.70,.70])for(const y of [1.04,1.5,1.96])rod(x+dx,y,z-.045,.045,.08,'circusGlow');
-   if(k===0){const head=new THREE.SphereGeometry(.14,12,8);head.scale(1,1.35,.7);head.translate(x,.99,z+.07);add(head,'circusIvory');const nose=new THREE.SphereGeometry(.035,8,6);nose.translate(x,.98,z+.18);add(nose,'circusRed');}
+   if(k===0){const head=new THREE.SphereGeometry(.14,12,8);head.scale(1,1.35,.7);head.translate(x,.99,z+.07);add(head,'circusIvoryPaint');const nose=new THREE.SphereGeometry(.035,8,6);nose.translate(x,.98,z+.18);add(nose,'circusPaint');}
   }else if(k===1||k===7){
    box(x,k===1?.46:.76,z,1.65,.10,.7,'wood');for(const dx of [-.7,.7])for(const dz of [-.25,.25])box(x+dx,k===1?.23:.38,z+dz,.07,k===1?.46:.76,.07,'circusMetal');
-   if(k===1){box(x,.93,z-.30,1.65,.45,.07,'circusRed');for(const dx of [-.75,0,.75])box(x+dx,.65,z-.30,.05,.8,.05,'circusMetal');}
-   else for(const dx of [-.45,.45]){rod(x+dx,.84,z,.15,.025,'circusIvory');rod(x+dx,.93,z+.19,.05,.15,'circusMetal');}
+   if(k===1){box(x,.93,z-.30,1.65,.45,.07,'circusPaint');for(const dx of [-.75,0,.75])box(x+dx,.65,z-.30,.05,.8,.05,'circusMetal');}
+   else for(const dx of [-.45,.45]){rod(x+dx,.84,z,.15,.025,'circusIvoryPaint');rod(x+dx,.93,z+.19,.05,.15,'circusMetal');}
   }else if(k===2){
    for(const dx of [-.75,.75]){rod(x+dx,1,z,.025,2,'circusMetal');box(x+dx,.045,z,.10,.09,.70,'circusMetal');}box(x,2,z,1.55,.04,.04,'circusMetal');
    for(const dx of [-.48,0,.48]){
@@ -40,8 +40,8 @@ export function buildCircusRoom(room:Room,add:CircusAdd,block:(x:number,z:number
    box(x,.80,z,1.65,.10,.85,'wood');for(const dx of [-.7,.7])box(x+dx,.4,z,.09,.8,.70,'circusMetal');
    for(const dx of [-.4,.4]){rod(x+dx,1.02,z,.10,.40,'circusMetal');for(const y of [.86,1.18])rod(x+dx,y,z,.27,.035,'wood');rod(x+dx,1.02,z,.22,.27,'rope');}
   }else{
-   box(x,.62,z,1.65,.09,.85,'circusRed');for(const dx of [-.7,.7])box(x+dx,.31,z,.07,.62,.70,'circusMetal');
-   for(const dx of [-.5,0,.5]){rod(x+dx,.85,z,.09,.36,'circusIvory');hoop(x+dx,1.25,z-.20,.19,'circusBrass');}
+   box(x,.62,z,1.65,.09,.85,'circusPaint');for(const dx of [-.7,.7])box(x+dx,.31,z,.07,.62,.70,'circusMetal');
+   for(const dx of [-.5,0,.5]){rod(x+dx,.85,z,.09,.36,'circusIvoryPaint');hoop(x+dx,1.25,z-.20,.19,'circusBrass');}
   }
   block(x,z,1.8,1.05,k===2?2.05:k===0||k===6?2.15:1.5);
  }

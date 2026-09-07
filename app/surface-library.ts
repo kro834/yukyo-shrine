@@ -2,8 +2,8 @@ import * as THREE from 'three';
 import type {Preferences} from './preferences.ts';
 
 type DetailMaps={full?:THREE.Texture;normal?:THREE.Texture;roughness?:THREE.Texture};
-type Surface={full:THREE.Texture;small:THREE.Texture;relief?:THREE.Texture;normal?:THREE.Texture;roughness?:THREE.Texture;metalness?:THREE.Texture;ultra:DetailMaps;bump:number;normalStrength:number;preserveFinish:boolean;photographic:boolean};
-export type SurfaceOptions={bump?:number;tint?:string;normal?:string;roughness?:string;metalness?:string;normalStrength?:number;preserveFinish?:boolean;lowSize?:128|256;ultra?:{full:string;normal:string;roughness:string}};
+type Surface={full:THREE.Texture;small:THREE.Texture;relief?:THREE.Texture;normal?:THREE.Texture;roughness?:THREE.Texture;metalness?:THREE.Texture;ultra:DetailMaps;bump:number;normalStrength:number;preserveFinish:boolean;photographic:boolean;repeat:[number,number]};
+export type SurfaceOptions={bump?:number;tint?:string;normal?:string;roughness?:string;metalness?:string;normalStrength?:number;preserveFinish?:boolean;lowSize?:128|256;repeat?:[number,number];ultra?:{full:string;normal:string;roughness:string}};
 /** Owns asynchronous texture loads; late High downloads cannot override a newer Low selection. */
 export class SurfaceLibrary {
   private quality:Preferences['quality']='low';
@@ -31,7 +31,7 @@ export class SurfaceLibrary {
       if(!this.own(full,true))return;
       const canvas=document.createElement('canvas'),size=options.lowSize??128;canvas.width=canvas.height=size;canvas.getContext('2d')?.drawImage(full.image,0,0,size,size);
       const small=new THREE.CanvasTexture(canvas);this.own(small,true);
-      const photographic=!!options.normal,surface:Surface={full,small,ultra:{},bump:options.bump??0,normalStrength:options.normalStrength??1,preserveFinish:options.preserveFinish??false,photographic};
+      const photographic=!!options.normal,surface:Surface={full,small,ultra:{},bump:options.bump??0,normalStrength:options.normalStrength??1,preserveFinish:options.preserveFinish??false,photographic,repeat:options.repeat??[1,1]};
       if(!photographic&&surface.bump){surface.relief=full.clone();this.own(surface.relief);surface.relief.needsUpdate=true;}
       for(const material of targets){this.surfaces.set(material,surface);if(options.tint)material.color.set(options.tint);}
       if(photographic){let requested=false;const loadDetails=()=>{
@@ -62,6 +62,7 @@ export class SurfaceLibrary {
         const next={map:low?surface.small:detail.full!,bumpMap:high?surface.relief??null:null,normalMap:high?detail.normal??null:null,roughnessMap:high?detail.roughness??null:null,metalnessMap:high?surface.metalness??null:null};
         for(const key of ['map','bumpMap','normalMap','roughnessMap','metalnessMap'] as const)if(m[key]!==next[key]){m[key]=next[key];changed=true;}
         m.bumpScale=surface.bump;m.normalScale.setScalar(surface.normalStrength);
+        for(const t of [surface.full,surface.small,surface.relief,surface.normal,surface.roughness,surface.metalness,...Object.values(surface.ultra)])if(t)t.repeat.set(...surface.repeat);
         for(const t of [surface.full,surface.relief,surface.normal,surface.roughness,surface.metalness,...Object.values(surface.ultra)])if(t){const anisotropy=Math.min(ultra?16:high?8:4,this.anisotropy);if(t.anisotropy!==anisotropy){t.anisotropy=anisotropy;t.needsUpdate=true;}}
         surface.small.anisotropy=1;
       }

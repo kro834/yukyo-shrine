@@ -28,7 +28,7 @@ export function createCircusDynamics(plan:CircusPlan,materials:Materials){
  const rod=(add:CircusAdd,a:THREE.Vector3,b:THREE.Vector3,r:number,m:CircusMaterial)=>{const delta=b.clone().sub(a),g=new THREE.CylinderGeometry(r,r,delta.length(),6);g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize()));g.translate(...a.clone().add(b).multiplyScalar(.5).toArray());add(g,m);};
  const batch=(parent:THREE.Group,draw:(add:CircusAdd)=>void)=>{
   const chunks=new Map<CircusMaterial,THREE.BufferGeometry[]>();
-  draw((g,m)=>{if(!chunks.has(m))chunks.set(m,[]);chunks.get(m)!.push(g);});
+  draw((g,m)=>{if((m==='circusRed'||m==='circusIvory')&&g.userData.surfaceUV!=='authored')surfaceUV(g,1);if(!chunks.has(m))chunks.set(m,[]);chunks.get(m)!.push(g);});
   const meshes:THREE.Mesh[]=[];
   for(const [m,parts] of chunks){const geometry=mergeGeometries(parts)!;parts.forEach(g=>g.dispose());geometry.computeBoundingBox();geometry.computeBoundingSphere();ownedGeometries.add(geometry);const mesh=new THREE.Mesh(geometry,materials[m]);mesh.castShadow=m!=='circusGlow';mesh.receiveShadow=m!=='circusGlow';parent.add(mesh);meshes.push(mesh);}
   return meshes;
@@ -94,7 +94,7 @@ export function createCircusDynamics(plan:CircusPlan,materials:Materials){
     cyl(add,0,.055,0,1.24,.10,'wood',40);
     for(let i=0;i<12;i++){
      const a=i*Math.PI/6,b=(i+1)*Math.PI/6,p=[0,.109,0,Math.sin(a)*1.21,.109,Math.cos(a)*1.21,Math.sin(b)*1.21,.109,Math.cos(b)*1.21];
-     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute([.5,.5,Math.sin(a)/2+.5,Math.cos(a)/2+.5,Math.sin(b)/2+.5,Math.cos(b)/2+.5],2));g.setIndex([0,1,2]);g.computeVertexNormals();add(g,i%2?'circusRed':'circusIvory');
+     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute([.5,.5,Math.sin(a)/2+.5,Math.cos(a)/2+.5,Math.sin(b)/2+.5,Math.cos(b)/2+.5],2));g.setIndex([0,1,2]);g.computeVertexNormals();add(g,i%2?'circusPaint':'circusIvoryPaint');
     }
     cyl(add,0,.122,0,.11,.027,'circusBrass');
     // The turning screen changes the cross's concealment direction by 90 degrees.
@@ -118,7 +118,7 @@ export function createCircusDynamics(plan:CircusPlan,materials:Materials){
    const leaf=new THREE.Group();leaf.position.set(0,.10,-1.6);root.add(leaf);
    batch(leaf,add=>{
     box(add,0,0,1.6,1.5,.08,3.2,'circusDark');
-    for(let i=0;i<10;i++)box(add,0,.052,.16+i*.32,1.48,.024,.303,i%3===0?'circusIvory':'wood');
+    for(let i=0;i<10;i++)box(add,0,.052,.16+i*.32,1.48,.024,.303,i%3===0?'circusIvoryPaint':'wood');
     for(const x of [-.72,.72])box(add,x,.06,1.6,.06,.085,3.20,'circusMetal');
    });
    update=progress=>{leaf.rotation.x=-progress*Math.PI/2;};

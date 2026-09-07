@@ -94,6 +94,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     circusIvory:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusIvory),
     circusDark:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusDark),
     circusPaint:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusPaint),
+    circusIvoryPaint:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusIvoryPaint),
     circusMetal:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusMetal),
     circusBrass:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusBrass),
     circusGlow:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusGlow),
@@ -141,14 +142,16 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   terrainFinish(mats.earth);terrainFinish(mats.rock);
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
   lampFinish(mats.circusGlow,'diffuser');
-  for(const m of [mats.circusRed,mats.circusIvory]){const color=m.color.clone();fabricFinish(m,true);m.color.copy(color);circusFabric(m);}
+  for(const m of [mats.circusRed,mats.circusIvory])circusFabric(m);
   agedFinish(mats.circusDark,'wood');agedFinish(mats.circusMetal,'lacquer');
   circusPaint(mats.circusPaint);
+  agedFinish(mats.circusIvoryPaint,'lacquer');
   type MaterialKey=keyof typeof mats;
   const batches=new Map<string,{material:MaterialKey;geometries:THREE.BufferGeometry[]}>();
   let groundGeometry=true,gothicRoomProps=false;
   const add=(g:THREE.BufferGeometry,m:MaterialKey)=>{
-    if(circus){if(m==='tatami')m='planks';else if(m==='paper'||m==='plaster')m='circusIvory';else if(m==='red')m='circusRed';}
+    if(circus){if(m==='tatami')m='planks';else if(m==='paper'||m==='plaster')m='circusIvory';else if(m==='red')m='circusPaint';}
+    if((m==='circusRed'||m==='circusIvory')&&g.userData.surfaceUV!=='authored'){surfaceUV(g,1);g.userData.surfaceUV='authored';}
     if(gothic){if(m==='tatami')m='stone';else if(m==='paper'&&!gothicRoomProps)m='red';else if(m==='plaster')m='concrete';}
     if(!gothic&&m==='concrete'){
       g.computeBoundingBox();const b=g.boundingBox!;
@@ -649,7 +652,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
   surfaces.preserveBaseFinish(mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory);
-  if(circus)surfaces.add('/horror-hemp.png',[mats.circusRed,mats.circusIvory],{bump:.0015,preserveFinish:true});
+  if(circus)surfaces.add('/materials/textile/rough_linen_diff_1k.jpg',[mats.circusRed,mats.circusIvory],{normal:'/materials/textile/rough_linen_nor_gl_1k.jpg',roughness:'/materials/textile/rough_linen_rough_1k.jpg',repeat:[1/.2707081393,1/.2712999880],normalStrength:.4,preserveFinish:true,lowSize:256,ultra:{full:'/materials/textile/rough_linen_diff_2k.jpg',normal:'/materials/textile/rough_linen_nor_gl_2k.jpg',roughness:'/materials/textile/rough_linen_rough_2k.jpg'}});
   surfaces.add('/cedar.png',[mats.red],{bump:.003,tint:gothic?'#462129':undefined});
   surfaces.add('/weathered-concrete.png',[mats.stone],{bump:.014,tint:'#aaa9a2'});
   surfaces.add('/rusted-steel.png',[mats.steel],{bump:.008,tint:'#8a9292'});

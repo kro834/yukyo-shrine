@@ -41,6 +41,7 @@ void main(){
 export class ContactOcclusion extends SSAOPass {
  private excluded:THREE.Object3D[]=[];
  private resolutionScale:number;
+ private normalVariants=new Map<THREE.Material,THREE.MeshNormalMaterial>();
  constructor(scene:THREE.Scene,camera:THREE.PerspectiveCamera,width:number,height:number,ultra=false){
   const scale=ultra?.75:.5;
   super(scene,camera,Math.max(1,Math.ceil(width*scale)),Math.max(1,Math.ceil(height*scale)),ultra?32:16);this.resolutionScale=scale;
@@ -70,6 +71,31 @@ export class ContactOcclusion extends SSAOPass {
   this.blurMaterial.uniforms.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
  }
  override setSize(w:number,h:number){super.setSize(Math.max(1,Math.ceil(w*this.resolutionScale)),Math.max(1,Math.ceil(h*this.resolutionScale)));}
+ /** Three's blanket FrontSide override drops the back of opaque double-sided
+  * cloth. Its depth then belongs to the room behind, projecting ghost architecture
+  * onto the canvas. Match each source's rasterization in this SAME normal pass. */
+ _renderOverride(renderer:THREE.WebGLRenderer,_material:THREE.Material,target:THREE.WebGLRenderTarget,clearColor:THREE.ColorRepresentation,clearAlpha:number){
+  const originals:{mesh:THREE.Mesh;material:THREE.Material|THREE.Material[]}[]=[],override=this.scene.overrideMaterial;
+  const color=renderer.getClearColor(new THREE.Color()),alpha=renderer.getClearAlpha(),autoClear=renderer.autoClear;
+  const variant=(source:THREE.Material)=>{
+   let normal=this.normalVariants.get(source);
+   if(!normal){normal=new THREE.MeshNormalMaterial({blending:THREE.NoBlending,side:source.side});this.normalVariants.set(source,normal);}
+   if(normal.side!==source.side){normal.side=source.side;normal.needsUpdate=true;}
+   normal.visible=source.visible;normal.depthTest=source.depthTest;normal.depthWrite=source.depthWrite;normal.depthFunc=source.depthFunc;
+   normal.polygonOffset=source.polygonOffset;normal.polygonOffsetFactor=source.polygonOffsetFactor;normal.polygonOffsetUnits=source.polygonOffsetUnits;
+   return normal;
+  };
+  try{
+   this.scene.traverseVisible(object=>{const mesh=object as THREE.Mesh;if(!mesh.isMesh)return;
+    const material=mesh.material;originals.push({mesh,material});mesh.material=Array.isArray(material)?material.map(variant):variant(material);
+   });
+   this.scene.overrideMaterial=null;renderer.setRenderTarget(target);renderer.autoClear=false;renderer.setClearColor(clearColor,clearAlpha);renderer.clear();renderer.render(this.scene,this.camera);
+  }finally{
+   for(const {mesh,material} of originals)mesh.material=material;
+   this.scene.overrideMaterial=override;renderer.autoClear=autoClear;renderer.setClearColor(color,alpha);
+  }
+ }
+ override dispose(){for(const normal of this.normalVariants.values())normal.dispose();this.normalVariants.clear();super.dispose();}
  override render(renderer:THREE.WebGLRenderer,writeBuffer:THREE.WebGLRenderTarget,readBuffer:THREE.WebGLRenderTarget){
   this.syncCamera();
   const hidden=this.excluded.filter(o=>o.visible),override=this.scene.overrideMaterial;
