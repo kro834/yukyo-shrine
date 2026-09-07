@@ -1,5 +1,14 @@
 # Scanned props v25 — source and license record
 
+## Bank vegetation, v57
+
+- Shrub 02, Rico Cilliers, Poly Haven, CC0 1.0: https://polyhaven.com/a/shrub_02
+- License: https://polyhaven.com/license
+- Official 1K glTF and dependencies downloaded on 2026-09-08; upstream MD5 hashes verified. Exact URLs and checksums are in `shrub/polyhaven-files-1k.json`.
+- Four plant variants: 7,590 / 5,242 / 9,234 / 5,188 triangles. One shared base color / normal / ARM set.
+- The upstream glTF references JPEG base color despite alpha MASK, so the official separate PNG alpha map is explicitly bound at runtime. Original files retained unchanged.
+- Variants are individually fitted to a maximum 1.1 × 0.85 × 1.1 m envelope. Mobile uses only the two cheapest variants, at most six visible; desktop Ultra permits at most 24 nearby shrubs. Plants never add collision or occupy walkable cells.
+
 Retrieved from Poly Haven's official public API on 2026-09-08. All three assets are distributed by Poly Haven under CC0 1.0. Poly Haven states that its assets may be used commercially, redistributed, and used without attribution: https://polyhaven.com/license
 
 The saved `polyhaven-info.json` and `polyhaven-files-1k-gltf.json` files are API snapshots from `https://api.polyhaven.com/info/{id}` and `https://api.polyhaven.com/files/{id}`. The latter records every exact dependency URL, byte size, and upstream MD5.

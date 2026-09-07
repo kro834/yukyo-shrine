@@ -1,0 +1,34 @@
+{
+  "gltf": {
+    "include": {
+      "textures/shrub_02_arm_1k.jpg": {
+        "size": 313715,
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_02/shrub_02_arm_1k.jpg",
+        "md5": "28c218aeb7cab930d99ee16578984241"
+      },
+      "textures/shrub_02_nor_gl_1k.jpg": {
+        "size": 490815,
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_02/shrub_02_nor_gl_1k.jpg",
+        "md5": "51a7f2db7e06a207171fd725585241d5"
+      },
+      "shrub_02.bin": {
+        "size": 758692,
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/4k/shrub_02/shrub_02.bin",
+        "md5": "683b5475238310899eac1458520903e6"
+      },
+      "textures/shrub_02_diff_1k.jpg": {
+        "size": 395120,
+        "url": "https://dl.polyhaven.org/file/ph-assets/Models/jpg/1k/shrub_02/shrub_02_diff_1k.jpg",
+        "md5": "3f4ae281928de030c7d4e41ad5b88a8b"
+      }
+    },
+    "size": 8083,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Models/gltf/1k/shrub_02/shrub_02_1k.gltf",
+    "md5": "8f7254d279c0c49c0b3edfe260aa5c86"
+  },
+  "alpha": {
+    "size": 91741,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Models/png/1k/shrub_02/shrub_02_alpha_1k.png",
+    "md5": "64a1f609d80ea076b43412498a3d2db5"
+  }
+}
