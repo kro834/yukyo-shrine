@@ -29,7 +29,7 @@ function navigation(input:Map<string,Position>,walls:Obstacle[]){
  for(let i=0;i<queue.length;i++){const [x,z]=queue[i].split(',').map(Number);for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){const k=(x+dx)+','+(z+dz);if(!seen.has(k)&&nodes.has(k)&&clear(nodes.get(queue[i])!,nodes.get(k)!)){seen.add(k);queue.push(k);}}}
  return {nodes,seen,reaches:(target:Position)=>[...seen].some(k=>Math.hypot(nodes.get(k)!.x-target.x,nodes.get(k)!.z-target.z)<6&&clear(nodes.get(k)!,target))};
 }
-test('four stage profiles generate distinct connected 5 by 5 topologies with reachable rooms and all objectives',()=>{
+test('all stage profiles generate distinct connected 5 by 5 topologies with reachable rooms and all objectives',()=>{
  const signatures=new Set<string>();
  for(const stage of Object.keys(STAGES) as StageId[])for(let seed=1;seed<=20;seed++){
   const l=createSectorLayout(seed,stage);assert.equal(l.sectors.length,25);assert.equal(l.rooms.length,87);assert.equal(l.rooms.filter(r=>r.bead).length,13);assert.equal(l.connections.size,STAGES[stage].links);
@@ -41,23 +41,23 @@ test('four stage profiles generate distinct connected 5 by 5 topologies with rea
   assert.equal(nav.seen.size,nav.nodes.size,stage+'/'+seed);
   signatures.add(stage+'/'+l.cells.map(c=>c.x+','+c.z).sort().join(';'));
  }
- assert.equal(signatures.size,80);
+ assert.equal(signatures.size,Object.keys(STAGES).length*20);
  const shrine=createSectorLayout(7),abyss=createSectorLayout(7,'abyss'),outer=createSectorLayout(7,'outer');
  assert.notDeepEqual(shrine.cells.map(c=>[c.x,c.z]),abyss.cells.map(c=>[c.x,c.z]));assert.notDeepEqual(abyss.cells.map(c=>[c.x,c.z]),outer.cells.map(c=>[c.x,c.z]));
  assert.ok(stageRules('abyss','normal').search>stageRules('outer','normal').search);assert.ok(stageRules('outer','normal').sense>stageRules('abyss','normal').sense);
  assert.equal(stageRules('abyss','gallery').enemies,false);assert.ok(stageRules('abyss','hard').sense>stageRules('abyss','normal').sense);
 });
 test('new furnished stages can collect and offer every route, then physically enter the goal',t=>{
- t.mock.method(Enemies.prototype,'update',()=>false);t.mock.method(Enemies.prototype,'hear',()=>0);
- t.mock.method(MirrorInventory.prototype,'collect',()=>0);
- const add=Enemies.prototype.addPatrolTargets;let actual:Enemies,points:Parameters<Enemies['addPatrolTargets']>[0]=[];
- t.mock.method(Enemies.prototype,'addPatrolTargets',function(this:Enemies,p:typeof points){actual=this;points=p;return add.call(this,p);});
- t.mock.method(Doors.prototype,'update',function(this:Doors){for(const d of this.states){d.open=true;d.progress=1;}});
+ const updateMock=t.mock.method(Enemies.prototype,'update',()=>false),hearMock=t.mock.method(Enemies.prototype,'hear',()=>0);
+ const collectMock=t.mock.method(MirrorInventory.prototype,'collect',()=>0);
+ const add=Enemies.prototype.addPatrolTargets;let actual:Enemies|undefined,points:Parameters<Enemies['addPatrolTargets']>[0]=[];
+ const patrolMock=t.mock.method(Enemies.prototype,'addPatrolTargets',function(this:Enemies,p:typeof points){actual=this;points=p;return add.call(this,p);});
+ const doorMock=t.mock.method(Doors.prototype,'update',function(this:Doors){for(const d of this.states){d.open=true;d.progress=1;}});
  const g=globalThis as unknown as Record<string,unknown>;g.innerWidth=1280;g.innerHeight=720;g.devicePixelRatio=1;
  const canvas={getContext:()=>({createRadialGradient:()=>({addColorStop(){}}),fillRect(){}})};
  g.document={addEventListener(){},removeEventListener(){},createElement:()=>canvas,createElementNS:()=>({addEventListener(){},removeEventListener(){},set src(_v:string){}})};
  const renderer={setPixelRatio(){},setSize(){},shadowMap:{},capabilities:{getMaxAnisotropy:()=>1},dispose(){}} as unknown as THREE.WebGLRenderer;
- for(const stage of ['abyss','outer','orchestra'] as StageId[])for(const [seed,color] of [[1,'blue'],[17,'red'],[71,'gold']] as const){
+ for(const stage of ['abyss','outer','orchestra','circus'] as StageId[])for(const [seed,color] of [[1,'blue'],[17,'red'],[71,'gold']] as const){
   const w=createWorld(canvas as unknown as HTMLCanvasElement,renderer,seed,stage);
   try{
    w.setMode('normal');assert.equal(actual!.actors.length,12);assert.deepEqual(actual!.difficulty,stageRules(stage,'normal'));w.step(.05);
@@ -74,7 +74,7 @@ test('new furnished stages can collect and offer every route, then physically en
    for(let i=0;i<45;i++)w.step(.05);w.camera.position.set(w.goalPosition.x,1.68,w.goalPosition.z-1.5);
    for(let i=0;i<8;i++){const p=w.move(0,1,0,true,.05);w.camera.position.set(p.x,p.y,p.z);w.step(.05);}
    assert.equal(w.completed,true,stage+'/'+color);
-  }finally{w.dispose();}
+  }finally{w.dispose();actual=undefined;points=[];for(const mocked of [updateMock,hearMock,collectMock,patrolMock,doorMock])mocked.mock.resetCalls();}
  }
 });
 test('Ultra maps are opt-in and late 2K downloads cannot override a newer Low choice',()=>{

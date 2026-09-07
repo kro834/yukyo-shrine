@@ -1,3 +1,10 @@
+import {circusFabric} from './circus-fabric.ts';
+import {createCircusPlan} from './circus-plan.ts';
+import {CircusRuntime} from './circus-runtime.ts';
+import {CIRCUS_MATERIALS,buildCircusCell,buildCircusWall,buildCircusScenery} from './circus-scenery.ts';
+import {createCircusDynamics} from './circus-dynamics.ts';
+import {CIRCUS_AREA_NAMES,circusRoomName,buildCircusRoom} from './circus-rooms.ts';
+import {combineObstacles} from './spatial.ts';
 import {BEAD_REQUIREMENTS,collectionReady} from './goal-rules.ts';
 import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
 import {buildYokochoFront} from './yokocho-front.ts';
@@ -58,7 +65,7 @@ import type {PlayMode} from './play-mode.ts';
 import {STAGES,stageRules,type StageId} from './stage-profile.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff),stage:StageId='shrine') {
-  const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra';
+  const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus';
   let playMode:PlayMode='normal',phaseRevision=0;let nightSky:THREE.DataTexture|undefined,skyRequested=false;
   const device=typeof navigator!=='undefined'?navigator as Navigator&{deviceMemory?:number}:undefined;
   const budget=new PerformanceBudget({touch:(device?.maxTouchPoints??0)>1||/Android|iPhone|iPad/i.test(device?.userAgent??''),cores:device?.hardwareConcurrency,memory:device?.deviceMemory});
@@ -72,15 +79,22 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   scene.add(new THREE.HemisphereLight(gothic?'#757d98':'#91a2af',gothic?'#171219':'#30271d',gothic?.048:.12));
   const moon=new THREE.DirectionalLight('#8c9aa6',stageProfile.moon);moon.position.set(-10,18,5);scene.add(moon);
   const layout=createLayout(seed,stage),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
+  const circusPlan=circus?createCircusPlan(seed,layout):undefined,circusRuntime=circusPlan?new CircusRuntime(circusPlan):undefined;
   const visualKind=(kind:string,x:number,z:number)=>{const patch=((Math.floor((x+200)/20)+Math.floor((z+300)/20)*3+(seed%5))%5+5)%5;if(['factory','bath','cistern','shop'].includes(kind))return patch===0?'stone':patch===2?'hall':kind;return kind;};
   const cave=createCaveSurfaces(layout.cells,layout.walls,seed,{detail:budget.mobile?'low':'high',ceilingLimit:caveDeckLimit(SECOND_DECK.cells)});
   const landforms=stage==='outer'?createOuterLandformSurfaces(layout.grid,layout.landforms,{belowUpperDeck}):undefined;
   const civicSites=createCivicSites(layout);
   const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2);
   const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5},.7);
-  const areaName=()=>{if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
+  const areaName=()=>{if(circus){if(elevation>4.5)return elevation>9.3?'三層 · 吊り道具の回廊':'二層 · 空中桟橋';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?circusRoomName(r):CIRCUS_AREA_NAMES[layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind??'hall'];}if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
+    circusRed:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusRed),
+    circusIvory:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusIvory),
+    circusDark:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusDark),
+    circusMetal:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusMetal),
+    circusBrass:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusBrass),
+    circusGlow:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusGlow),
     wood:new THREE.MeshStandardMaterial({color:'#685044',roughness:.9,metalness:0}),
     planks:new THREE.MeshStandardMaterial({color:'#d0bdaa',roughness:1,metalness:0}),
     dark:new THREE.MeshStandardMaterial({color:'#796b5f',roughness:.84}),
@@ -124,10 +138,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
   terrainFinish(mats.earth);terrainFinish(mats.rock);
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
+  for(const m of [mats.circusRed,mats.circusIvory]){const color=m.color.clone();fabricFinish(m,true);m.color.copy(color);circusFabric(m);}
+  agedFinish(mats.circusDark,'wood');agedFinish(mats.circusMetal,'lacquer');
   type MaterialKey=keyof typeof mats;
   const batches=new Map<string,{material:MaterialKey;geometries:THREE.BufferGeometry[]}>();
   let groundGeometry=true,gothicRoomProps=false;
   const add=(g:THREE.BufferGeometry,m:MaterialKey)=>{
+    if(circus){if(m==='tatami')m='planks';else if(m==='paper'||m==='plaster')m='circusIvory';else if(m==='red')m='circusRed';}
     if(gothic){if(m==='tatami')m='stone';else if(m==='paper'&&!gothicRoomProps)m='red';else if(m==='plaster')m='concrete';}
     if(!gothic&&m==='concrete'){
       g.computeBoundingBox();const b=g.boundingBox!;
@@ -149,7 +166,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     if(!batches.has(key))batches.set(key,{material:m,geometries:[]});batches.get(key)!.geometries.push(g);
   };
   const box=(x:number,y:number,z:number,w:number,h:number,d:number,m:MaterialKey)=>{
-    if(m==='tatami'&&!gothic&&h<=.065&&w>=1.5&&d>=1.5){
+    if(m==='tatami'&&!gothic&&!circus&&h<=.065&&w>=1.5&&d>=1.5){
       const placements=tatamiPlacementsForRectangle({x,z,width:w,depth:d,floorY:y+h/2-TATAMI.maxRise,inset:.08,variation:seed+x*.7+z});
       if(placements.length){
         const floor=createTatamiGeometry(placements);add(floor.reed,'tatami');add(floor.border,'tatamiTrim');
@@ -190,6 +207,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const fieldCells=new Set(layout.cells.filter(c=>c.kind==='field'&&!belowUpperDeck(c.x*4-2,c.x*4+2,c.z*4-2,c.z*4+2)).map(c=>c.x+','+c.z));
   const isFieldCell=(x:number,z:number)=>fieldCells.has(x+','+z);
   for(const c of layout.cells){
+    if(circus){buildCircusCell(c,add,fixture);continue;}
     const x=c.x*CELL,z=c.z*CELL,kind=visualKind(c.kind,x,z);
     if(gothic){
       box(x,-.14,z,4,.28,4,kind==='shop'||kind==='yokocho'?'planks':'concrete');
@@ -263,6 +281,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     if(kind==='passage'&&!narrowKeys.has(c.x+','+c.z)&&(c.x+c.z)%3===0){lantern(x,c.h-.68,z);box(x,c.h-.12,z,.025,.65,.025,'gold');}
   }
   for(const w of layout.walls){
+    if(circus){buildCircusWall(w,add);continue;}
     const kind=visualKind(w.kind??"hall",w.x+w.insideX*.2,w.z+w.insideZ*.2);
     if(gothic){
       box(w.x,w.h/2,w.z,w.alongX?4:.3,w.h,w.alongX?.3:4,'concrete');
@@ -351,6 +370,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
   }
   for(const n of layout.narrows){
+    if(circus){for(const sign of [-1,1]){const x=n.x+(n.alongX?0:sign*1.68),z=n.z+(n.alongX?sign*1.68:0);box(x,1.8,z,n.alongX?4:.64,3.6,n.alongX?.64:4,'circusDark');buildCircusWall({x:n.x+(n.alongX?0:sign*1.40),z:n.z+(n.alongX?sign*1.40:0),h:3.6,alongX:n.alongX,insideX:n.alongX?0:-sign,insideZ:n.alongX?-sign:0},add);}continue;}
     if(gothic){
       const top=4.1;
       for(const sign of [-1,1]){
@@ -412,6 +432,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const scannedPlacements:ScannedPlacement[]=[];
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
+    if(circus){buildCircusRoom(room,add,block,fixture,room.id===altarRoom.id);continue;}
     if(room.themeId){gothicRoomProps=room.themeId.startsWith('orchestra-');buildHorrorArea(room,{box,cylinder,fixture,block},room.id===altarRoom.id);gothicRoomProps=false;continue;}
     if(room.id===altarRoom.id)continue;
     const cx=(room.x1+room.x2)*2,cz=(room.z1+room.z2)*2;
@@ -458,7 +479,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
   }
   // Colonnaded cloisters, high lantern canopies and stone inlays distinguish each court.
-  for(const court of layout.courts){
+  for(const court of circus?[]:layout.courts){
     const cx=court.x*4,cz=court.z*4;
     for(const side of [-1,1]){
       for(let z=cz-court.rz*4+2;z<=cz+court.rz*4-2;z+=8){
@@ -472,9 +493,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
     for(const side of [-1,1])for(let j=-1;j<=1;j++)lantern(cx+side*9,court.h-1.3,cz+j*5,true);
   }
-  for(const p of layout.paddies){const x=(p.x1+p.x2)*2,z=(p.z1+p.z2)*2,w=(p.x2-p.x1+1)*4,d=(p.z2-p.z1+1)*4;box(x,-.04,z,w,.035,d,'water');}
+  for(const p of circus?[]:layout.paddies){const x=(p.x1+p.x2)*2,z=(p.z1+p.z2)*2,w=(p.x2-p.x1+1)*4,d=(p.z2-p.z1+1)*4;box(x,-.04,z,w,.035,d,'water');}
   // Fixtures follow generated walls instead of old absolute stage coordinates.
-  for(const w of layout.walls){if(w.twoSided||Math.abs(Math.round((w.x+w.z)/2))%7!==0)continue;const x=w.x+w.insideX*.35,z=w.z+w.insideZ*.35,kind=w.kind;
+  for(const w of circus?[]:layout.walls){if(w.twoSided||Math.abs(Math.round((w.x+w.z)/2))%7!==0)continue;const x=w.x+w.insideX*.35,z=w.z+w.insideZ*.35,kind=w.kind;
     if(kind==='shop'){
       box(x,.52,z,w.alongX?2.8:.55,1.04,w.alongX?.55:2.8,'wood');block(x,z,w.alongX?2.8:.55,w.alongX?.55:2.8,1.04);
       for(let j=-2;j<=2;j++){const px=x+(w.alongX?j*.47:0),pz=z+(w.alongX?0:j*.47);cylinder(px,1.28,pz,.14,.42,'glass');cylinder(px,1.5,pz,.15,.035,'gold');box(px,1.1,pz,.2,.07,.2,(['candyRed','candyYellow','candyBlue','candyPink'] as const)[(j+2)%4]);}
@@ -490,7 +511,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const a=s.quarterTurns*Math.PI/2;fixture(s.x+1.58*Math.cos(a),2.78,s.z+1.58*Math.sin(a),'#a0b6b8');
     }
   }
-  buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height);
+  if(circusPlan)buildCircusScenery(circusPlan,layout,add,fixture);
+  if(!circus)buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height);
   groundGeometry=false;fixtureFloor=4.8;
   for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
     if((x===13||x===22)&&z>=2&&z<=6)continue;
@@ -568,6 +590,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=!['lightSpill','light','coolLight','grass'].includes(m);mesh.receiveShadow=mesh.castShadow||m==='grass';mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
   for(const body of lanternTemplates){body.shade.dispose();body.caps.dispose();body.ribs.dispose();}
+  const circusMeshes=circusPlan?createCircusDynamics(circusPlan,mats):undefined;if(circusMeshes)scene.add(circusMeshes.group);
   const scannedProps=new ScannedProps(scene,scannedPlacements,!rendererOverride);
   obstacles.push(...goal.walls);
   const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors,gothic),enemyMeshes=createEnemyMeshes(scene,enemies);
@@ -584,8 +607,16 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   let goalBlockers=goal.blockers();
   const thirdFixed=[...THIRD_DECK.walls,...deckFurnitureWalls(9.6),...highRails,...highCaps];
   let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
-  let groundCollision=[...obstacles,...groundDoors,...goalBlockers],groundEnemyCollision=[...enemyWalls,...groundDoors,...goalBlockers],upperCollision=[...upperFixed,...upperDoorBlocks];
-  const refreshCollision=()=>{const g=doors.blockers(),u=doors.blockers(UPPER_HEIGHT),seal=goal.blockers();if(g!==groundDoors||seal!==goalBlockers){groundDoors=g;goalBlockers=seal;groundCollision=[...obstacles,...g,...seal];groundEnemyCollision=[...enemyWalls,...g,...seal];}if(u!==upperDoorBlocks){upperDoorBlocks=u;upperCollision=[...upperFixed,...u];}};
+  const emptyMechanisms:import('./movement.ts').Obstacle[]=[];
+  let mechanisms=circusRuntime?.blockers()??emptyMechanisms,playerMechanisms=circusRuntime?.blockers(!circusRuntime.riding)??emptyMechanisms;
+  let groundBase=[...obstacles,...groundDoors,...goalBlockers],enemyBase=[...enemyWalls,...groundDoors,...goalBlockers];
+  let groundCollision=combineObstacles(groundBase,playerMechanisms),groundEnemyCollision=combineObstacles(enemyBase,mechanisms),upperCollision=[...upperFixed,...upperDoorBlocks];
+  enemies.setMechanismBlockers(mechanisms);
+  const refreshCollision=()=>{const g=doors.blockers(),u=doors.blockers(UPPER_HEIGHT),seal=goal.blockers(),m=circusRuntime?.blockers()??emptyMechanisms,p=circusRuntime?.blockers(!circusRuntime.riding)??emptyMechanisms;const baseChanged=g!==groundDoors||seal!==goalBlockers;
+    if(baseChanged){groundDoors=g;goalBlockers=seal;groundBase=[...obstacles,...g,...seal];enemyBase=[...enemyWalls,...g,...seal];}
+    if(baseChanged||p!==playerMechanisms){playerMechanisms=p;groundCollision=combineObstacles(groundBase,p);}
+    if(baseChanged||m!==mechanisms){mechanisms=m;groundEnemyCollision=combineObstacles(enemyBase,m);enemies.setMechanismBlockers(m);}
+    if(u!==upperDoorBlocks){upperDoorBlocks=u;upperCollision=[...upperFixed,...u];}};
   let elevation=0,collision=groundCollision,reflectionEnabled=true;
   const mirror=new Reflector(new THREE.PlaneGeometry(4.7,6.7),{textureWidth:budget.mobile?1:512,textureHeight:budget.mobile?1:512,color:0x293d38});mirror.rotation.x=-Math.PI/2;mirror.position.set(poolPosition.x,.03,poolPosition.z);scene.add(mirror);water.visible=false;
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
@@ -610,7 +641,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
-  surfaces.preserveBaseFinish(mats.light,mats.washiLit,mats.coolLight);
+  surfaces.preserveBaseFinish(mats.light,mats.washiLit,mats.coolLight,mats.circusRed,mats.circusIvory);
+  if(circus)surfaces.add('/horror-hemp.png',[mats.circusRed,mats.circusIvory],{bump:.0015,preserveFinish:true});
   surfaces.add('/cedar.png',[mats.red],{bump:.003,tint:gothic?'#462129':undefined});
   surfaces.add('/weathered-concrete.png',[mats.stone],{bump:.014,tint:'#aaa9a2'});
   surfaces.add('/rusted-steel.png',[mats.steel],{bump:.008,tint:'#8a9292'});
@@ -635,8 +667,12 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const fixedFor=(level:number)=>level>9?thirdFixed:level>4?upperFixed:obstacles;
   const collisionFor=()=>elevation>9.3?thirdFixed:elevation>4.5?upperCollision:groundCollision;
   return {renderer,scene,camera,layout,stage,scannedReady:scannedProps.ready,
-    setMode(mode:PlayMode){playMode=mode;if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=stageRules(stage,mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
+    setMode(mode:PlayMode){circusRuntime?.reset();refreshCollision();playMode=mode;if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=stageRules(stage,mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
     get playMode(){return playMode;},
+    get riding(){return circusRuntime?.riding??false;},
+    circusStatus(){return circusRuntime?.snapshot()??null;},
+    circusHint(){if(!circusRuntime||!circusPlan||elevation>2.2)return '';const status=circusRuntime.snapshot();if(status.riding)return (status.speed<.05?'トロッコ待機中':'トロッコ乗車中')+' · 次は'+circusPlan.stations[status.destination].name+' · 自動降車';const station=circusPlan.stations.map(s=>({...s,d:Math.hypot(s.exit.x-camera.position.x,s.exit.z-camera.position.z)})).sort((a,b)=>a.d-b.d)[0];return station.d<36?station.name+' '+Math.round(station.d)+'m · 〇で呼ぶ・乗る':'';},
+    mechanismNear(){return circusRuntime?.near(camera.position,camera.rotation.y)?.label??'';},
     mirrorStatus(){return mirrorInventory.snapshot();},
     useMirror(){return playMode!=='gallery'&&mirrorInventory.use();},
     stairHint(){const options=[...STAIRS.map(s=>({...s,low:0,high:4.8})),...HIGH_STAIRS.map(s=>({...s,low:4.8,high:9.6}))].flatMap(s=>[{x:(s.minX+s.maxX)/2,z:s.minZ-2,floor:s.low,to:s.high,up:true},{x:(s.minX+s.maxX)/2,z:s.maxZ+2,floor:s.high,to:s.low,up:false}]).filter(s=>Math.abs(s.floor-elevation)<.6).map(s=>({...s,d:Math.hypot(s.x-camera.position.x,s.z-camera.position.z)})).sort((a,b)=>a.d-b.d);const s=options[0];return s&&s.d<22?(s.up?'↑ ':'↓ ')+(['一層','二層','三層'][Math.round(s.to/4.8)])+'への階段 · '+Math.round(s.d)+'m':'';},
@@ -658,18 +694,20 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     collection(){return {...beadInventory(beads),areaName:areaName(),blueOffered:goal.blueOffered,redOffered:goal.redOffered,finale:enemies.finalKind,unlocked:goal.unlocked,area:areaAt(camera.position,elevation)};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
       if(goal.completed)return {x:camera.position.x,z:camera.position.z,y:camera.position.y,running:false};
+      if(circusRuntime?.riding){stamina.step(dt,false,false,false);lastMotion={running:false,moving:false};const p=circusRuntime.snapshot().cart;return {...p,running:false};}
       refreshCollision();collision=collisionFor();
       const allowed=sprint&&stamina.canSprint,pos=movePlayer(camera.position,x,z,yaw,allowed,dt,collision),moving=Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001;stamina.step(dt,sprint,moving,allowed&&moving);lastMotion={running:allowed&&moving,moving};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68,running:allowed&&moving};
     },
     enemyDirections(){return !mirrorInventory.active||playMode==='gallery'?[]:enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned',level:enemyFloorHint(elevation,e.floor),chasing:e.brain.mode==='chase'}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     nearAltar(){return playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
-    interact(){if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
+    interact(){if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     burst(){if(playMode==='gallery'||goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x);run.stuns+=hits;return hits;},
     step(dt:number){
       if(goal.completed)return false;
       burstRecharge.step(dt);mirrorInventory.step(dt);
       const liveDt=timeStop.step(dt);environmentTime+=liveDt*1000;
+      if(circusRuntime){const occupants=[...(circusRuntime.riding?[]:[{x:camera.position.x,z:camera.position.z,y:elevation+1.68}]),...(playMode==='gallery'?[]:enemies.actors.map(e=>({...e.position,y:e.floor+1.68})))];const ride=circusRuntime.step(liveDt,occupants);if(ride.position){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=0;lastMotion={running:false,moving:false};}if(ride.lure&&playMode!=='gallery'&&liveDt>0)enemies.hear(ride.lure,0);}
       const detectable=flashlight.visible||(lastMotion.running&&lastMotion.moving);
       if(runningSteps.update(dt,lastMotion.running,lastMotion.moving)){
         if(playMode!=='gallery'&&liveDt>1e-6)enemies.hear(camera.position,elevation);
@@ -689,7 +727,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const activeSearch=!goal.completed&&enemies.actors.some(e=>e.brain.mode!=='stunned'&&e.investigate&&e.searchTime>0&&Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28);
       const stunned=!activeChase&&!activeSearch&&enemies.actors.some(e=>e.brain.mode==='stunned'&&(!!enemies.finalKind||Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28));
       run.step(dt,{chasing:activeChase,searching:activeSearch,hidden:!detectable&&!enemies.finalKind,frozen:timeStop.active,stunned,burden,finale:!!enemies.finalKind});
-      if(caught){phaseRevision++;elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
+      if(caught){circusRuntime?.reset();phaseRevision++;elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
         const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
         const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
     },
@@ -715,10 +753,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       flashlight.castShadow=quality!=='low';camera.fov=p.fov;camera.updateProjectionMatrix();
       flashlight.shadow.normalBias=ultra?.006:high?.010:.018;
       lightPool.forEach((light,i)=>{light.visible=i<(quality==='low'?3:6);});fixtureShadow.configure(quality,budget.mobile);
-      reflectionEnabled=quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
+      reflectionEnabled=!circus&&quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!circus&&!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
       effects?.configure(quality);glowMat.opacity=quality==='low'?.26:.12;
     },
     render(time:number){
+      if(circusRuntime)circusMeshes?.update(circusRuntime.snapshot(),environmentTime/1000,camera.position);
       const area=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind;
       moodTarget.copy(area==='shop'||area==='factory'||area==='bath'||area==='cistern'||area==='cave'||area==='field'?moods[area]:moods.shrine);
       if(stage!=='shrine')moodTarget.lerp(stageFog,.72);
@@ -728,7 +767,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         fixtureLighting.select(camera.position,floorBand(elevation),lightFixtures,collisionFor(),configuredQuality==='low'?3:6);
         // At this distance exponential fog is already opaque; keep nearby detail intact.
         for(const c of staticChunks){const foliage=(c.mesh.material as THREE.Material).name==='grass',range=foliage?(configuredQuality==='low'?36:configuredQuality==='ultra'?72:60):configuredQuality==='low'?area==='field'?85:72:110;c.mesh.visible=c.center.distanceToSquared(camera.position)<(range+c.radius)**2;}
-        mirror.visible=reflectionEnabled&&mirror.position.distanceToSquared(camera.position)<3600;water.visible=!mirror.visible;
+        mirror.visible=reflectionEnabled&&mirror.position.distanceToSquared(camera.position)<3600;water.visible=!circus&&!mirror.visible;
         lastLight=time;
       }
       camera.getWorldDirection(direction);flashlightRight.set(1,0,0).applyQuaternion(camera.quaternion);
@@ -736,7 +775,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       flashlight.target.position.copy(camera.position).addScaledVector(direction,8);
       const lightDt=lastLightFrame?Math.min(.1,(time-lastLightFrame)/1000):.016;fixtureLighting.step(lightDt);lastLightFrame=time;
       const shadowOrigin=fixtureShadow.light.position;
-      const movingShadow=(playMode!=='gallery'&&enemies.actors.some(e=>Math.abs(e.floor-shadowOrigin.y)<5&&Math.hypot(e.position.x-shadowOrigin.x,e.position.z-shadowOrigin.z)<11))||doors.states.some(d=>d.progress>0&&d.progress<1&&Math.hypot(d.spec.x-shadowOrigin.x,d.spec.z-shadowOrigin.z)<11)||beads.some(b=>!b.collected&&Math.abs(b.floor-shadowOrigin.y)<5&&Math.hypot(b.position.x-shadowOrigin.x,b.position.z-shadowOrigin.z)<11)||(goal.progress>0&&goal.progress<1&&Math.hypot(goal.offset.x-shadowOrigin.x,GOAL.z+goal.offset.z-shadowOrigin.z)<11);
+      const movingShadow=!!circusRuntime&&(circusRuntime.snapshot().moving||circusRuntime.snapshot().devices.some(d=>d.progress!==d.target))||(playMode!=='gallery'&&enemies.actors.some(e=>Math.abs(e.floor-shadowOrigin.y)<5&&Math.hypot(e.position.x-shadowOrigin.x,e.position.z-shadowOrigin.z)<11))||doors.states.some(d=>d.progress>0&&d.progress<1&&Math.hypot(d.spec.x-shadowOrigin.x,d.spec.z-shadowOrigin.z)<11)||beads.some(b=>!b.collected&&Math.abs(b.floor-shadowOrigin.y)<5&&Math.hypot(b.position.x-shadowOrigin.x,b.position.z-shadowOrigin.z)<11)||(goal.progress>0&&goal.progress<1&&Math.hypot(goal.offset.x-shadowOrigin.x,GOAL.z+goal.offset.z-shadowOrigin.z)<11);
       fixtureShadow.update(fixtureLighting.slots,camera.position,lightDt,time,movingShadow);
       if(gothic)fixtureShadow.light.intensity*=.55;
       lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=(gothic?3.8:7)*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
@@ -748,8 +787,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;scannedProps.dispose();fixtureShadow.dispose();nightSky?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();nightSky?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
-
 

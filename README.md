@@ -78,3 +78,11 @@ Tests cover input transitions, concurrent touch actions, slider sensitivity, cur
 Installed Chrome visual and interaction QA covers desktop and an emulated iPhone viewport. Stage-selection and final-pursuit UI fixtures are exercised separately from actual collection/capture simulations. Physical DualSense, iOS Safari and low-end hardware performance remain untested in this environment.
 
 Spatial inspiration: https://www.spaceonigirigames.com/shadowcorridor2 . Maps, rigs, UI and fixtures are original; no game branding, map, screenshot or audio is redistributed.
+
+## Night Circus
+
+The fifth initially selectable stage, 夜廻りサーカス, retains the seeded5×5 sectors,87 rooms and three floors. A rounded254m rail loop connects four stations in the central big top. Circle (keyboard E, or the contextual touch button) calls an empty cart or boards the waiting cart. It accelerates to7m/s, stops for people on the track and automatically dismounts at the next station's clear exit. Camera look, light and combat abilities remain usable. Menus pause the ride; L2 freezes it with the world. Capture/restart releases the rider and resets apparatus.
+
+Four optional mechanisms add alternative tactics: sliding curtain,90° rotating concealment wall, hinged stage bridge and a lure that sends enemies to its activation location. Devices wait while someone occupies the moving part's sweep. Rendered and collidable geometry use the same dimensions, and enemies route around closed mechanisms while retaining ordinary door interaction. Stable static collision indices are shared with the small changing mechanism groups.
+
+Twenty continuous red/ivory canopy panels cover the big top, with low interior screens preserving standing-eye concealment. Recessed room props distinguish dressing rooms, costume stores, workshops, spectator seating, trunks, carnival booths, mirrors and dining rooms. Weathered fabric and photographic timber are batched and distance culled; apparatus adds42 meshes and3380 triangles. No text is added to the3D environment.

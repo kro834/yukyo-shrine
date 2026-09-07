@@ -1,7 +1,11 @@
 import type {Obstacle} from './movement.ts';
 const cache=new WeakMap<Obstacle[],{length:number;bins:Map<string,Obstacle[]>}>();
+const groups=new WeakMap<Obstacle[],Obstacle[][]>();
+/** Keep static broad-phase bins reusable when a small set of machines moves. */
+export function combineObstacles(...parts:Obstacle[][]){const result=parts.flat();groups.set(result,parts);return result;}
 /** Conservative broad phase. Callers retain exact narrow-phase collision tests. */
-export function nearbyObstacles(items:Obstacle[],minX:number,minZ:number,maxX:number,maxZ:number){
+export function nearbyObstacles(items:Obstacle[],minX:number,minZ:number,maxX:number,maxZ:number):Obstacle[]{
+  const parts=groups.get(items);if(parts)return [...new Set(parts.flatMap(part=>nearbyObstacles(part,minX,minZ,maxX,maxZ)))];
   if(items.length<64)return items;
   let entry=cache.get(items);
   if(!entry||entry.length!==items.length){

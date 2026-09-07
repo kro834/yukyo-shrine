@@ -90,6 +90,12 @@ export class Enemies {
   private squadCooldown=0;
   patrolTargets:PatrolTarget[]=[];
   private walls:Obstacle[];
+  private mechanismSource:Obstacle[]|null=null;
+  private mechanismWalls:Obstacle[]=[];
+  setMechanismBlockers(items:Obstacle[]){
+    if(items===this.mechanismSource)return;this.mechanismSource=items;
+    this.mechanismWalls=items.map(o=>({...o,minX:o.minX-RADIUS,maxX:o.maxX+RADIUS,minZ:o.minZ-RADIUS,maxZ:o.maxZ+RADIUS}));
+  }
   private areaAt:(p:Position,floor?:number)=>AreaColor;
   private wingAt:(p:Position)=>Cell['kind']|undefined;
   private thirdWalls=[...THIRD_DECK.walls,...deckFurnitureWalls(9.6),...highRails,...highCaps];
@@ -159,19 +165,20 @@ export class Enemies {
     const nodes=typeof upper==='number'&&upper>9?this.thirdNodes:upper?this.upperNodes:this.nodes,cx=Math.round(p.x/4),cz=Math.round(p.z/4),walls=typeof upper==='number'&&upper>9?this.thirdWalls:upper?this.upperWalls:this.walls;
     const local:{key:string;point:Position;distance:number}[]=[];
     for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){const key=(cx+dx)+','+(cz+dz),point=nodes.get(key);if(point)local.push({key,point,distance:Math.hypot(point.x-p.x,point.z-p.z)});}
-    local.sort((a,b)=>a.distance-b.distance);const nearby=local.find(c=>!segmentBlocked(p,c.point,walls));if(nearby)return nearby;
+    const clear=(point:Position)=>!segmentBlocked(p,point,walls)&&(!!upper||!segmentBlocked(p,point,this.mechanismWalls));
+    local.sort((a,b)=>a.distance-b.distance);const nearby=local.find(c=>clear(c.point));if(nearby)return nearby;
     const candidates=Array.from(nodes,([key,point])=>({key,point,distance:Math.hypot(point.x-p.x,point.z-p.z)})).sort((a,b)=>a.distance-b.distance);
-    return candidates.find(c=>!segmentBlocked(p,c.point,walls))??null;
+    return candidates.find(c=>clear(c.point))??null;
   }
   private path(start:Position,target:Position,upper:boolean|number=false):Position[]{
     const a=this.closest(start,upper),b=this.closest(target,upper);if(!a||!b)return [];
     const graph=typeof upper==='number'&&upper>9?this.thirdGraph:upper?this.upperGraph:this.graph,nodes=typeof upper==='number'&&upper>9?this.thirdNodes:upper?this.upperNodes:this.nodes,walls=typeof upper==='number'&&upper>9?this.thirdWalls:upper?this.upperWalls:this.walls;
     const queue=[a.key],parent=new Map<string,string|null>([[a.key,null]]);
-    for(let i=0;i<queue.length&&!parent.has(b.key);i++)for(const n of graph.get(queue[i])??[])if(!parent.has(n)){parent.set(n,queue[i]);queue.push(n);}
+    for(let i=0;i<queue.length&&!parent.has(b.key);i++)for(const n of graph.get(queue[i])??[])if(!parent.has(n)&&(!!upper||!segmentBlocked(nodes.get(queue[i])!,nodes.get(n)!,this.mechanismWalls))){parent.set(n,queue[i]);queue.push(n);}
     if(!parent.has(b.key))return [];
     const result:Position[]=[];let k:string|null=b.key;
     while(k&&k!==a.key){result.push(nodes.get(k)!);k=parent.get(k)??null;}
-    result.reverse();if(a.distance>.3&&(!result[0]||segmentBlocked(start,result[0],walls)))result.unshift(a.point);return result;
+    result.reverse();if(a.distance>.3&&(!result[0]||segmentBlocked(start,result[0],walls)||!upper&&segmentBlocked(start,result[0],this.mechanismWalls)))result.unshift(a.point);return result;
   }
   hear(position:Position,floor=0){
     const balance=AREA_MULTIPLIERS[this.areaAt(position,floor)];
@@ -244,8 +251,8 @@ export class Enemies {
       }
       if(goal){
         e.planIn-=dt;
-        if(!stairTravel&&segmentBlocked(e.position,goal,blockers)){
-          if(e.planIn<=0&&(!e.route.length||e.brain.mode==='chase'||e.investigate)){e.route=this.path(e.position,goal,upstairs);e.planIn=.9+e.id*.017;}
+        if(!stairTravel&&(segmentBlocked(e.position,goal,blockers)||!upstairs&&segmentBlocked(e.position,goal,this.mechanismWalls))){
+          if(e.planIn<=0&&(!e.route.length||e.brain.mode==='chase'||e.investigate||!upstairs&&e.route[0]&&segmentBlocked(e.position,e.route[0],this.mechanismWalls))){e.route=this.path(e.position,goal,upstairs);e.planIn=.9+e.id*.017;}
           while(e.route[0]&&Math.hypot(e.route[0].x-e.position.x,e.route[0].z-e.position.z)<.22)e.route.shift();
           goal=e.route[0]??null;
         }else e.route=[];

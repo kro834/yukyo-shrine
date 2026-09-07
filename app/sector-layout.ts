@@ -1,3 +1,4 @@
+import {circusWallHeight} from './circus-enclosure.ts';
 import {seededRandom} from './seeded-random.ts';
 import type {Cell,Room} from './shrine-layout.ts';
 import {NEW_HORROR_AREAS} from './horror-areas.ts';
@@ -61,10 +62,11 @@ export function createSectorLayout(seed=1,stage:StageId='shrine'){
  }
  for(const s of sectors.filter(s=>s.kind==='field')){const cx=(s.col-2)*19,cz=(s.row-2)*19;for(const dx of [-2,1])for(const dz of [-2,1]){let empty=true;for(let x=0;x<2;x++)for(let z=0;z<2;z++)if(grid.has(key(cx+dx+x,cz+dz+z)))empty=false;if(empty)paddies.push({x1:cx+dx,x2:cx+dx+1,z1:cz+dz,z2:cz+dz+1});}}
  // Narrow shrine corridors share collision and scenery; preserve the broad stair hall.
- for(const c of grid.values())if(c.kind==='hall'&&!(c.x>=11&&c.x<=27&&c.z>=0&&c.z<=13)&&!rooms.some(r=>c.x>=r.x1&&c.x<=r.x2&&c.z>=r.z1&&c.z<=r.z2))c.kind='passage';
+  for(const c of grid.values())if(stage!=='circus'&&c.kind==='hall'&&!(c.x>=11&&c.x<=27&&c.z>=0&&c.z<=13)&&!rooms.some(r=>c.x>=r.x1&&c.x<=r.x2&&c.z>=r.z1&&c.z<=r.z2))c.kind='passage';
   const landformPlan=stage==='outer'?planOuterLandforms(grid,sectors,rooms,c=>SECOND_DECK.grid.has(key(c.x,c.z))):null;
   if(landformPlan)for(const cellKey of grid.keys())if(!landformPlan.grid.has(cellKey))grid.delete(cellKey);
   const envelope=encloseLayout(grid,rooms,paddies,stage==='outer');
+  if(stage==='circus'){const byCenter=new Map(envelope.obstacles.map(o=>[((o.minX+o.maxX)/2)+','+((o.minZ+o.maxZ)/2),o]));for(const w of envelope.walls){w.h=circusWallHeight(w,rooms);const o=byCenter.get(w.x+','+w.z);if(o)o.maxY=w.h;}}
  assignOuterAreas(rooms,seed,stage);
  assignOrchestraRooms(rooms,seed,stage);
  return {cells:[...grid.values()],grid,...envelope,rooms,doors:envelope.doors,courts:[] as {x:number;z:number;rx:number;rz:number;h:number}[],stages:sectors,paddies,expansionAreas:rooms,sectors,stage,connections,landforms:landformPlan?.regions??[]};

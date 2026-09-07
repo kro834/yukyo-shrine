@@ -15,7 +15,7 @@ test('curved plants respect visual heights and stay below the global geometry bu
 });
 test('tall field plants have no vertices on walkable cells and scatter is deterministic',()=>{
  const v=new THREE.Vector3();
- for(const stage of ['shrine','abyss','outer','orchestra'] as const){
+ for(const stage of ['shrine','abyss','outer','orchestra','circus'] as const){
   const layout=createSectorLayout(17,stage),scatter=fieldFoliageRoots(layout,17,()=>0,layout.obstacles),variants=new Map<string,THREE.BufferGeometry>();
   if(stage!=='outer')assert.equal(scatter.counts.verge,0);
   assert.ok(Object.entries(scatter.counts).reduce((sum,[kind,count])=>sum+count*FOLIAGE_LIMITS[kind as keyof typeof FOLIAGE_LIMITS].triangles,0)<=143600);
