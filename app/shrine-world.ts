@@ -17,6 +17,7 @@ import {exteriorRoofSites,exteriorRoof} from './exterior-roofs.ts';
 import {outdoorTimberBay,outdoorTimberFinish} from './outdoor-timber.ts';
 import {prepareNightSky} from './night-sky.ts';
 import {plankFloor} from './plank-floor.ts';
+import {OutdoorReflection,reflectedWaterFinish,waterReflectionUniforms} from './outdoor-reflection.ts';
 import {finiteFixture,finiteSceneFixtures,pendingFixtureFinish} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -151,6 +152,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
   terrainFinish(mats.earth);terrainFinish(mats.rock);terrainFinish(mats.bank);
   const waterClock={value:0};waterFinish(mats.water,waterClock);
+  const waterReflection=waterReflectionUniforms();
+  if(stage==='outer'&&!budget.mobile&&!rendererOverride)reflectedWaterFinish(mats.water,waterReflection);
   if(stage==='outer')mats.water.envMapIntensity=0;
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
   lampFinish(mats.circusGlow,'diffuser');
@@ -664,6 +667,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     if(u!==upperDoorBlocks){upperDoorBlocks=u;upperCollision=[...upperFixed,...u];}};
   let elevation=0,collision=groundCollision,reflectionEnabled=true;
   const mirror=new Reflector(new THREE.PlaneGeometry(4.7,6.7),{textureWidth:budget.mobile?1:512,textureHeight:budget.mobile?1:512,color:0x293d38});mirror.rotation.x=-Math.PI/2;mirror.position.set(poolPosition.x,.03,poolPosition.z);scene.add(mirror);water.visible=false;
+  const outdoorReflection=landforms&&!budget.mobile&&!rendererOverride?new OutdoorReflection(waterReflection,landforms.tilemetadata):undefined;
+  const reflectionExcluded=[...staticChunks.filter(c=>c.mesh.material===mats.water).map(c=>c.mesh),mirror,water];
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
   for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
   dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
@@ -834,9 +839,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);
       beadMeshes.update(environmentTime);
       goalMeshes.update();
+      if(outdoorReflection){
+        const active=outdoorReflection.update(renderer,scene,camera,time,configuredQuality==='ultra'&&area==='field'&&elevation<3,reflectionExcluded);
+        if(active){mirror.visible=false;water.visible=!circus;}
+      }
       if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
