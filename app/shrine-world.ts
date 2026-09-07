@@ -15,6 +15,7 @@ import {wainscot} from './wainscot.ts';
 import {waterFinish} from './water-finish.ts';
 import {exteriorRoofSites,exteriorRoof} from './exterior-roofs.ts';
 import {outdoorTimberBay,outdoorTimberFinish} from './outdoor-timber.ts';
+import {prepareNightSky} from './night-sky.ts';
 import {finiteFixture,finiteSceneFixtures,pendingFixtureFinish} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -72,7 +73,7 @@ import {STAGES,stageRules,type StageId} from './stage-profile.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff),stage:StageId='shrine') {
   const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus';
-  let playMode:PlayMode='normal',phaseRevision=0;let nightSky:THREE.DataTexture|undefined,skyRequested=false;
+  let playMode:PlayMode='normal',phaseRevision=0;let nightSky:THREE.Texture|undefined,nightSkyTarget:THREE.WebGLRenderTarget|undefined,skyRequested=false;
   const device=typeof navigator!=='undefined'?navigator as Navigator&{deviceMemory?:number}:undefined;
   const budget=new PerformanceBudget({touch:(device?.maxTouchPoints??0)>1||/Android|iPhone|iPad/i.test(device?.userAgent??''),cores:device?.hardwareConcurrency,memory:device?.deviceMemory});
   const renderer=rendererOverride??new THREE.WebGLRenderer({canvas,antialias:!budget.mobile,powerPreference:'high-performance'});
@@ -780,7 +781,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       camera.fov=p.fov;camera.updateProjectionMatrix();
       selectedQuality=p.quality;const quality=budget.quality(p.quality);
       if(stage==='outer'){
-        if(quality!=='low'&&!nightSky&&!skyRequested&&!rendererOverride){skyRequested=true;new HDRLoader().load('/materials/outer/qwantani_moonrise_puresky_1k.hdr',texture=>{if(disposed){texture.dispose();return;}texture.mapping=THREE.EquirectangularReflectionMapping;nightSky=texture;if(configuredQuality!=='low'){scene.background=texture;mats.water.envMap=texture;mats.water.envMapIntensity=.018;mats.water.needsUpdate=true;}});}
+        if(quality!=='low'&&!nightSky&&!skyRequested&&!rendererOverride){skyRequested=true;new HDRLoader().load('/materials/outer/qwantani_moonrise_puresky_1k.hdr',texture=>{if(disposed){texture.dispose();return;}try{nightSkyTarget=prepareNightSky(renderer,texture);nightSky=nightSkyTarget.texture;}finally{texture.dispose();}if(configuredQuality!=='low'){scene.background=nightSky;mats.water.envMap=nightSky;mats.water.envMapIntensity=.018;mats.water.needsUpdate=true;}});}
         scene.background=quality!=='low'&&nightSky?nightSky:backgroundColor;scene.backgroundIntensity=.018;const waterSky=quality!=='low'?nightSky??null:null;if(mats.water.envMap!==waterSky){mats.water.envMap=waterSky;mats.water.needsUpdate=true;}mats.water.envMapIntensity=waterSky?.018:0;
       }
       if(configuredQuality===quality)return;
@@ -830,6 +831,6 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();nightSky?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
