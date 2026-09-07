@@ -26,3 +26,16 @@ test('static fixture shadows are cached while moving doors and actors refresh; u
  shadow.update(slots,viewer,.04,690,false);assert.equal(shadow.light.shadow.needsUpdate,true);shadow.update(slots,viewer,.04,730,false);assert.equal(shadow.light.shadow.needsUpdate,false);
  assert.equal(shadow.light.shadow.camera.up.z,-1);assert.equal(shadow.light.shadow.mapSize.x,512);shadow.dispose();
 });
+
+test('an unowned fixture never exposes an uninitialized PCF shadow sampler',()=>{
+ const shadow=new FixtureShadow(new THREE.Scene()),viewer=new THREE.Vector3(0,1.68,3);
+ for(const quality of ['high','ultra'] as const){
+  shadow.configure(quality,false);assert.equal(shadow.light.visible,false);
+  shadow.update([],viewer,.016,100,false);assert.equal(shadow.light.visible,false);assert.equal(shadow.light.shadow.map,null);
+  const slots=[slot(lamp(1,0))];shadow.update(slots,viewer,.016,120,false);shadow.update(slots,viewer,.016,140,false);
+  assert.equal(shadow.light.visible,true);assert.equal(shadow.light.shadow.needsUpdate,true);
+  for(let i=0;i<30;i++)shadow.update([],viewer,.02,160+i*20,false);
+  assert.equal(shadow.light.visible,false);
+ }
+ shadow.dispose();
+});

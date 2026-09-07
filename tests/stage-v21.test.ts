@@ -15,7 +15,7 @@ import {buildYokochoFront} from '../app/yokocho-front.ts';
 import {MirrorInventory} from '../app/mirror-inventory.ts';
 
 test('only a completed Hard run unlocks another stage; cleared Normal runs can retry',()=>{
- for(const current of ['shrine','abyss','outer'] as StageId[])for(const next of ['shrine','abyss','outer'] as StageId[])for(const mode of ['gallery','normal','hard'] as const){
+ for(const current of Object.keys(STAGES) as StageId[])for(const next of Object.keys(STAGES) as StageId[])for(const mode of ['gallery','normal','hard'] as const){
   assert.equal(canTransitionStage(mode,false,current,next),false);
   assert.equal(canTransitionStage(mode,true,current,next),mode==='hard'||current===next);
  }
@@ -29,11 +29,11 @@ function navigation(input:Map<string,Position>,walls:Obstacle[]){
  for(let i=0;i<queue.length;i++){const [x,z]=queue[i].split(',').map(Number);for(const [dx,dz] of [[1,0],[-1,0],[0,1],[0,-1]]){const k=(x+dx)+','+(z+dz);if(!seen.has(k)&&nodes.has(k)&&clear(nodes.get(queue[i])!,nodes.get(k)!)){seen.add(k);queue.push(k);}}}
  return {nodes,seen,reaches:(target:Position)=>[...seen].some(k=>Math.hypot(nodes.get(k)!.x-target.x,nodes.get(k)!.z-target.z)<6&&clear(nodes.get(k)!,target))};
 }
-test('three stage profiles generate distinct connected 5 by 5 topologies with reachable rooms and all objectives',()=>{
+test('four stage profiles generate distinct connected 5 by 5 topologies with reachable rooms and all objectives',()=>{
  const signatures=new Set<string>();
  for(const stage of Object.keys(STAGES) as StageId[])for(let seed=1;seed<=20;seed++){
   const l=createSectorLayout(seed,stage);assert.equal(l.sectors.length,25);assert.equal(l.rooms.length,87);assert.equal(l.rooms.filter(r=>r.bead).length,13);assert.equal(l.connections.size,STAGES[stage].links);
-  assert.ok(l.connections.has('12:13')&&l.connections.has('13:18'));assert.equal(new Set(l.rooms.flatMap(r=>r.themeId?[r.themeId]:[])).size,30);
+  assert.ok(l.connections.has('12:13')&&l.connections.has('13:18'));assert.equal(new Set(l.rooms.flatMap(r=>r.themeId?[r.themeId]:[])).size,stage==='outer'?38:stage==='orchestra'?34:30);
   for(const k of [...RED_AREAS,'yokocho'])assert.ok(l.cells.some(c=>c.kind===k));
   assert.ok(l.rooms.some(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2));
   for(const r of l.rooms)assert.ok(l.doors.filter(d=>d.room===r.id||d.rooms?.includes(r.id)).length>=2);
@@ -41,7 +41,7 @@ test('three stage profiles generate distinct connected 5 by 5 topologies with re
   assert.equal(nav.seen.size,nav.nodes.size,stage+'/'+seed);
   signatures.add(stage+'/'+l.cells.map(c=>c.x+','+c.z).sort().join(';'));
  }
- assert.equal(signatures.size,60);
+ assert.equal(signatures.size,80);
  const shrine=createSectorLayout(7),abyss=createSectorLayout(7,'abyss'),outer=createSectorLayout(7,'outer');
  assert.notDeepEqual(shrine.cells.map(c=>[c.x,c.z]),abyss.cells.map(c=>[c.x,c.z]));assert.notDeepEqual(abyss.cells.map(c=>[c.x,c.z]),outer.cells.map(c=>[c.x,c.z]));
  assert.ok(stageRules('abyss','normal').search>stageRules('outer','normal').search);assert.ok(stageRules('outer','normal').sense>stageRules('abyss','normal').sense);
@@ -57,7 +57,7 @@ test('new furnished stages can collect and offer every route, then physically en
  const canvas={getContext:()=>({createRadialGradient:()=>({addColorStop(){}}),fillRect(){}})};
  g.document={addEventListener(){},removeEventListener(){},createElement:()=>canvas,createElementNS:()=>({addEventListener(){},removeEventListener(){},set src(_v:string){}})};
  const renderer={setPixelRatio(){},setSize(){},shadowMap:{},capabilities:{getMaxAnisotropy:()=>1},dispose(){}} as unknown as THREE.WebGLRenderer;
- for(const stage of ['abyss','outer'] as StageId[])for(const [seed,color] of [[1,'blue'],[17,'red'],[71,'gold']] as const){
+ for(const stage of ['abyss','outer','orchestra'] as StageId[])for(const [seed,color] of [[1,'blue'],[17,'red'],[71,'gold']] as const){
   const w=createWorld(canvas as unknown as HTMLCanvasElement,renderer,seed,stage);
   try{
    w.setMode('normal');assert.equal(actual!.actors.length,12);assert.deepEqual(actual!.difficulty,stageRules(stage,'normal'));w.step(.05);

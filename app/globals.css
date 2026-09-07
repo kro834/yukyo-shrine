@@ -52,3 +52,6 @@ html[data-shrine-playing=true],html[data-shrine-playing=true] *{cursor:none!impo
 @media(max-width:600px){.stage-choices{grid-template-columns:1fr}.stage-choices button{padding:13px 17px;gap:5px}.stage-choices b{font-size:23px}.run-results{gap:7px 20px}.run-results dd{font-size:17px}.run-results dt{font-size:11px}.clear-screen>span{display:none}.clear-screen>small{font-size:11px}.clear-screen h1{font-size:24px}}@media(max-height:630px){.clear-screen{justify-content:flex-start}.stage-choices{grid-template-columns:repeat(2,minmax(0,1fr))}.run-results{display:none}.clear-screen>*{flex-shrink:0}}
 
 .quality-options{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))}
+
+.stage-choices button[data-stage=orchestra]{grid-column:1/-1;background:#241b29e8}.stage-choices button[data-stage=orchestra] b{font-size:clamp(18px,2.3vw,28px);letter-spacing:.09em}
+.clear-screen{justify-content:flex-start}.clear-screen>*{flex-shrink:0}

@@ -12,9 +12,13 @@ Capture restores the ordinary roster, empties held/offered beads and mirrors, cl
 
 ## Modes and stages
 
-Start with Gallery, Normal or Hard. Gallery provides safe sightseeing with no active enemies. Only clearing on Hard unlocks the choice of **深淵 (Abyss)** or **外縁 (Outer Reach)**, or a new seed for the same stage. A stage change recreates the world and input lifecycle while retaining preferences.
+Start with Gallery, Normal or Hard. Gallery provides safe sightseeing with no active enemies. Only clearing on Hard unlocks **深淵 (Abyss)**, **外縁 (Outer Reach)** and **オーケストラ・ツー (Orchestra Two)**, or a new seed for the same stage. A stage change recreates the world and input lifecycle while retaining preferences.
 
 Abyss has lower cave ceilings, damp dark surfaces, fewer inter-sector links and longer enemy searches. Outer Reach emphasizes open fenced fields, moonlit sky, alleys and shops, with wider detection and faster pursuit. Both preserve all bead routes and tested ground navigation.
+
+Outer Reach also contains eight exclusive nostalgic interiors, placed in eight separate random sectors without replacing the original30 themes: 終電の去った木造駅, 夕暮れの廃校舎, 閉館した銀映館, 祭りのあとの縁日, 雨待ちの旧旅籠, 忘れ湯の浴場, 宛先のない郵便局 and 夕凪の蓄音室. Low timber ceilings, corner wall linings, shaded lamps and distinct furniture establish their identities. Room IDs, bead routes and altar selection are preserved; furnishings leave the offset entrance cross clear.
+
+Orchestra Two is a dark Gothic music complex: black stone walls, pointed arches, blind tracery windows, wooden sliding doors and sparse warm fixtures. Four exclusive rooms contain a pipe organ, abandoned string instruments, a closed curtained stage and old clocks. It retains the three-floor layout, all objective routes and the existing controls, with longer enemy searches and reduced ambient light. Dedicated rooms occupy four separate sectors and leave stair volumes and door approaches clear.
 
 ## Controls
 
@@ -43,6 +47,10 @@ Narrow passages have recessed plaster/shoji, individual waist boards, timber ret
 
 Desktop High and Ultra use one nearby hanging fixture's downward shadow, with stable ownership and a fade before changing fixtures. Static rooms reuse the shadow atlas; nearby moving enemies, doors, collectibles and the opening goal refresh it. Mobile, Low and Medium omit this additional shadow pass.
 
+Lanterns use fitted curved shades, caps and bamboo ribs. Continuous, distance-filtered transmission varies the emission itself, preserving paper detail without seams on curved surfaces. Emissive materials retain consistent intensity across quality changes; bloom halos are restrained. Recreated effects explicitly release their high-pass materials. Unowned shadow fixtures remain hidden until their depth atlas can be initialized, avoiding discarded PCF draws in unlit areas.
+
+Caves use continuous vaulted surfaces, outward weathered wall relief, sealed floor seams and lantern suspension matched to the actual ceiling. Field tiles share slight ground relief and exact edges; grass roots follow the rendered triangles. Curved opaque grasses sit in patches, with taller plants behind exterior fences and outside walkable cells. High and Ultra blend matched albedo/normal/roughness offsets to soften repeated rock and earth textures. Lower settings omit this shader; mobile cave tessellation and distance-capped foliage limit added geometry.
+
 Low omits relief maps, shadows and postprocessing; phones start on Low. Medium retains bloom and shadows. High uses1K PBR detail and contact occlusion. Ultra lazily loads2K maps for four major surfaces,32-sample AO, higher flashlight shadows and reflection targets. Rendering resolution adapts within device pixel budgets; mobile omits planar reflections. Static geometry is batched in24m chunks, spatially culled, and enemy parts are merged while animated joints remain independent.
 
 See [MATERIALS.md](MATERIALS.md) and bundled provenance JSON for official CC0 material sources. This is realtime graphics with remaining geometric simplifications; photographic equivalence is not claimed.
@@ -50,7 +58,7 @@ See [MATERIALS.md](MATERIALS.md) and bundled provenance JSON for official CC0 ma
 ## Development and verification
 
 - `pnpm dev` starts the local site; `pnpm build` produces the static client.
-- `node --test tests/*.test.ts` runs the154-test suite (Node24 used).
+- `node --test tests/*.test.ts` runs the168-test suite (Node24 used).
 - `node node_modules/typescript/bin/tsc --noEmit` checks types.
 
 Tests cover input transitions, concurrent touch actions, slider sensitivity, cursor state policy, all objective routes, furnished connectivity, stairs, door interaction, rendering resource/texture lifetimes, final pursuit transitions,32 real-ramp pursuit cases, mirror grants and reset, and threat/freeze/stun reliability.

@@ -47,7 +47,7 @@ test('cedar grain follows structural length and narrow frames sample one board r
  const floor=new THREE.BoxGeometry(4,.28,4);surfaceUV(floor,1/1.5,'floor');const p=floor.getAttribute('position'),n=floor.getAttribute('normal'),uv=floor.getAttribute('uv');for(let i=0;i<p.count;i++)if(n.getY(i)>.9){assert.ok(Math.abs(uv.getX(i)-p.getZ(i)/1.5)<1e-6);assert.ok(Math.abs(uv.getY(i)-p.getX(i)/1.5)<1e-6);}floor.dispose();
 });
 
-test('visible room overlay uses photographic planks; High lamp cores exceed bloom threshold while Low remains restrained',()=>{
+test('visible room overlay uses photographic planks; shaded lamp emission stays stable across quality changes',()=>{
  const globals=globalThis as unknown as Record<string,unknown>;globals.innerWidth=1280;globals.innerHeight=720;globals.devicePixelRatio=1;
  const canvas={getContext:()=>({createRadialGradient:()=>({addColorStop(){}}),fillRect(){}})};globals.document={addEventListener(){},removeEventListener(){},createElement:()=>canvas,createElementNS:()=>({addEventListener(){},removeEventListener(){},set src(_v:string){}})};
  const renderer={setPixelRatio(){},setSize(){},shadowMap:{},capabilities:{getMaxAnisotropy:()=>1},dispose(){}} as unknown as THREE.WebGLRenderer;
@@ -57,7 +57,12 @@ test('visible room overlay uses photographic planks; High lamp cores exceed bloo
   const rooms=world.layout.rooms.filter(r=>r.id.startsWith('expansion-')&&!r.themeId&&![3,4].includes((Number(r.id.slice(-2))-1)%9));assert.ok(rooms.length>10);
   for(const r of rooms){const ray=new THREE.Raycaster(new THREE.Vector3((r.x1+r.x2)*2+.6,.3,(r.z1+r.z2)*2+.4),new THREE.Vector3(0,-1,0),0,1);const hit=ray.intersectObjects(meshes,false)[0];assert.ok(hit,r.id);assert.equal((hit.object as THREE.Mesh<THREE.BufferGeometry,THREE.Material>).material.name,'planks',r.id);}
   const lamps=new Set<THREE.Material>();world.scene.traverse(o=>{if(o instanceof THREE.Mesh&&!Array.isArray(o.material)&&['light','coolLight'].includes(o.material.name))lamps.add(o.material);});
-  const luminance=(m:THREE.Material)=>{const c=(m as THREE.MeshBasicMaterial).color;return .2126*c.r+.7152*c.g+.0722*c.b;};
-  world.configure({...DEFAULTS,quality:'high'});assert.ok([...lamps].every(m=>luminance(m)>1.15));world.configure({...DEFAULTS,quality:'low'});assert.ok([...lamps].every(m=>luminance(m)<1.15));assert.equal(renderer.shadowMap.enabled,false);
+  assert.equal(lamps.size,2);
+  const original=[...lamps].map(m=>{assert.ok(m instanceof THREE.MeshStandardMaterial);assert.ok(m.emissiveIntensity>1&&m.emissiveIntensity<=1.35);return {material:m,emission:m.emissive.clone(),intensity:m.emissiveIntensity,key:m.customProgramCacheKey()};});
+  for(const quality of ['high','low','ultra','low'] as const){
+   world.configure({...DEFAULTS,quality});
+   for(const {material,emission,intensity,key} of original){assert.deepEqual(material.emissive,emission);assert.equal(material.emissiveIntensity,intensity);assert.equal(material.customProgramCacheKey(),key);assert.match(key,/lamp-transmission/);}
+  }
+  assert.equal(renderer.shadowMap.enabled,false);
  }finally{world.dispose();}
 });

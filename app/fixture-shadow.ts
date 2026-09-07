@@ -18,7 +18,9 @@ export class FixtureShadow {
  configure(quality:GraphicsQuality,mobile:boolean){
   const enabled=!mobile&&(quality==='high'||quality==='ultra'),size=quality==='ultra'?1024:512;
   if(!enabled||this.light.shadow.mapSize.x!==size){this.light.shadow.dispose();this.light.shadow.map=this.light.shadow.mapPass=null;}
-  this.light.shadow.mapSize.set(size,size);this.enabled=enabled;this.light.visible=enabled;this.light.castShadow=enabled;
+  // An unallocated depth map cannot be bound to a PCF shadow sampler. Keep the
+  // fixture out of the renderer until an owner lights it and requests its atlas.
+  this.light.shadow.mapSize.set(size,size);this.enabled=enabled;this.light.visible=false;this.light.castShadow=enabled;
   this.lastUpdate=-Infinity;if(!enabled){this.owner=null;this.blend=0;this.light.intensity=0;}
  }
  update(slots:Slot[],viewer:THREE.Vector3,dt:number,time:number,dynamic:boolean){
@@ -38,6 +40,7 @@ export class FixtureShadow {
   }
   const gain=(same?ownerSlot?.gain:slots.find(s=>s.current?.id===this.owner?.id)?.gain)??0;
   this.light.intensity=this.owner?5.25*this.blend*gain:0;
+  this.light.visible=this.light.intensity>0&&this.owner!==null;
   // Static rooms reuse the atlas; moving doors/actors refresh at up to 30 Hz.
   const refresh=this.light.intensity>0&&(this.lastUpdate===-Infinity||(dynamic||this.dynamicLastFrame)&&time-this.lastUpdate>=1000/30);
   this.light.shadow.needsUpdate=refresh;if(refresh){this.lastUpdate=time;this.dynamicLastFrame=dynamic;}

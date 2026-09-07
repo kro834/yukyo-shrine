@@ -1,5 +1,9 @@
 import type {Room} from './shrine-layout.ts';
-type Mat='planks'|'wood'|'plaster'|'stone'|'rust'|'tatami'|'paper'|'tile'|'rope'|'dark'|'gold'|'washiLit'|'water';
+import {outerArea,buildOuterShell,type OuterMaterial,type OuterBuilder} from './outer-areas.ts';
+import {buildOuterMemoriesA} from './outer-memories-a.ts';
+import {buildOuterMemoriesB} from './outer-memories-b.ts';
+import {ORCHESTRA_ROOMS,buildOrchestraRoom} from './orchestra-rooms.ts';
+type Mat=OuterMaterial;
 type Theme={id:string;name:string;floor:Mat;wall:Mat;accent:Mat;light:string};
 const rows=[
  ['white-cord','白紐の結界堂','stone','plaster','paper','moon'],['inverted-dolls','逆さ雛の座敷','tatami','paper','tile','ember'],['empty-noh','無人能舞台','wood','plaster','paper','paper'],['umbrellas','置き傘の土間','stone','plaster','paper','amber'],['comb-teeth','櫛歯の間','wood','paper','wood','moon'],
@@ -10,10 +14,20 @@ const rows=[
  ['withered-flowers','供花の枯庭','stone','plaster','tile','moon'],['shadow-crossing','影踏みの渡り廊','wood','plaster','wood','paper'],['white-curtain','白幕の送り座','tatami','plaster','paper','paper'],['paper-cranes','折鶴の納め所','wood','paper','paper','amber'],['empty-kimono','抜け殻の着物廊','tatami','paper','paper','ember'],
 ] as const;
 export const NEW_HORROR_AREAS:readonly Theme[]=rows.map(([id,name,floor,wall,accent,light])=>({id,name,floor,wall,accent,light}));
-export const horrorArea=(id?:string)=>NEW_HORROR_AREAS.find(t=>t.id===id);
-type Builder={box:(x:number,y:number,z:number,w:number,h:number,d:number,m:Mat)=>void;cylinder:(x:number,y:number,z:number,r:number,h:number,m:Mat,rb?:number)=>void;fixture:(x:number,y:number,z:number,color:string)=>void;block:(x:number,z:number,w:number,d:number,h?:number)=>void};
+export const horrorArea=(id?:string)=>NEW_HORROR_AREAS.find(t=>t.id===id)??outerArea(id)??ORCHESTRA_ROOMS.find(t=>t.id===id);
+type Builder=OuterBuilder;
 /** Shared material batches, recessed corners and overhead motifs keep all doors clear. */
 export function buildHorrorArea(r:Room,b:Builder,reserved=false){
+ const orchestra=ORCHESTRA_ROOMS.find(t=>t.id===r.themeId);
+ if(orchestra){
+  const x=(r.x1+r.x2)*2,z=(r.z1+r.z2)*2;
+  b.box(x,.029,z,(r.x2-r.x1+1)*4-.38,.024,(r.z2-r.z1+1)*4-.38,orchestra.floor);
+  buildOrchestraRoom(r.themeId!,r,b,reserved);return;
+ }
+ if(buildOuterShell(r,b)){
+  if(!buildOuterMemoriesA(r.themeId!,r,b,reserved))buildOuterMemoriesB(r.themeId!,r,b,reserved);
+  return;
+ }
  const t=horrorArea(r.themeId);if(!t)return;const n=NEW_HORROR_AREAS.indexOf(t),cx=(r.x1+r.x2)*2,cz=(r.z1+r.z2)*2,hw=(r.x2-r.x1+1)*2,hd=(r.z2-r.z1+1)*2;
  const {box,cylinder,fixture,block}=b;
  box(cx,.018,cz,hw*2-.25,.025,hd*2-.25,t.floor==='wood'?'planks':t.floor);

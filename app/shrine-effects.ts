@@ -43,6 +43,6 @@ export function createEffects(renderer:THREE.WebGLRenderer,scene:THREE.Scene,cam
       if(enabled)composer.render();else renderer.render(scene,camera);
       if(reveal)renderEnemyEcho(renderer,scene,camera);
     },
-    dispose(){for(const pass of [base,ao,bloom,output])pass.dispose();ao.ssaoMaterial.dispose();ao.noiseTexture.dispose();composer.dispose();},
+    dispose(){for(const pass of [base,ao,bloom,output])pass.dispose();bloom.materialHighPassFilter.dispose();ao.ssaoMaterial.dispose();ao.noiseTexture.dispose();composer.dispose();},
   };
 }

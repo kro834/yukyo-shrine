@@ -10,13 +10,14 @@ import {fabricFinish} from './fabric-finish.ts';
 import {organicFinish} from './organic-finish.ts';
 import type {Preferences} from './preferences.ts';
 import type {Doors,Enemies,Enemy} from './shrine-gameplay';
-export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
+export function createDoorMeshes(scene:THREE.Scene,doors:Doors,gothic=false){
   const wood=new THREE.MeshStandardMaterial({color:'#251914',roughness:.88});
-  const paper=new THREE.MeshStandardMaterial({color:'#aa9370',roughness:.97});
-  agedFinish(paper,'paper');
+  const paper=new THREE.MeshStandardMaterial({color:gothic?'#423137':'#aa9370',roughness:.97});
+  agedFinish(paper,gothic?'wood':'paper');
   const metal=new THREE.MeshStandardMaterial({color:'#352e23',metalness:.65,roughness:.45});
   const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.add('/materials/wood_planks_diff.jpg',[wood],{tint:'#d9d0c2',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.65,ultra:{full:'/materials/ultra/wood_planks_diff_2k.jpg',normal:'/materials/ultra/wood_planks_nor_gl_2k.jpg',roughness:'/materials/ultra/wood_planks_rough_2k.jpg'}});
   const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>{const g=chamferedBox(w,h,d).translate(x,y,z);surfaceUV(g,.38,'timber-photo');return g;};
+  if(gothic)surfaces.add('/materials/wood_planks_diff.jpg',[paper],{tint:'#45363a',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.5,preserveFinish:true});
   const merged=(parts:THREE.BufferGeometry[])=>{const geometry=mergeGeometries(parts)!;parts.forEach(g=>g.dispose());return geometry;};
   const frameGeometry=merged([box(-1.76,1.7,0,.48,3.4,.36),box(1.76,1.7,0,.48,3.4,.36),box(0,3.17,0,4,.48,.34),box(0,.035,0,4,.07,.35)]);
   const paperGeometry=box(0,1.48,0,2.97,2.88,.1);
