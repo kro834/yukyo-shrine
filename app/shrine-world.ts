@@ -32,6 +32,7 @@ import {agedFinish} from './surface-finish.ts';
 import {SurfaceLibrary} from './surface-library.ts';
 import {surfaceUV} from './surface-uv.ts';
 import {FixtureLighting} from './fixture-lighting.ts';
+import {FixtureShadow} from './fixture-shadow.ts';
 import {belowUpperDeck} from './ground-clearance.ts';
 import {RunProgress} from './run-progress.ts';
 import {Stamina} from './stamina.ts';
@@ -130,13 +131,14 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const lanterns:THREE.Vector3[]=[];
   let fixtureFloor=0;const fixtureFloors=new Map<THREE.Vector3,number>();
   const fixtureColors=new Map<THREE.Vector3,string>();
-  const fixture=(x:number,y:number,z:number,color:string,floor=fixtureFloor)=>{if(groundGeometry&&y>4.5&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5))return;const p=new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z);lanterns.push(p);fixtureColors.set(p,color);fixtureFloors.set(p,floor);};
+  const fixtureShadowPositions=new Map<THREE.Vector3,THREE.Vector3>();
+  const fixture=(x:number,y:number,z:number,color:string,floor=fixtureFloor,shadowDrop=0)=>{if(groundGeometry&&y>4.5&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5))return;const p=new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z);lanterns.push(p);fixtureColors.set(p,color);fixtureFloors.set(p,floor);if(shadowDrop&&p.y-shadowDrop>floor+1.9)fixtureShadowPositions.set(p,p.clone().add(new THREE.Vector3(0,-shadowDrop,0)));};
   const lantern=(x:number,y:number,z:number,large=false)=>{
     const r=large?.42:.22,h=large?.95:.6;if(groundGeometry&&y+h/2>4.5&&belowUpperDeck(x-r,x+r,z-r,z+r))return;
     cylinder(x,y,z,r,h,'light',r*.85);cylinder(x,y+h/2,z,r*1.13,.09,'dark');cylinder(x,y-h/2,z,r*1.02,.09,'dark');
     for(let j=0;j<8;j++){const a=j*Math.PI/4;box(x+Math.sin(a)*r,y,z+Math.cos(a)*r,.025,h,.025,'red');}
     for(let j=-1;j<=1;j++){const hoop=new THREE.TorusGeometry(r+.004,.006,3,12);hoop.rotateX(Math.PI/2);hoop.translate(x,y+j*h/4,z);add(hoop,'wood');}
-    const point=new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z);lanterns.push(point);fixtureFloors.set(point,fixtureFloor);
+    const point=new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z);lanterns.push(point);fixtureFloors.set(point,fixtureFloor);if(point.y-h/2-.08>fixtureFloor+1.9)fixtureShadowPositions.set(point,point.clone().add(new THREE.Vector3(0,-h/2-.08,0)));
   };
   const wetPatch=(x:number,z:number,rx:number,rz:number,m:MaterialKey)=>{
     const shape=new THREE.Shape();for(let i=0;i<16;i++){const a=i/16*Math.PI*2,r=.76+.24*natureRandom(),px=Math.cos(a)*rx*r,pz=Math.sin(a)*rz*r;if(i===0)shape.moveTo(px,pz);else shape.lineTo(px,pz);}shape.closePath();
@@ -302,7 +304,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         for(const dy of [-h/2,h/2])box(n.x,y+dy,n.z,r*2+.035,.024,r*2+.035,'dark');
         for(const dx of [-r,r])box(n.x+dx,y,n.z,.014,.014,r*2,'wood');
         for(const dz of [-r,r])box(n.x,y,n.z+dz,r*2,.014,.014,'wood');
-        box(n.x,2.94,n.z,.012,.12,.012,'black');fixture(n.x,y,n.z,'#f4bb78');
+        box(n.x,2.94,n.z,.012,.12,.012,'black');fixture(n.x,y,n.z,'#f4bb78',0,.22);
       }
     }
   }
@@ -494,7 +496,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
   for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
   dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
-  const fixtureLighting=new FixtureLighting(),lightFixtures=lanterns.map((position,id)=>({id,position,floor:fixtureFloors.get(position)??0,color:fixtureColors.get(position)??'#ffc184'}));
+  const fixtureLighting=new FixtureLighting(),fixtureShadow=new FixtureShadow(scene),lightFixtures=lanterns.map((position,id)=>({id,position,floor:fixtureFloors.get(position)??0,color:fixtureColors.get(position)??'#ffc184',shadowPosition:fixtureShadowPositions.get(position)}));
   const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ffc184',0,11,2);scene.add(p);return p;});
   const flashlight=new THREE.SpotLight('#edf1ee',65,36,.72,.4,2);flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
   renderer.shadowMap.type=THREE.PCFShadowMap;flashlight.castShadow=true;flashlight.shadow.mapSize.set(1024,1024);flashlight.shadow.bias=-.00015;flashlight.shadow.normalBias=.03;flashlight.shadow.camera.near=.1;flashlight.shadow.camera.far=36;
@@ -610,7 +612,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(flashlight.shadow.mapSize.x!==size){flashlight.shadow.map?.dispose();flashlight.shadow.map=null;flashlight.shadow.mapSize.set(size,size);}
       if(quality==='low'&&flashlight.shadow.map){flashlight.shadow.map.dispose();flashlight.shadow.map=null;}
       flashlight.castShadow=quality!=='low';camera.fov=p.fov;camera.updateProjectionMatrix();
-      lightPool.forEach((light,i)=>{light.visible=i<(quality==='low'?3:6);});
+      lightPool.forEach((light,i)=>{light.visible=i<(quality==='low'?3:6);});fixtureShadow.configure(quality,budget.mobile);
       reflectionEnabled=quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
       effects?.configure(quality);glowMat.opacity=quality==='low'?.7:.22;
     },
@@ -628,8 +630,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         lastLight=time;
       }
       flashlight.position.copy(camera.position);flashlight.position.y-=.12;camera.getWorldDirection(direction);flashlight.target.position.copy(flashlight.position).addScaledVector(direction,10);
-      fixtureLighting.step(lastLightFrame?Math.min(.1,(time-lastLightFrame)/1000):.016);lastLightFrame=time;
-      lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=7*slot.gain*(1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
+      const lightDt=lastLightFrame?Math.min(.1,(time-lastLightFrame)/1000):.016;fixtureLighting.step(lightDt);lastLightFrame=time;
+      const shadowOrigin=fixtureShadow.light.position;
+      const movingShadow=(playMode!=='gallery'&&enemies.actors.some(e=>Math.abs(e.floor-shadowOrigin.y)<5&&Math.hypot(e.position.x-shadowOrigin.x,e.position.z-shadowOrigin.z)<11))||doors.states.some(d=>d.progress>0&&d.progress<1&&Math.hypot(d.spec.x-shadowOrigin.x,d.spec.z-shadowOrigin.z)<11)||beads.some(b=>!b.collected&&Math.abs(b.floor-shadowOrigin.y)<5&&Math.hypot(b.position.x-shadowOrigin.x,b.position.z-shadowOrigin.z)<11)||(goal.progress>0&&goal.progress<1&&Math.hypot(goal.offset.x-shadowOrigin.x,GOAL.z+goal.offset.z-shadowOrigin.z)<11);
+      fixtureShadow.update(fixtureLighting.slots,camera.position,lightDt,time,movingShadow);
+      lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=7*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
       doorMeshes.update(camera.position,configuredQuality==='low'?72:110);
       enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);
       beadMeshes.update(environmentTime);
@@ -637,7 +642,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;nightSky?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;fixtureShadow.dispose();nightSky?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
 

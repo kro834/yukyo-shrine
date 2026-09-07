@@ -39,7 +39,9 @@ Controller use hides touch controls and suppresses emulated mouse look. The curs
 
 Photographic local PBR textures, scale-correct timber UVs, aged plaster, tatami fibres, washi and worn metal complement original geometry. Layered alley storefronts use wood, shutters, short curtains, eaves, utility fittings, gutters and irregular damp pavement. No reference-game images or text signs are embedded in the world.
 
-Narrow passages have recessed plaster/shoji, individual waist boards, timber returns and ceiling joinery within the navigation envelope. Suspended lamps fit below the ceiling. Continuous photographic board crops avoid artificial joints on posts; prominent timber edges are chamfered with indexed geometry. Special enemy faces have sculpted eye sockets, cheeks and noses with surface weathering; cloth folds and fabric materials remain separate from rigid masks.
+Narrow passages have recessed plaster/shoji, individual waist boards, timber returns and ceiling joinery within the navigation envelope. Suspended lamps fit below the ceiling. Continuous photographic board crops avoid artificial joints on posts; prominent timber edges are chamfered with indexed geometry. The six special enemies wear layered clothing shaped around shoulders, chest and waist, with obi, cuffs, articulated fingers and grounded split-toe footwear. Sculpted masks and skin gain local, distance-filtered surface detail on High and Ultra; normalized linen reflectance preserves the distinction between pale and dark clothing at every quality.
+
+Desktop High and Ultra use one nearby hanging fixture's downward shadow, with stable ownership and a fade before changing fixtures. Static rooms reuse the shadow atlas; nearby moving enemies, doors, collectibles and the opening goal refresh it. Mobile, Low and Medium omit this additional shadow pass.
 
 Low omits relief maps, shadows and postprocessing; phones start on Low. Medium retains bloom and shadows. High uses1K PBR detail and contact occlusion. Ultra lazily loads2K maps for four major surfaces,32-sample AO, higher flashlight shadows and reflection targets. Rendering resolution adapts within device pixel budgets; mobile omits planar reflections. Static geometry is batched in24m chunks, spatially culled, and enemy parts are merged while animated joints remain independent.
 
@@ -48,7 +50,7 @@ See [MATERIALS.md](MATERIALS.md) and bundled provenance JSON for official CC0 ma
 ## Development and verification
 
 - `pnpm dev` starts the local site; `pnpm build` produces the static client.
-- `node --test tests/*.test.ts` runs the150-test suite (Node24 used).
+- `node --test tests/*.test.ts` runs the154-test suite (Node24 used).
 - `node node_modules/typescript/bin/tsc --noEmit` checks types.
 
 Tests cover input transitions, concurrent touch actions, slider sensitivity, cursor state policy, all objective routes, furnished connectivity, stairs, door interaction, rendering resource/texture lifetimes, final pursuit transitions,32 real-ramp pursuit cases, mirror grants and reset, and threat/freeze/stun reliability.

@@ -13,6 +13,7 @@ export class SurfaceLibrary {
   private details:(()=>void)[]=[];
   private ultraDetails:(()=>void)[]=[];
   private variants=new Map<THREE.MeshStandardMaterial,boolean>();
+  private baseFinishes=new Set<THREE.MeshStandardMaterial>();
   private programs:Map<THREE.MeshStandardMaterial,{compile:THREE.MeshStandardMaterial['onBeforeCompile'];key:()=>string}>;
   private anisotropy:number;
   private loader:THREE.TextureLoader;
@@ -49,10 +50,11 @@ export class SurfaceLibrary {
     });
   }
   setQuality(quality:Preferences['quality']){this.quality=quality;if(quality==='high'||quality==='ultra')for(const load of this.details)load();if(quality==='ultra')for(const load of this.ultraDetails)load();this.apply();}
+  preserveBaseFinish(...materials:THREE.MeshStandardMaterial[]){for(const m of materials)this.baseFinishes.add(m);this.apply();}
   private apply(){
     const ultra=this.quality==='ultra',high=this.quality==='high'||ultra,low=this.quality==='low';
     for(const [m,program] of this.programs){
-      const surface=this.surfaces.get(m),procedural=high&&(!surface?.photographic||surface.preserveFinish);
+      const surface=this.surfaces.get(m),procedural=this.baseFinishes.has(m)||high&&(!surface?.photographic||surface.preserveFinish);
       let changed=this.variants.get(m)!==procedural;
       if(changed){m.onBeforeCompile=procedural?program.compile:()=>{};m.customProgramCacheKey=()=>procedural?program.key():'surface-albedo-v20';this.variants.set(m,procedural);}
       if(surface){

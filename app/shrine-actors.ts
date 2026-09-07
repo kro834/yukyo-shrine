@@ -6,6 +6,8 @@ import {agedFinish} from './surface-finish.ts';
 import {SurfaceLibrary} from './surface-library.ts';
 import {surfaceUV} from './surface-uv.ts';
 import {chamferedBox} from './chamfered-box.ts';
+import {fabricFinish} from './fabric-finish.ts';
+import {organicFinish} from './organic-finish.ts';
 import type {Preferences} from './preferences.ts';
 import type {Doors,Enemies,Enemy} from './shrine-gameplay';
 export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
@@ -58,11 +60,13 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const mask=new THREE.MeshStandardMaterial({color:'#bdbaa9',roughness:.82});
   const sculpt=new THREE.MeshStandardMaterial({color:'#b5ab96',roughness:.92,vertexColors:true});
   const paleCloth=new THREE.MeshStandardMaterial({color:'#ded6c6',roughness:1});
+  fabricFinish(cloth);fabricFinish(paleCloth,true);
+  organicFinish(skin,'skin');organicFinish(mask,'mask');organicFinish(sculpt,'mask');
   const black=new THREE.MeshStandardMaterial({color:'#0c0a09',roughness:.98});
   const cord=new THREE.MeshStandardMaterial({color:'#6a5c40',roughness:1});
   const aura=new THREE.MeshBasicMaterial({color:'#a7c4c0',transparent:true,opacity:.23,depthWrite:false,depthTest:false,fog:false});
   let enabled=true;
-  const surfaces=new SurfaceLibrary([cloth,paleCloth],4);cloth.color.set('#c9c1b5');surfaces.add('/horror-hemp.png',[cloth,paleCloth],{bump:.0015});
+  const surfaces=new SurfaceLibrary([cloth,paleCloth,skin,mask,sculpt],4);surfaces.preserveBaseFinish(cloth,paleCloth);surfaces.add('/horror-hemp.png',[cloth,paleCloth],{bump:.0015});
   const part=(parent:THREE.Group,g:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z:number)=>{const mesh=new THREE.Mesh(g,m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=m!==aura;parent.add(mesh);return mesh;};
   const robe=(top:number,bottom:number,height:number)=>{const g=new THREE.CylinderGeometry(top,bottom,height,24,8);const p=g.getAttribute('position');for(let i=0;i<p.count;i++){const a=Math.atan2(p.getZ(i),p.getX(i)),fold=1+Math.sin(a*11+p.getY(i)*1.6)*.065;p.setX(i,p.getX(i)*fold);p.setZ(i,p.getZ(i)*fold*.72);}g.computeVertexNormals();return g;};
   const echoRig=(root:THREE.Group)=>{
