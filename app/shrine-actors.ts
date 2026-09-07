@@ -137,7 +137,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
     a.halo.rotation.z=stunned?0:time*.00018*(i%2?1:-1);
     a.ribbons.forEach((r,j)=>r.rotation.z=Math.sin(time*.0018+j)*.045);
     const color=stunned?'#b8ffff':(e.kind==='danger'?colors[4]:colors[i%4]);a.glow.color.set(color);a.aura.color.set(color);
-    a.mask.emissiveIntensity=stunned?.65:.22;a.ringMat.opacity=stunned?.7:0;
+    a.mask.emissiveIntensity=stunned?.65:e.brain.mode==='chase'?.55+Math.sin(time*.007)*.12:.22;a.ringMat.opacity=stunned?.7:0;
   });},dispose(){materials.forEach(m=>m.dispose());}};
 }
 

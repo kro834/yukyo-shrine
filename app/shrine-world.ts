@@ -21,6 +21,7 @@ import {BurstRecharge} from './burst-recharge.ts';
 import {PerformanceBudget} from './performance-budget.ts';
 import {SECOND_DECK,THIRD_DECK,HIGH_STAIRS,highRails,highCaps,deckFurnitureWalls,floorBand,deckTheme,deckContains} from './vertical-layout.ts';
 import {AREA_THEMES} from './expansion-areas.ts';
+import {RunProgress} from './run-progress.ts';
 import {TimeStop} from './time-stop.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff)) {
@@ -459,7 +460,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const beadMeshes=createMagatamaMeshes(scene,beads);
   enemies.addPatrolTargets([...beads.map(b=>({id:'room:'+b.id,position:b.position,floor:b.floor})),...layout.expansionAreas.map(r=>({id:r.id,position:{x:(r.x1+r.x2)*2,z:(r.z1+r.z2)*2},floor:0}))]);
   const goalMeshes=createGoalMeshes(scene,goal);
-  const burstRecharge=new BurstRecharge(),timeStop=new TimeStop();let environmentTime=0;
+  const burstRecharge=new BurstRecharge(),timeStop=new TimeStop(),run=new RunProgress();let environmentTime=0;
   let goalBlockers=goal.blockers();
   const thirdFixed=[...THIRD_DECK.walls,...deckFurnitureWalls(9.6),...highRails,...highCaps];
   let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
@@ -504,7 +505,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     get timeStopped(){return timeStop.active;},
     get timeStopRemaining(){return timeStop.remaining;},
     get timeStopCooldown(){return timeStop.cooldown;},
-    stopTime(){return !goal.completed&&timeStop.use();},
+    stopTime(){const used=!goal.completed&&timeStop.use();if(used)run.freezes++;return used;},
+    runStatus(){return run.snapshot();},
     goalDirection(){return enemyDirection(camera.position,goal.altar,camera.rotation.y);},
     collection(){return {...beadInventory(beads),areaName:areaName(),blueOffered:goal.blueOffered,redOffered:goal.redOffered,unlocked:goal.unlocked,area:areaAt(camera.position,elevation)};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
@@ -516,7 +518,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     nearAltar(){return goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
     interact(){if(goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
-    burst(){if(goal.completed||!burstRecharge.use())return null;return enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x);},
+    burst(){if(goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x);run.stuns+=hits;return hits;},
     step(dt:number){
       if(goal.completed)return false;
       burstRecharge.step(dt);
@@ -529,10 +531,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       lastMotion={running:false,moving:false};
       if(liveDt>1e-6)for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>9.3?thirdFixed:e.floor>4.5?upperFixed:enemyWalls,liveDt);
       doors.update(dt,camera.position,floorLevel());refreshCollision();collision=collisionFor();doorMeshes.update();
-      collectMagatama(beads,camera.position,elevation,collision);
+      const uncollected=beads.filter(b=>!b.collected);collectMagatama(beads,camera.position,elevation,collision);for(const b of uncollected)if(b.collected)run.pickup(b.color);
+      const inventory=beadInventory(beads);run.step(dt,{chasing:enemies.actors.some(e=>e.brain.mode==='chase'),searching:enemies.actors.some(e=>e.investigate&&Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28),hidden:!detectable,frozen:timeStop.active,burden:Math.max((inventory.blue+goal.blueOffered)/5,inventory.red,inventory.gold,goal.unlocked?1:0)});enemies.pressure=run.pressure;
       goal.update(dt,camera.position,elevation);refreshCollision();collision=collisionFor();
       if(goal.completed)return false;
-      if(liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable,thirdFixed)){elevation=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
+      if(liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable,thirdFixed)){elevation=0;run.defeated();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
         const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
         const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
     },

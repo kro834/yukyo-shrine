@@ -14,7 +14,7 @@ test('wide hearing records the last running position through walls without track
  const l=createLayout(),enemies=new Enemies(l.cells,l.obstacles),e=enemies.actors[0],boss=enemies.actors[4];
  e.position={x:0,z:0};boss.position={x:40,z:0};const noise={x:25,z:0};
  enemies.hear(noise);assert.deepEqual(e.investigate,noise);assert.deepEqual(boss.investigate,noise);
- e.position={x:0,z:0};enemies.hear({x:35,z:0});assert.deepEqual(e.investigate,noise,'blue normal hearing stops beyond 28 m');
+ e.position={x:0,z:0};enemies.hear({x:37,z:0});assert.deepEqual(e.investigate,noise,'blue normal hearing stops beyond 35.2 m');
  enemies.update(.05,{x:-100,z:-250},l.obstacles);assert.deepEqual(e.investigate,noise);
 });
 test('an enemy follows an upstairs footstep by climbing a real staircase',()=>{
