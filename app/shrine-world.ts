@@ -99,8 +99,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const areaName=()=>{if(circus){if(elevation>4.5)return elevation>9.3?'三層 · 吊り道具の回廊':'二層 · 空中桟橋';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?circusRoomName(r):CIRCUS_AREA_NAMES[layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind??'hall'];}if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
-    circusRed:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusRed),
-    circusIvory:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusIvory),
+    circusRed:new THREE.MeshPhysicalMaterial({...CIRCUS_MATERIALS.circusRed,sheen:.35,sheenColor:0xb37277,sheenRoughness:1}),
+    circusIvory:new THREE.MeshPhysicalMaterial({...CIRCUS_MATERIALS.circusIvory,sheen:.35,sheenColor:0xd7cbb2,sheenRoughness:1}),
     circusDark:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusDark),
     circusPaint:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusPaint),
     circusIvoryPaint:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusIvoryPaint),
@@ -800,6 +800,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       }
       if(configuredQuality===quality)return;
       const wasUltra=configuredQuality==='ultra',ultra=quality==='ultra',high=quality==='high'||ultra;
+      mats.circusRed.sheen=mats.circusIvory.sheen=high?.35:0;
       configuredQuality=quality;lastLight=-Infinity;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);scannedProps.setQuality(quality);
       if(quality==='low'||wasUltra!==ultra){effects?.dispose();effects=undefined;}
       if(quality!=='low'&&!effects&&!rendererOverride)effects=createEffects(renderer,scene,camera,budget.mobile,ultra);
@@ -854,6 +855,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
+
+
 
 
 
