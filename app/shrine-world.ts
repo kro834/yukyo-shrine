@@ -11,6 +11,7 @@ import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
 import {buildYokochoFront} from './yokocho-front.ts';
 import {buildNarrowInterior,NARROW_LAMP} from './narrow-interior.ts';
 import {chamferedBox} from './chamfered-box.ts';
+import {wainscot} from './wainscot.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {Reflector} from 'three/addons/objects/Reflector.js';
@@ -351,7 +352,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     const variation=Math.abs(Math.round(w.x)*13+Math.round(w.z)*7+seed)%7,screen=variation===2||variation===3||variation===4;
     const luminous=screen&&!w.twoSided&&Math.abs(Math.round(w.x+w.z)+seed)%9===0;
     box(x,1.85,z,w.alongX?3.7:.055,2.15,w.alongX?.055:3.7,luminous?'washiLit':screen?'paper':variation<2?'plaster':'wood');
-    box(x,.39,z,w.alongX?4:.16,.78,w.alongX?.16:4,'wood');
+    add(wainscot(4,.78,.16,variation).rotateY(Math.atan2(w.insideX,w.insideZ)).translate(x,.39,z),'wood');
     if(screen){
       for(let j=-4;j<=4;j++)box(x+(w.alongX?j*.41:0),1.85,z+(w.alongX?0:j*.41),w.alongX?.036:.12,2.2,w.alongX?.12:.036,'dark');
       for(let j=0;j<6;j++)box(x,.8+j*.42,z,w.alongX?4:.12,.035,w.alongX?.12:4,'dark');
@@ -359,7 +360,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     for(const offset of [-2,2])box(x+(w.alongX?offset:0),w.h/2,z+(w.alongX?0:offset),.22,w.h,.22,'wood');
     box(x,w.h-.22,z,w.alongX?4:.32,.3,w.alongX?.32:4,'dark');
     box(x,.8,z,w.alongX?4:.18,.07,w.alongX?.18:4,'dark');
-    if(w.twoSided){const bx=w.x-w.insideX*.19,bz=w.z-w.insideZ*.19;box(bx,1.7,bz,w.alongX?3.7:.06,2.8,w.alongX?.06:3.7,screen?'paper':'plaster');box(bx,.4,bz,w.alongX?4:.15,.8,w.alongX?.15:4,'dark');}
+    if(w.twoSided){const bx=w.x-w.insideX*.19,bz=w.z-w.insideZ*.19;box(bx,1.7,bz,w.alongX?3.7:.06,2.8,w.alongX?.06:3.7,screen?'paper':'plaster');add(wainscot(4,.8,.15,variation+7).rotateY(Math.atan2(-w.insideX,-w.insideZ)).translate(bx,.4,bz),'wood');}
     // Light through the lattice: static floor patches need no additional shadow pass.
     if(luminous){
       for(let row=0;row<5;row++)for(let col=-3;col<=3;col++){
@@ -371,12 +372,16 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
     // Small andon fixtures tuck into the existing wall face, away from doorways.
     if(!w.twoSided&&variation===1&&Math.abs(Math.round((w.x+w.z)/2))%5===0){
-      const px=w.x+w.insideX*.22,pz=w.z+w.insideZ*.22;
+      // The former frame sat behind the .26 m facing, leaving a floating bright
+      // rectangle. Mount the housing outside it, still inside player clearance.
+      const px=w.x+w.insideX*.36,pz=w.z+w.insideZ*.36;
+      const fx=px+w.insideX*.073,fz=pz+w.insideZ*.073;
       box(px,.16,pz,w.alongX?.46:.13,.15,w.alongX?.13:.46,'dark');
       box(px,.65,pz,w.alongX?.36:.12,.72,w.alongX?.12:.36,'light');
-      for(const side of [-1,1])box(px+(w.alongX?side*.2:0),.65,pz+(w.alongX?0:side*.2),.035,.88,.035,'dark');
+      for(const side of [-1,1])box(fx+(w.alongX?side*.19:0),.65,fz+(w.alongX?0:side*.19),.026,.82,.026,'dark');
+      for(const y of [.45,.82])box(fx,y,fz,w.alongX?.36:.018,.018,w.alongX?.018:.36,'wood');
       for(const y of [.25,1.05])box(px,y,pz,w.alongX?.44:.16,.055,w.alongX?.16:.44,'dark');
-      fixture(px+w.insideX*.25,.8,pz+w.insideZ*.25,'#f1a052');
+      fixture(px+w.insideX*.18,.8,pz+w.insideZ*.18,'#f1a052');
     }
   }
   for(const n of layout.narrows){
