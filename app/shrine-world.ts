@@ -13,6 +13,7 @@ import {buildNarrowInterior,NARROW_LAMP} from './narrow-interior.ts';
 import {chamferedBox} from './chamfered-box.ts';
 import {wainscot} from './wainscot.ts';
 import {waterFinish} from './water-finish.ts';
+import {exteriorRoofSites,exteriorRoof} from './exterior-roofs.ts';
 import {finiteFixture,finiteSceneFixtures,pendingFixtureFinish} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -136,6 +137,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     rock:new THREE.MeshStandardMaterial({color:'#525b59',roughness:.91}),
     earth:new THREE.MeshStandardMaterial({color:'#443d2b',roughness:1}),
     bank:new THREE.MeshStandardMaterial({color:'#b0b8a4',roughness:1}),
+    roofMetal:new THREE.MeshStandardMaterial({color:'#616e6a',roughness:.88,metalness:.12}),
     grass:new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.94,vertexColors:true,side:THREE.DoubleSide}),
   };
   for(const [name,material] of Object.entries(mats))material.name=name;
@@ -452,6 +454,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const water=new THREE.Mesh(new THREE.PlaneGeometry(4.85,6.85),new THREE.MeshPhysicalMaterial({color:'#17332f',metalness:0,roughness:.13,ior:1.333,clearcoat:0}));water.rotation.x=-Math.PI/2;water.position.set(poolPosition.x,.024,poolPosition.z);scene.add(water);
   waterFinish(water.material,waterClock);
   const scannedPlacements:ScannedPlacement[]=[];
+  if(stage==='outer')for(const r of exteriorRoofSites(layout.rooms,layout.cells)){
+    const x=(r.x1+r.x2)*2,z=(r.z1+r.z2)*2,y=r.h+.24;
+    const roof=exteriorRoof((r.x2-r.x1+1)*4+.5,(r.z2-r.z1+1)*4+.5);
+    add(roof.metal.translate(x,y,z),'roofMetal');add(roof.gables.translate(x,y,z),'wood');add(roof.trim.translate(x,y,z),'dark');
+  }
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
     if(circus){buildCircusRoom(room,add,block,circusFixture,room.id===altarRoom.id);continue;}
@@ -678,7 +685,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const interior=(id:string,targets:THREE.MeshStandardMaterial[],normalStrength:number,tint:string)=>surfaces.add('/materials/interior/'+id+'/'+id+'_diff_1k.jpg',targets,{tint,normal:'/materials/interior/'+id+'/'+id+'_nor_gl_1k.jpg',roughness:'/materials/interior/'+id+'/'+id+'_rough_1k.jpg',normalStrength,lowSize:256});
   interior('decrepit_wallpaper',[mats.paper],.35,'#d7cdb9');
   interior('tatami_mat',[mats.tatami],.45,'#d2c8a7');
-  photographic('rust_coarse_01',[mats.rust],'#d0b8a3',false,.7);
+  mats.rust.color.set('#d0b8a3');photographic('rust_coarse_01',[mats.rust,mats.roofMetal],undefined,false,.7);
   mats.pavement.color.set('#9caaa4');
   photographic('cobblestone_floor_001',[mats.pavement,mats.wetPavement],undefined,true,.9);
   photographic('concrete_floor_worn_001',[mats.concrete],gothic?'#898893':'#c1c1b7',false,.7);
