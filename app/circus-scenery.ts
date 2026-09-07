@@ -82,13 +82,19 @@ function buildCanopyPanels(add:CircusAdd){
   for(let radial=0;radial<=radialSteps;radial++)for(const angle of angles){
    const t=radial/radialSteps,r=34/Math.max(Math.abs(Math.sin(angle)),Math.abs(Math.cos(angle))),x=Math.sin(angle)*r*t,z=Math.cos(angle)*r*t;
    // Sag is zero at every seam and at apex/eave, continuous across every panel.
-   const sag=.14*Math.sin(Math.PI*t)*Math.sin(Math.PI*(angle-a0)/(a1-a0));
+   const panelU=(angle-a0)/(a1-a0);
+   const sag=(.60*Math.sin(Math.PI*t)+.035*Math.sin(6*Math.PI*t))*Math.sin(Math.PI*panelU);
    p.push(x,circusRoofHeight(x,z)-sag,z);uv.push(x,z);
   }
   for(let radial=0;radial<radialSteps;radial++)for(let j=0;j<columns-1;j++){
    const a=radial*columns+j,b=a+columns;idx.push(a,b,b+1);if(radial>0)idx.push(a,b+1,a+1);
   }
   const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2));g.setIndex(idx);g.computeVertexNormals();g.userData.surfaceUV='authored';g.userData.circusCanopyPanel=panel;add(g,panel%2?'circusRed':'circusIvory');
+  // Sewn-in reinforcing cord follows each shared radial seam beneath the cloth.
+  // Stop short of the crown so twenty cords cannot pile up at one vertex.
+  const seamRadius=34/Math.max(Math.abs(Math.sin(a0)),Math.abs(Math.cos(a0)));
+  const seamPoint=(r:number)=>{const x=Math.sin(a0)*r,z=Math.cos(a0)*r;return new THREE.Vector3(x,circusRoofHeight(x,z)-.035,z);};
+  rod(add,seamPoint(.8),seamPoint(seamRadius-.06),.018,'rope');
  }
 }
 /** Static rails, boarding marks, control hardware and a complete radial-panel big top.
@@ -136,5 +142,6 @@ export function buildCircusScenery(plan:CircusPlan,layout:Layout,add:CircusAdd,f
  // A suspended rigging crown makes the square canopy read as an old circus tent.
  const crown=new THREE.TorusGeometry(.7,.045,6,24);crown.rotateX(Math.PI/2);crown.translate(0,10.9,0);add(crown,'circusMetal');
 }
+
 
 
