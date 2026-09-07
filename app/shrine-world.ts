@@ -204,8 +204,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         add(new THREE.BoxGeometry(w,Math.max(.002,h-TATAMI.maxRise),d).translate(x,y-TATAMI.maxRise/2,z),'wood');return;
       }
     }
-    const size=[w,h,d].sort((a,b)=>a-b),beveled=m==='wood'&&size[0]>.08&&size[1]<.25&&size[2]>1;
-    add((beveled?chamferedBox(w,h,d):new THREE.BoxGeometry(w,h,d)).translate(x,y,z),m);
+    const size=[w,h,d].sort((a,b)=>a-b),beveled=(m==='wood'||m==='dark')&&size[0]>.08&&size[1]<.35&&size[2]>1;
+    add((beveled?chamferedBox(w,h,d,Math.min(.008,size[0]*.08)):new THREE.BoxGeometry(w,h,d)).translate(x,y,z),m);
   };
   const cylinder=(x:number,y:number,z:number,r:number,h:number,m:MaterialKey,r2=r)=>add(new THREE.CylinderGeometry(r,r2,h,12).translate(x,y,z),m);
   const jar=(x:number,y:number,z:number)=>{add(ceramicJar().translate(x,y,z),'pottery');const seal=ceramicSeal(x*.7+z);add(seal.paper.translate(x,y,z),'paper');add(seal.cord.translate(x,y,z),'rope');};
@@ -855,6 +855,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
+
 
 
 
