@@ -18,6 +18,7 @@ import {outdoorTimberBay,outdoorTimberFinish} from './outdoor-timber.ts';
 import {prepareNightSky} from './night-sky.ts';
 import {plankFloor} from './plank-floor.ts';
 import {OutdoorReflection,reflectedWaterFinish,waterReflectionUniforms} from './outdoor-reflection.ts';
+import {ceramicJar} from './ceramic-jar.ts';
 import {finiteFixture,finiteSceneFixtures,pendingFixtureFinish} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -143,6 +144,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     bank:new THREE.MeshStandardMaterial({color:'#b0b8a4',roughness:1}),
     roofMetal:new THREE.MeshStandardMaterial({color:'#616e6a',roughness:.88,metalness:.12}),
     outdoorTimber:new THREE.MeshStandardMaterial({color:'#b3b4ad',roughness:.98,vertexColors:true}),
+    pottery:new THREE.MeshPhysicalMaterial({color:'#637066',roughness:.42,metalness:0,ior:1.48,clearcoat:.8,clearcoatRoughness:.23}),
     grass:new THREE.MeshStandardMaterial({color:'#ffffff',roughness:.94,vertexColors:true,side:THREE.DoubleSide}),
   };
   for(const [name,material] of Object.entries(mats))material.name=name;
@@ -206,6 +208,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     add((beveled?chamferedBox(w,h,d):new THREE.BoxGeometry(w,h,d)).translate(x,y,z),m);
   };
   const cylinder=(x:number,y:number,z:number,r:number,h:number,m:MaterialKey,r2=r)=>add(new THREE.CylinderGeometry(r,r2,h,12).translate(x,y,z),m);
+  const jar=(x:number,y:number,z:number)=>add(ceramicJar().translate(x,y,z),'pottery');
   const block=(x:number,z:number,w:number,d:number,maxY=3.4)=>obstacles.push({minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2,maxY});
   const natureRandom=seededRandom(seed^0x72851);
   const rock=(x:number,y:number,z:number,w:number,h:number,d:number)=>{
@@ -481,7 +484,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
     if(circus){buildCircusRoom(room,add,block,circusFixture,room.id===altarRoom.id);continue;}
-    if(room.themeId){gothicRoomProps=room.themeId.startsWith('orchestra-');buildHorrorArea(room,{box,cylinder,fixture,block},room.id===altarRoom.id);gothicRoomProps=false;continue;}
+    if(room.themeId){gothicRoomProps=room.themeId.startsWith('orchestra-');buildHorrorArea(room,{box,cylinder,fixture,block,jar},room.id===altarRoom.id);gothicRoomProps=false;continue;}
     if(room.id===altarRoom.id)continue;
     const cx=(room.x1+room.x2)*2,cz=(room.z1+room.z2)*2;
     lantern(cx,room.h-.7,cz,true);box(cx,room.h-.2,cz,.03,.8,.03,'dark');
@@ -702,7 +705,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   mats.planks.color.set('#d8c5ad');mats.wood.color.set('#d9d0c2');mats.dark.color.set('#afa596');
   photographic('wood_planks',[mats.planks,mats.wood,mats.dark,mats.outdoorTimber],gothic?'#847d74':undefined,true,.65);
   photographic('rock_face_03',[mats.rock],'#b6b2a7',true,.8);
-  photographic('clay_plaster',[mats.plaster],'#c8b49b',true,.6);
+  mats.plaster.color.set('#c8b49b');photographic('clay_plaster',[mats.plaster,mats.pottery],undefined,true,.6);
   const interior=(id:string,targets:THREE.MeshStandardMaterial[],normalStrength:number,tint:string)=>surfaces.add('/materials/interior/'+id+'/'+id+'_diff_1k.jpg',targets,{tint,normal:'/materials/interior/'+id+'/'+id+'_nor_gl_1k.jpg',roughness:'/materials/interior/'+id+'/'+id+'_rough_1k.jpg',normalStrength,lowSize:256});
   interior('decrepit_wallpaper',[mats.paper],.35,'#d7cdb9');
   interior('tatami_mat',[mats.tatami],.45,'#d2c8a7');
