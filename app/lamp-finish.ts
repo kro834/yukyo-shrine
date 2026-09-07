@@ -1,9 +1,11 @@
-import type {MeshStandardMaterial} from 'three';
+import type {MeshStandardMaterial,PointsMaterial} from 'three';
 
-/** Thin shade transmission: filtered fibres remain visible in the emission itself. */
+/** Shade-only photographic response. World exposure, fixture pools, shadows and
+ * scene illumination are intentionally unaffected. UV.y is normalized shade height.
+ */
 export function lampFinish(material:MeshStandardMaterial,kind:'paper'|'diffuser'){
  const previous=material.onBeforeCompile,previousKey=material.customProgramCacheKey();
- material.customProgramCacheKey=()=>`lamp-transmission-v2-${kind}-${previousKey}`;
+ material.customProgramCacheKey=()=>`lamp-transmission-v3-${kind}-${previousKey}`;
  material.onBeforeCompile=(shader,renderer)=>{
   previous.call(material,shader,renderer);
   shader.vertexShader='varying vec3 lampPosition;\nvarying vec2 lampUv;\n'+shader.vertexShader;
@@ -14,11 +16,39 @@ export function lampFinish(material:MeshStandardMaterial,kind:'paper'|'diffuser'
    float lampFiltered(vec3 p){vec3 footprint=fwidth(p);float visibility=1.0-smoothstep(.15,.55,max(max(footprint.x,footprint.y),footprint.z));return mix(.5,lampNoise(p),visibility);}
   `+shader.fragmentShader;
   shader.fragmentShader=shader.fragmentShader.replace('#include <emissivemap_fragment>',`#include <emissivemap_fragment>
-   float lampCloud=lampFiltered(lampPosition*5.0),lampGrain=lampFiltered(lampPosition*vec3(${kind==='paper'?'175.0,24.0,175.0':'110.0'}));
-   float lampEnd=smoothstep(0.0,.14,lampUv.y)*smoothstep(0.0,.14,1.0-lampUv.y);
-   float lampTransmission=${kind==='paper'?'.66+.24*lampCloud+.10*lampGrain':'.78+.12*lampCloud+.04*lampGrain'};
-   totalEmissiveRadiance*=lampTransmission${kind==='diffuser'?'*mix(.77,1.0,lampEnd)':''};
-   diffuseColor.rgb*=.92+.08*lampCloud;
+   float lampCloud=lampFiltered(lampPosition*6.0);
+   float lampGrain=lampFiltered(lampPosition*vec3(${kind==='paper'?'175.0,24.0,175.0':'110.0'}));
+   float lampV=clamp(lampUv.y,0.0,1.0);
+   float lampEnds=smoothstep(0.0,.16,lampV)*smoothstep(0.0,.16,1.0-lampV);
+   float lampCore=exp(-pow((lampV-.54)/.27,2.0));
+   float lampDensity=${kind==='paper'?'.20+.52*(1.0-lampCloud)+.16*(1.0-lampGrain)':'.16+.22*(1.0-lampCloud)+.06*(1.0-lampGrain)'};
+   float lampTransmission=exp(-lampDensity)*${kind==='paper'?'mix(.48,.80,lampEnds)*(1.0+.52*lampCore)':'mix(.66,1.0,lampEnds)'};
+   totalEmissiveRadiance*=lampTransmission;
+   ${kind==='paper'?'totalEmissiveRadiance*=mix(vec3(1.0,.63,.31),vec3(1.0,.91,.73),lampCore);':''}
+   diffuseColor.rgb*=.81+.19*lampCloud;
   `);
+  // Preserve shadow/incident-light direction while softening ONLY reflected light
+  // on thin glowing paper. A nearby flashlight must not erase the transmission.
+  shader.fragmentShader=shader.fragmentShader.replace('vec3 outgoingLight = totalDiffuse + totalSpecular + totalEmissiveRadiance;',`
+   vec3 lampReflection=totalDiffuse+totalSpecular;
+   float lampReflectedPeak=max(max(lampReflection.r,lampReflection.g),lampReflection.b);
+   lampReflection/=1.0+lampReflectedPeak/${kind==='paper'?'.72':'1.05'};
+   vec3 outgoingLight=lampReflection+totalEmissiveRadiance;
+  `);
+ };
+}
+
+/** A local lens halo should disappear while inspecting the shade, but retain its
+ * existing material intensity and colour at normal/distant viewing ranges.
+ */
+export function lampHaloFinish(material:PointsMaterial){
+ const previous=material.onBeforeCompile,previousKey=material.customProgramCacheKey();
+ material.customProgramCacheKey=()=>`lamp-halo-distance-v1-${previousKey}`;
+ material.onBeforeCompile=(shader,renderer)=>{
+  previous.call(material,shader,renderer);
+  shader.vertexShader='varying float lampHaloDistance;\n'+shader.vertexShader;
+  shader.vertexShader=shader.vertexShader.replace('#include <project_vertex>','#include <project_vertex>\nlampHaloDistance=length(mvPosition.xyz);');
+  shader.fragmentShader='varying float lampHaloDistance;\n'+shader.fragmentShader;
+  shader.fragmentShader=shader.fragmentShader.replace('#include <color_fragment>','#include <color_fragment>\ndiffuseColor.a*=smoothstep(1.4,4.5,lampHaloDistance);');
  };
 }

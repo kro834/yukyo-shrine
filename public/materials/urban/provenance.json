@@ -1,0 +1,123 @@
+{
+  "id": "concrete_wall_007",
+  "page": "https://polyhaven.com/a/concrete_wall_007",
+  "license": "CC0-1.0",
+  "licenseUrl": "https://polyhaven.com/license",
+  "retrieved": "2026-09-08",
+  "info": {
+    "name": "Concrete Wall 007",
+    "categories": [
+      "outdoor",
+      "man made",
+      "wall",
+      "plaster-concrete",
+      "concrete",
+      "plaster"
+    ],
+    "type": 1,
+    "tags": [
+      "rough",
+      "old",
+      "weathered",
+      "wall",
+      "worn",
+      "damaged",
+      "chipped",
+      "discolored",
+      "cracked",
+      "stained",
+      "dirty",
+      "dry",
+      "plaster",
+      "scratched",
+      "concrete",
+      "plastered",
+      "cement",
+      "grey"
+    ],
+    "info": null,
+    "dimensions": [
+      2159.9998474121094,
+      2159.9998474121094
+    ],
+    "date_published": 1674086400,
+    "staging": null,
+    "max_resolution": [
+      8192,
+      8192
+    ],
+    "files_hash": "c5e1c8435799f08d174a94c5e73d43e955572a10",
+    "authors": {
+      "Dario Barresi": "Processing",
+      "Rico Cilliers": "Tiling",
+      "Charlotte Baglioni": "Photography"
+    },
+    "description": "Free 8K texture of weathered concrete wall with plaster patches: rough, pitted surface, horizontal formboard lines, cracks, chips, stains and dirty grey tones.",
+    "category_id": "0a7b70c3-bc79-531b-8cf3-cadeb4cbf686",
+    "category": "Concrete/Cast Walls & Floors/Bare Cast",
+    "attributes": {
+      "surface_use": "wall",
+      "condition": [
+        "weathered",
+        "cracked",
+        "damaged",
+        "worn"
+      ],
+      "origin": "man_made",
+      "setting": "outdoor"
+    },
+    "img_version": "eac7f867",
+    "download_count": 84355,
+    "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/concrete_wall_007.png?width=256&height=256"
+  },
+  "files": [
+    {
+      "res": "1k",
+      "kind": "Diffuse",
+      "name": "concrete_wall_007_diff_1k.jpg",
+      "size": 654485,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_007/concrete_wall_007_diff_1k.jpg",
+      "md5": "f8a951200ebe1a42ba57ef331d94f8e2"
+    },
+    {
+      "res": "1k",
+      "kind": "nor_gl",
+      "name": "concrete_wall_007_nor_gl_1k.jpg",
+      "size": 602349,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_007/concrete_wall_007_nor_gl_1k.jpg",
+      "md5": "7d62088fb4f40833226cdb2a09476a58"
+    },
+    {
+      "res": "1k",
+      "kind": "Rough",
+      "name": "concrete_wall_007_rough_1k.jpg",
+      "size": 563812,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/concrete_wall_007/concrete_wall_007_rough_1k.jpg",
+      "md5": "57fc45c0410543a5117bbfab360e040a"
+    },
+    {
+      "res": "2k",
+      "kind": "Diffuse",
+      "name": "concrete_wall_007_diff_2k.jpg",
+      "size": 2926629,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_wall_007/concrete_wall_007_diff_2k.jpg",
+      "md5": "0805d124f36cc6c8408b66e4c49b8c50"
+    },
+    {
+      "res": "2k",
+      "kind": "nor_gl",
+      "name": "concrete_wall_007_nor_gl_2k.jpg",
+      "size": 2572385,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_wall_007/concrete_wall_007_nor_gl_2k.jpg",
+      "md5": "6f85128b9b5704228f865b090561163f"
+    },
+    {
+      "res": "2k",
+      "kind": "Rough",
+      "name": "concrete_wall_007_rough_2k.jpg",
+      "size": 2361386,
+      "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/concrete_wall_007/concrete_wall_007_rough_2k.jpg",
+      "md5": "6579780dfb9a3ddf22bc883fb1af4cf4"
+    }
+  ]
+}

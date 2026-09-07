@@ -38,7 +38,7 @@ import {FixtureLighting} from './fixture-lighting.ts';
 import {FixtureShadow} from './fixture-shadow.ts';
 import {fieldGround,fieldSurfaceHeight} from './field-ground.ts';
 import {terrainFinish} from './terrain-finish.ts';
-import {lampFinish} from './lamp-finish.ts';
+import {lampFinish,lampHaloFinish} from './lamp-finish.ts';
 import {lanternBody} from './lantern-body.ts';
 import {gothicArch,buildGothicWall} from './gothic-architecture.ts';
 import {ORCHESTRA_AREA_NAMES} from './orchestra-layout.ts';
@@ -99,6 +99,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     tatami:new THREE.MeshStandardMaterial({color:'#727253',roughness:.95}),
     tatamiTrim:new THREE.MeshStandardMaterial({color:'#243421',roughness:1}),
     concrete:new THREE.MeshStandardMaterial({color:'#454946',roughness:.94}),
+    concreteWall:new THREE.MeshStandardMaterial({color:'#b4b6ad',roughness:1}),
+    civicPaint:new THREE.MeshStandardMaterial({color:'#414b47',roughness:.76,metalness:.04}),
+    civicEnamel:new THREE.MeshStandardMaterial({color:'#a0a99e',roughness:.54,metalness:.04}),
+    civicGlass:new THREE.MeshPhysicalMaterial({color:'#b6c5c0',roughness:.29,metalness:0,transparent:true,opacity:.23}),
     rust:new THREE.MeshStandardMaterial({color:'#713d27',roughness:.85,metalness:.4}),
     steel:new THREE.MeshStandardMaterial({color:'#29393c',roughness:.56,metalness:.8}),
     tile:new THREE.MeshStandardMaterial({color:'#829791',roughness:.32,metalness:0}),
@@ -116,6 +120,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   for(const [name,material] of Object.entries(mats))material.name=name;
   agedFinish(mats.paper,'paper');agedFinish(mats.plaster,'plaster');agedFinish(mats.tatami,'tatami');
   fabricFinish(mats.tatamiTrim);mats.tatamiTrim.color.set('#243421');
+  agedFinish(mats.concreteWall,'plaster');agedFinish(mats.civicPaint,'lacquer');agedFinish(mats.civicEnamel,'lacquer');
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
   terrainFinish(mats.earth);terrainFinish(mats.rock);
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
@@ -124,6 +129,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   let groundGeometry=true,gothicRoomProps=false;
   const add=(g:THREE.BufferGeometry,m:MaterialKey)=>{
     if(gothic){if(m==='tatami')m='stone';else if(m==='paper'&&!gothicRoomProps)m='red';else if(m==='plaster')m='concrete';}
+    if(!gothic&&m==='concrete'){
+      g.computeBoundingBox();const b=g.boundingBox!;
+      if(b.max.y-b.min.y>.6&&Math.min(b.max.x-b.min.x,b.max.z-b.min.z)<1.25)m='concreteWall';
+    }
     if(groundGeometry&&!g.userData.caveSurface){g.computeBoundingBox();const b=g.boundingBox!;
       if(b.max.y>4.5&&belowUpperDeck(b.min.x,b.max.x,b.min.z,b.max.z)){
         if(b.min.y>=4.5){g.dispose();return;}
@@ -131,8 +140,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       }
     }
     // World-scale UVs avoid stretched grain on walls, beams and long pipes.
-    if(g.userData.surfaceUV!=='authored'&&['pavement','wetPavement','tile','planks','wood','red','dark','concrete','rust','steel','stone','rock','earth','plaster','paper','tatami'].includes(m)){
-      const scale=(m==='pavement'||m==='wetPavement')?1/2.4:m==='rust'?1/2.2:m==='concrete'?1/3:m==='planks'?1/1.5:m==='rock'?1/2.7:m==='plaster'?1/2:m==='earth'?1:['wood','red','dark'].includes(m)?.38:.3;
+    if(g.userData.surfaceUV!=='authored'&&['pavement','wetPavement','tile','planks','wood','red','dark','concrete','concreteWall','rust','steel','stone','rock','earth','plaster','paper','tatami'].includes(m)){
+      const scale=(m==='pavement'||m==='wetPavement')?1/2.4:m==='rust'?1/2.2:m==='concreteWall'?1/2.16:m==='concrete'?1/3:m==='planks'?1/1.5:m==='rock'?1/2.7:m==='plaster'?1/2:m==='earth'?1:['wood','red','dark'].includes(m)?.38:.3;
       surfaceUV(g,scale,['wood','dark'].includes(m)?'timber-photo':m==='red'?'timber':m==='planks'?'floor':undefined);
     }
     g.computeBoundingBox();const center=g.boundingBox!.getCenter(new THREE.Vector3());
@@ -476,7 +485,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
   }
   if(landforms){
-    obstacles.push(...buildCivicScene(civicSites,add,landforms.height));
+    obstacles.push(...buildCivicScene(civicSites,(g,m)=>add(g,m==='planks'?'wood':m==='dark'?'civicPaint':m==='enamel'?'civicEnamel':m==='glass'?'civicGlass':m),landforms.height));
     for(const s of civicSites)if(s.id==='railway-underpass-bay'){
       const a=s.quarterTurns*Math.PI/2;fixture(s.x+1.58*Math.cos(a),2.78,s.z+1.58*Math.sin(a),'#a0b6b8');
     }
@@ -589,6 +598,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const glowCanvas=document.createElement('canvas');glowCanvas.width=64;glowCanvas.height=64;const ctx=glowCanvas.getContext('2d')!;
   const grad=ctx.createRadialGradient(32,32,0,32,32,32);grad.addColorStop(0,'rgba(255,178,78,.36)');grad.addColorStop(.3,'rgba(255,112,31,.10)');grad.addColorStop(1,'rgba(255,100,20,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,64,64);
   const glowTex=new THREE.CanvasTexture(glowCanvas),glowMat=new THREE.PointsMaterial({map:glowTex,color:'#ffffff',size:1.1,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
+  lampHaloFinish(glowMat);
   const glowGeometry=new THREE.BufferGeometry().setFromPoints(lanterns.filter(p=>!fixtureColors.has(p)));scene.add(new THREE.Points(glowGeometry,glowMat));
   let lastLight=-Infinity,lastLightFrame=0,disposed=false,configuredQuality:Preferences['quality']|null=null;const direction=new THREE.Vector3(),moodTarget=new THREE.Color('#080c0d');
   let effects:ReturnType<typeof createEffects>|undefined;
@@ -616,6 +626,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   mats.pavement.color.set('#9caaa4');
   photographic('cobblestone_floor_001',[mats.pavement,mats.wetPavement],undefined,true,.9);
   photographic('concrete_floor_worn_001',[mats.concrete],gothic?'#898893':'#c1c1b7',false,.7);
+  const wallRoot='/materials/urban/concrete_wall_007';
+  if(!gothic)surfaces.add(wallRoot+'_diff_1k.jpg',[mats.concreteWall],{tint:'#b4b6ad',normal:wallRoot+'_nor_gl_1k.jpg',roughness:wallRoot+'_rough_1k.jpg',normalStrength:.65,preserveFinish:true,ultra:{full:wallRoot+'_diff_2k.jpg',normal:wallRoot+'_nor_gl_2k.jpg',roughness:wallRoot+'_rough_2k.jpg'}});
   surfaces.add('/materials/outer/grass_path_2_diff_1k.jpg',[mats.earth],{tint:'#a4a38c',normal:'/materials/outer/grass_path_2_nor_gl_1k.jpg',roughness:'/materials/outer/grass_path_2_rough_1k.jpg',normalStrength:.7,preserveFinish:true});
   mats.concrete.roughness=1;mats.stone.roughness=.78;mats.stone.metalness=0;
   mats.rock.roughness=1;mats.plaster.roughness=1;mats.rust.roughness=1;mats.rust.metalness=0;mats.steel.roughness=.7;

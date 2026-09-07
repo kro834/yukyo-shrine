@@ -20,6 +20,11 @@ test('changing effect quality releases every bloom high-pass filter exactly once
 test('both fitted lantern bodies have nondegenerate indexed surfaces and visible outward faces',()=>{
  for(const large of [false,true]){
   const body=lanternBody(large);
+  const shadePosition=body.shade.getAttribute('position'),shadeUV=body.shade.getAttribute('uv');
+  body.shade.computeBoundingBox();const {min,max}=body.shade.boundingBox!;
+  for(let i=0;i<shadeUV.count;i++)assert.ok(Math.abs(shadeUV.getY(i)-(shadePosition.getY(i)-min.y)/(max.y-min.y))<1e-6,'each shade must map bottom-to-top independently of its size');
+  const placed=body.shade.clone().translate(76,7.5,-152);
+  assert.deepEqual(Array.from(placed.getAttribute('uv').array),Array.from(shadeUV.array),'placing a lantern must preserve its internal light gradient');placed.dispose();
   for(const g of [body.shade,body.caps,body.ribs]){
    assert.ok(g.index);const p=g.getAttribute('position'),n=g.getAttribute('normal');
    for(let i=0;i<p.count;i++){assert.ok(Number.isFinite(p.getX(i)+p.getY(i)+p.getZ(i)));assert.ok(Math.abs(new THREE.Vector3().fromBufferAttribute(n,i).length()-1)<.001);assert.ok(p.getY(i)>=body.bottom-1e-6&&p.getY(i)<=body.top+1e-6);}

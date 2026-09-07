@@ -31,6 +31,9 @@ export function lanternBody(large=false){
   g.setIndex(indices);g.normalizeNormals();g.userData.surfaceUV='authored';return g;
  };
  const shade=lathe(profile.map(([y,rad])=>new THREE.Vector2(rad*r,y*h)),.3);
+ // Transmission follows each shade from its lower cap to its upper cap.
+ const shadeUv=shade.getAttribute('uv'),shadePosition=shade.getAttribute('position');
+ for(let i=0;i<shadeUv.count;i++)shadeUv.setY(i,shadePosition.getY(i)/h+.5);
  const capRadius=r*.88,capHeight=large?.065:.045;
  const cap=(y:number)=>lathe([
   new THREE.Vector2(0,y-capHeight/2),

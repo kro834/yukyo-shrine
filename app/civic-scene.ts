@@ -9,20 +9,18 @@ export function buildCivicScene(sites:readonly CivicSite[],add:(g:THREE.BufferGe
  const colliders:Obstacle[]=[];
  for(const site of sites){
   const kit=createCivicLandmark(site.id),angle=site.quarterTurns*Math.PI/2;
-  const point=(x:number,z:number)=>({x:site.x+x*.5*Math.cos(angle)-z*Math.sin(angle),z:site.z+x*.5*Math.sin(angle)+z*Math.cos(angle)});
+  const point=(x:number,z:number)=>({x:site.x+x*Math.cos(angle)-z*Math.sin(angle),z:site.z+x*Math.sin(angle)+z*Math.cos(angle)});
   for(const part of kit.parts){
    let g:THREE.BufferGeometry;
-   if(part.kind==='box'){
-    const floor=part.x===0&&part.y===.04&&part.w===8&&part.d===12;
-    g=new THREE.BoxGeometry(part.w,part.h,part.d).translate(part.x,floor?-.04:part.y,part.z);
-   }else if(part.kind==='beveledBox')g=chamferedBox(part.w,part.h,part.d,part.radius).rotateY(-(part.yaw??0)).translate(part.x,part.y,part.z);
+   if(part.kind==='box')g=new THREE.BoxGeometry(part.w,part.h,part.d).translate(part.x,part.y,part.z);
+   else if(part.kind==='beveledBox')g=chamferedBox(part.w,part.h,part.d,part.radius).rotateY(-(part.yaw??0)).translate(part.x,part.y,part.z);
    else if(part.kind==='cylinder')g=new THREE.CylinderGeometry(part.r,part.rb,part.h,part.segments).translate(part.x,part.y,part.z);
    else {
     const from=new THREE.Vector3(...part.from),to=new THREE.Vector3(...part.to),delta=to.clone().sub(from);
     g=new THREE.CylinderGeometry(part.radius,part.radius,delta.length(),part.segments,1,true);
     g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0,1,0),delta.normalize()));g.translate(...from.add(to).multiplyScalar(.5).toArray());
    }
-   g.scale(.5,1,1).rotateY(-angle).translate(site.x,0,site.z);add(g,part.material);
+   g.rotateY(-angle).translate(site.x,0,site.z);add(g,part.material);
   }
   const rect=(r:{minX:number;maxX:number;minZ:number;maxZ:number})=>{
    const ps=[point(r.minX,r.minZ),point(r.maxX,r.minZ),point(r.maxX,r.maxZ),point(r.minX,r.maxZ)];
