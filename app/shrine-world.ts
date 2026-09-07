@@ -18,7 +18,7 @@ import {outdoorTimberBay,outdoorTimberFinish} from './outdoor-timber.ts';
 import {prepareNightSky} from './night-sky.ts';
 import {plankFloor} from './plank-floor.ts';
 import {OutdoorReflection,reflectedWaterFinish,waterReflectionUniforms} from './outdoor-reflection.ts';
-import {ceramicJar} from './ceramic-jar.ts';
+import {ceramicJar,ceramicSeal} from './ceramic-jar.ts';
 import {finiteFixture,finiteSceneFixtures,pendingFixtureFinish} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -208,7 +208,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     add((beveled?chamferedBox(w,h,d):new THREE.BoxGeometry(w,h,d)).translate(x,y,z),m);
   };
   const cylinder=(x:number,y:number,z:number,r:number,h:number,m:MaterialKey,r2=r)=>add(new THREE.CylinderGeometry(r,r2,h,12).translate(x,y,z),m);
-  const jar=(x:number,y:number,z:number)=>add(ceramicJar().translate(x,y,z),'pottery');
+  const jar=(x:number,y:number,z:number)=>{add(ceramicJar().translate(x,y,z),'pottery');const seal=ceramicSeal(x*.7+z);add(seal.paper.translate(x,y,z),'paper');add(seal.cord.translate(x,y,z),'rope');};
   const block=(x:number,z:number,w:number,d:number,maxY=3.4)=>obstacles.push({minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2,maxY});
   const natureRandom=seededRandom(seed^0x72851);
   const rock=(x:number,y:number,z:number,w:number,h:number,d:number)=>{
@@ -852,3 +852,4 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
+

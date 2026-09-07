@@ -58,7 +58,7 @@ export function buildHorrorArea(r:Room,b:Builder,reserved=false){
    case 13: for(let j=-4;j<=4;j++)beam(j*.2,1.4,0,.035,2.8,.035,'rust');for(const y of [.12,1.4,2.72])beam(0,y,0,1.7,.06,.1,'rust');break;
    case 14: for(const j of [-.46,.46]){vessel(j,.29,0,.32,.52,'wood');vessel(j,.565,0,.28,.008,'dark');vessel(j,.3,0,.335,.035,'rust');}break;
    case 15: beam(0,1.6,-.08,1.65,1.8,.035,'washiLit');for(let j=0;j<5;j++)beam(0,.85+j*.35,0,1.7,.31,.08,'wood');break;
-   case 16: for(let j=-1;j<=1;j++){if(b.jar)b.jar(x+j*.52,.43,z);else vessel(j*.52,.43,0,.17,.68,'tile',.27);vessel(j*.52,.82,0,.15,.13,'paper');beam(j*.52,.9,0,.32,.04,.28,'rope');}break;
+   case 16: for(let j=-1;j<=1;j++){if(b.jar)b.jar(x+j*.52,.43,z);else {vessel(j*.52,.43,0,.17,.68,'tile',.27);vessel(j*.52,.82,0,.15,.13,'paper');beam(j*.52,.9,0,.32,.04,.28,'rope');}}break;
    case 17: for(let j=-2;j<=2;j++)for(let k=0;k<3+Math.abs(j);k++)vessel(j*.32,.1+k*.055,0,.14,.035,'tile');break;
    case 18: for(let j=-1;j<=1;j++){beam(j*.5,1.4,0,.045,2.5,.08,'wood');vessel(j*.5,1.6,0,.12,.33,'tile',.095);beam(j*.5-.04,1.66,.115,.025,.04,.015,'dark');beam(j*.5+.04,1.66,.115,.025,.04,.015,'dark');}break;
    case 19: beam(0,3.1,0,1.5,.18,.25,'rust');for(let j=0;j<12;j++){beam(0,2.85-j*.12,j%2?.025:-.025,.07,.09,.065,'rust');}beam(0,.25,0,1.2,.5,.9,'wood');break;
@@ -77,3 +77,4 @@ export function buildHorrorArea(r:Room,b:Builder,reserved=false){
   if(![0,7,11,23,26,28].includes(n))block(x,z,1.85,1.5,2.5);
  }
 }
+
