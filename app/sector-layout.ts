@@ -34,7 +34,7 @@ export function createSectorLayout(seed=1,stage:StageId='shrine'){
  const connections=sectorConnections(random,profile.links);
  const fourRooms=new Set(mix(Array.from({length:25},(_,i)=>i).filter(i=>i!==13)).slice(0,12));
  for(let row=0;row<5;row++)for(let col=0;col<5;col++){
-  const index=row*5+col,cx=(col-2)*19,cz=(row-2)*19,kind=kinds[index],h=stage==='orchestra'?(kind==='cave'?3.8:kind==='hall'||kind==='stone'?5.8:4.6):kind==='cave'?(stage==='abyss'?3.25:4.8):kind==='field'?7.5:kind==='yokocho'?4.5:3.8;
+  const index=row*5+col,cx=(col-2)*19,cz=(row-2)*19,kind=kinds[index],h=stage==='orchestra'?(kind==='cave'?3.8:kind==='hall'||kind==='stone'?5.8:4.6):stage==='abyss'?(kind==='cistern'?5.2:kind==='cave'||kind==='field'?3.15:3.4):kind==='cave'?4.8:kind==='field'?7.5:kind==='yokocho'?4.5:3.8;
   const sector:Sector={id:`sector-${row+1}-${col+1}`,row,col,x1:cx-8,x2:cx+8,z1:cz-8,z2:cz+8,kind,rotation:Math.floor(random()*4),variant:Math.floor(random()*3)};sectors.push(sector);
   ring(cx-8,cz-8,cx+8,cz+8,h,kind);
   if(stage==='outer'&&kind==='field')rect(cx-7,cz-7,cx+7,cz+7,h,kind);
@@ -57,10 +57,15 @@ export function createSectorLayout(seed=1,stage:StageId='shrine'){
  for(const s of sectors){if(s.row===2&&s.col===3)continue;const cx=(s.col-2)*19,cz=(s.row-2)*19;
   const roomAt=(x:number,z:number)=>rooms.some(r=>x>=r.x1&&x<=r.x2&&z>=r.z1&&z<=r.z2);
   const corners=[[-4,-4],[-4,4],[4,-4],[4,4]].filter(([x,z])=>!roomAt(cx+x,cz+z));
-  for(const [dx,dz] of corners){if(['cave','field','yokocho','shop'].includes(s.kind)){rect(cx+dx-2,cz+dz-2,cx+dx+2,cz+dz+2,s.kind==='cave'?5.8:s.kind==='field'?7.5:4.2,s.kind);}}
+  for(const [dx,dz] of corners){if(['cave','field','yokocho','shop'].includes(s.kind)){rect(cx+dx-2,cz+dz-2,cx+dx+2,cz+dz+2,s.kind==='cave'?5.8:s.kind==='field'?(stage==='abyss'?3.15:7.5):4.2,s.kind);}}
   if(s.variant>0){const d=s.rotation%2?2:-2;if(s.rotation<2)rect(cx-4,cz+d,cx+4,cz+d,3.8,s.kind);else rect(cx+d,cz-4,cx+d,cz+4,3.8,s.kind);}
  }
- for(const s of sectors.filter(s=>s.kind==='field')){const cx=(s.col-2)*19,cz=(s.row-2)*19;for(const dx of [-2,1])for(const dz of [-2,1]){let empty=true;for(let x=0;x<2;x++)for(let z=0;z<2;z++)if(grid.has(key(cx+dx+x,cz+dz+z)))empty=false;if(empty)paddies.push({x1:cx+dx,x2:cx+dx+1,z1:cz+dz,z2:cz+dz+1});}}
+ // Water belongs to the outer landscape basins. Other stages retain dry voids;
+ // the old spare-cell rectangles created unrelated, uncontained rice paddies.
+ if(stage==='outer')for(const room of rooms)for(let x=room.x1;x<=room.x2;x++)for(let z=room.z1;z<=room.z2;z++){
+  const cell=grid.get(key(x,z));
+  if(cell?.kind==='field')Object.assign(cell,{kind:'hall',h:room.h});
+ }
  // Narrow shrine corridors share collision and scenery; preserve the broad stair hall.
   for(const c of grid.values())if(stage!=='circus'&&c.kind==='hall'&&!(c.x>=11&&c.x<=27&&c.z>=0&&c.z<=13)&&!rooms.some(r=>c.x>=r.x1&&c.x<=r.x2&&c.z>=r.z1&&c.z<=r.z2))c.kind='passage';
   const landformPlan=stage==='outer'?planOuterLandforms(grid,sectors,rooms,c=>SECOND_DECK.grid.has(key(c.x,c.z))):null;

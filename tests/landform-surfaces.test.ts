@@ -14,7 +14,7 @@ test('lowered banks join exactly, cover new landscape voids, and match planting 
   for(const r of layout.landforms)for(const c of r.removed)if(!belowUpperDeck(c.x*4-2,c.x*4+2,c.z*4-2,c.z*4+2))assert.ok(covered.has(c.x+','+c.z));
   for(const s of terrain.surfaces){
    assert.ok(!layout.grid.has(s.x+','+s.z));
-   if(s.water){assert.ok(!['underpass','greenway'].includes(s.identity));continue;}
+   if(s.water){assert.ok(!['underpass','greenway'].includes(s.identity));assert.ok(terrain.tiles.find(t=>t.x===s.x&&t.z===s.z)?.removed,'water must stay inside a carved basin');continue;}
    const p=s.geometry.getAttribute('position'),n=s.geometry.getAttribute('normal'),index=s.geometry.index!;
    for(let i=0;i<32*3;i+=3){
     const ids=[index.getX(i),index.getX(i+1),index.getX(i+2)],average=(axis:'X'|'Y'|'Z')=>ids.reduce((sum,j)=>sum+p['get'+axis as 'getX'](j),0)/3;

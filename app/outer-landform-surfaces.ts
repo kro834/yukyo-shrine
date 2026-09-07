@@ -62,7 +62,8 @@ export function createOuterLandformSurfaces(grid:Map<string,Cell>,regions:readon
   // Fade to zero at the path edge and basin floor; concrete channels stay planar.
   const noise=Math.sin(x*.83+Math.sin(z*.31)*1.7)*Math.sin(z*.69+x*.19)*.12+Math.sin(x*.37-z*.47)*.055;
   const relief=noise*profile.organic*smooth(d/1.3)*(1-smooth((d-3.4)/1.4));
-  return Math.min(0,-profile.depth*clamp(d/SLOPE)+relief);
+  const t=clamp(d/SLOPE),slope=t+(smooth(t)-t)*profile.organic;
+  return Math.min(0,-profile.depth*slope+relief);
  };
  const normalAt=(x:number,z:number)=>{
   const dx=(analyticalHeight(x+EPS,z)-analyticalHeight(x-EPS,z))/(2*EPS),dz=(analyticalHeight(x,z+EPS)-analyticalHeight(x,z-EPS))/(2*EPS);
@@ -110,7 +111,10 @@ export function createOuterLandformSurfaces(grid:Map<string,Cell>,regions:readon
   renderedPositions.set(key(t.x,t.z),geometry.getAttribute('position') as THREE.BufferAttribute);
   const material=t.region.identity==='underpass'||t.region.identity==='floodgate'?'concrete':'bank';
   surfaces.push({x:t.x,z:t.z,geometry,material,regionId:t.region.sectorId,identity:t.region.identity,water:false});
-  const waterY=WATER.has(t.region.identity)?-LANDFORM_DEPTH[t.region.identity]+.12:null;
+  // Only authored basins hold water. The exterior terrain halo is dry support,
+  // not another rice field inherited from whichever region happens to be nearest.
+  const level=-LANDFORM_DEPTH[t.region.identity]+.12;
+  const waterY=t.removed&&WATER.has(t.region.identity)&&minY<level?level:null;
   if(waterY!==null){
    const water=new THREE.PlaneGeometry(4,4);water.rotateX(-Math.PI/2);water.translate(t.x*4,waterY,t.z*4);
    surfaces.push({x:t.x,z:t.z,geometry:water,material:'water',regionId:t.region.sectorId,identity:t.region.identity,water:true});

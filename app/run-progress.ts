@@ -3,9 +3,12 @@ export class RunProgress {
  elapsed=0;deaths=0;pickups=0;stuns=0;freezes=0;escapes=0;pressure=0;
  state:ThreatState='quiet';private wasChased=false;private safeFor=0;
  lastPickup:'blue'|'red'|'gold'|null=null;
- step(dt:number,status:{chasing:boolean;searching:boolean;hidden:boolean;frozen:boolean;burden:number;stunned?:boolean;finale?:boolean}){
+ step(dt:number,status:{chasing:boolean;searching:boolean;hidden:boolean;frozen:boolean;burden:number;stunned?:boolean;finale?:boolean;distance?:number}){
   this.elapsed+=Math.max(0,Math.min(.15,dt));
-  this.pressure=status.frozen||status.stunned?0:status.chasing?1:status.searching?.45:0;
+  const distance=Math.max(0,status.distance??0);
+  // Live proximity, not an accumulated detection bar. No random wobble: even
+  // small relative movements change the value, and lost threats clear at once.
+  this.pressure=status.frozen||status.stunned?0:status.chasing?.16+.84/(1+(distance/18)**1.25):status.searching?.45*Math.exp(-distance/24):0;
   if(status.finale){this.wasChased=false;this.safeFor=0;}else if(status.chasing){this.wasChased=true;this.safeFor=0;}else if(this.wasChased&&!status.frozen&&!status.stunned){this.safeFor+=Math.max(0,dt);if(this.safeFor>=2){this.escapes++;this.wasChased=false;this.safeFor=0;}}
   this.state=status.frozen?'frozen':status.stunned?'stunned':status.chasing?'chase':status.searching?'search':status.hidden?'hidden':'quiet';
  }
