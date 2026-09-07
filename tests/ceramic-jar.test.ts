@@ -1,7 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
-import {ceramicJar} from '../app/ceramic-jar.ts';
+import {ceramicJar,ceramicSeal} from '../app/ceramic-jar.ts';
+
+test('paper stays above the ceramic lip for all pleat phases',()=>{
+ const material=new THREE.MeshBasicMaterial({side:THREE.DoubleSide}),jar=new THREE.Mesh(ceramicJar(),material);jar.updateMatrixWorld();
+ for(const phase of [0,.7,2,4.9]){
+  const seal=ceramicSeal(phase),paper=new THREE.Mesh(seal.paper,material);paper.updateMatrixWorld();
+  for(let a=0;a<64;a++)for(const r of [.13,.14,.145,.15,.155,.159]){
+   const ray=new THREE.Raycaster(new THREE.Vector3(Math.cos((a+.31)/64*Math.PI*2)*r,1,Math.sin((a+.31)/64*Math.PI*2)*r),new THREE.Vector3(0,-1,0));
+   const ceramic=ray.intersectObject(jar)[0],cover=ray.intersectObject(paper)[0];
+   assert.ok(cover&&(!ceramic||cover.point.y>ceramic.point.y+.002),'paper must clear the entire folded ceramic rim');
+  }
+  seal.paper.dispose();seal.cord.dispose();
+ }
+ jar.geometry.dispose();material.dispose();
+});
 
 test('storage jar preserves its placement envelope and has a hollow mouth above a closed bottom',()=>{
  const g=ceramicJar();g.computeBoundingBox();
@@ -16,3 +30,5 @@ test('storage jar preserves its placement envelope and has a hollow mouth above 
  assert.ok(lip&&lip.point.y>.33,'the folded lip has physical thickness');
  g.dispose();material.dispose();
 });
+
+
