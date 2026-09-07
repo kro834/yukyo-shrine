@@ -5,6 +5,7 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {agedFinish} from './surface-finish.ts';
 import {SurfaceLibrary} from './surface-library.ts';
 import {surfaceUV} from './surface-uv.ts';
+import {chamferedBox} from './chamfered-box.ts';
 import type {Preferences} from './preferences.ts';
 import type {Doors,Enemies,Enemy} from './shrine-gameplay';
 export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
@@ -12,12 +13,12 @@ export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
   const paper=new THREE.MeshStandardMaterial({color:'#aa9370',roughness:.97});
   agedFinish(paper,'paper');
   const metal=new THREE.MeshStandardMaterial({color:'#352e23',metalness:.65,roughness:.45});
-  const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.add('/cedar.png',[wood],{bump:.012,tint:'#685443'});
-  const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>{const g=new THREE.BoxGeometry(w,h,d).translate(x,y,z);surfaceUV(g,.38,'timber');return g;};
+  const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.add('/materials/wood_planks_diff.jpg',[wood],{tint:'#d9d0c2',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.65,ultra:{full:'/materials/ultra/wood_planks_diff_2k.jpg',normal:'/materials/ultra/wood_planks_nor_gl_2k.jpg',roughness:'/materials/ultra/wood_planks_rough_2k.jpg'}});
+  const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>{const g=chamferedBox(w,h,d).translate(x,y,z);surfaceUV(g,.38,'timber-photo');return g;};
   const merged=(parts:THREE.BufferGeometry[])=>{const geometry=mergeGeometries(parts)!;parts.forEach(g=>g.dispose());return geometry;};
   const frameGeometry=merged([box(-1.76,1.7,0,.48,3.4,.36),box(1.76,1.7,0,.48,3.4,.36),box(0,3.17,0,4,.48,.34),box(0,.035,0,4,.07,.35)]);
   const paperGeometry=box(0,1.48,0,2.97,2.88,.1);
-  const leafWoodGeometry=merged([...[-1.48,1.48].map(x=>box(x,1.48,0,.05,2.92,.13)),...[.04,.52,2.94].map(y=>box(0,y,0,2.99,.05,.13)),box(0,.28,0,2.96,.46,.12)]);
+  const leafWoodGeometry=merged([...[-1.48,0,1.48].map(x=>box(x,1.48,0,.05,2.92,.13)),...[.04,.52,2.62,2.94].map(y=>box(0,y,0,2.99,.05,.13)),box(0,.28,0,2.96,.46,.12)]);
   const pullGeometry=merged([-1,1].map(side=>new THREE.CylinderGeometry(.07,.07,.018,16).rotateX(Math.PI/2).translate(1.05,1.3,side*.065)));
   const chunks=new Map<string,number[]>();
   doors.states.forEach(({spec:d},i)=>{const key=Math.floor(d.x/24)+':'+Math.floor(d.z/24)+':'+(d.floor??0);if(!chunks.has(key))chunks.set(key,[]);chunks.get(key)!.push(i);});
@@ -55,11 +56,13 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const cloth=new THREE.MeshStandardMaterial({color:'#302822',metalness:0,roughness:.97});
   const skin=new THREE.MeshStandardMaterial({color:'#928477',roughness:.94});
   const mask=new THREE.MeshStandardMaterial({color:'#bdbaa9',roughness:.82});
+  const sculpt=new THREE.MeshStandardMaterial({color:'#b5ab96',roughness:.92,vertexColors:true});
+  const paleCloth=new THREE.MeshStandardMaterial({color:'#ded6c6',roughness:1});
   const black=new THREE.MeshStandardMaterial({color:'#0c0a09',roughness:.98});
   const cord=new THREE.MeshStandardMaterial({color:'#6a5c40',roughness:1});
   const aura=new THREE.MeshBasicMaterial({color:'#a7c4c0',transparent:true,opacity:.23,depthWrite:false,depthTest:false,fog:false});
   let enabled=true;
-  const surfaces=new SurfaceLibrary([cloth],4);surfaces.add('/horror-hemp.png',[cloth],{bump:.006,tint:'#aaa49c'});
+  const surfaces=new SurfaceLibrary([cloth,paleCloth],4);cloth.color.set('#c9c1b5');surfaces.add('/horror-hemp.png',[cloth,paleCloth],{bump:.0015});
   const part=(parent:THREE.Group,g:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z:number)=>{const mesh=new THREE.Mesh(g,m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=m!==aura;parent.add(mesh);return mesh;};
   const robe=(top:number,bottom:number,height:number)=>{const g=new THREE.CylinderGeometry(top,bottom,height,24,8);const p=g.getAttribute('position');for(let i=0;i<p.count;i++){const a=Math.atan2(p.getZ(i),p.getX(i)),fold=1+Math.sin(a*11+p.getY(i)*1.6)*.065;p.setX(i,p.getX(i)*fold);p.setZ(i,p.getZ(i)*fold*.72);}g.computeVertexNormals();return g;};
   const echoRig=(root:THREE.Group)=>{
@@ -68,7 +71,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   };
   const createActor=(e:Enemy)=>{const i=e.id;
     const root=new THREE.Group();root.name='horror-'+e.kind;scene.add(root);
-    if(e.kind in EXTRA_ENEMY_PROFILES){const rig=specialEnemyRig(root,e.kind,{cloth,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
+    if(e.kind in EXTRA_ENEMY_PROFILES){const rig=specialEnemyRig(root,e.kind,{cloth,paleCloth,sculpt,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
     const crawler=e.kind==='stalker',tall=e.kind==='watcher',large=e.kind==='danger';
     root.scale.set(large?1.13:1,tall?1.17:large?1.1:1,1);
     const body=new THREE.Group();root.add(body);body.rotation.x=crawler?.72:e.kind==='normal'?.13:large?.2:0;body.position.y=crawler?-.55:0;
@@ -106,5 +109,5 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
       a.root.visible=enabled&&(!viewer||Math.hypot(e.position.x-viewer.x,e.position.z-viewer.z)<range);a.echoGroup.visible=reveal;if(!a.root.visible)continue;
       a.root.position.set(e.position.x,e.floor,e.position.z);a.root.rotation.y=e.facing;a.animate(e,time);a.sync();
     }
-  },dispose(){surfaces.dispose();for(const m of [cloth,skin,mask,black,cord,aura])m.dispose();}};
+  },dispose(){surfaces.dispose();for(const m of [cloth,paleCloth,sculpt,skin,mask,black,cord,aura])m.dispose();}};
 }
