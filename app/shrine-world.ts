@@ -563,7 +563,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
   }
   if(circusPlan)buildCircusScenery(circusPlan,layout,add,circusFixture);
-  if(!circus)buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height);
+  if(!circus)buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height,!budget.mobile);
   groundGeometry=false;fixtureFloor=4.8;
   for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
     if((x===13||x===22)&&z>=2&&z<=6)continue;
@@ -855,6 +855,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
+
 
 
 

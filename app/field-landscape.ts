@@ -64,8 +64,9 @@ export function fieldFoliageRoots(layout:Layout,seed:number,height:(x:number,z:n
  }
  return {roots,counts};
 }
-export function buildFieldFoliage(layout:Layout,seed:number,height:(x:number,z:number)=>number,obstacles:Obstacle[],add:(geometry:THREE.BufferGeometry)=>void,vergeHeight?:(x:number,z:number)=>number){
+export function buildFieldFoliage(layout:Layout,seed:number,height:(x:number,z:number)=>number,obstacles:Obstacle[],add:(geometry:THREE.BufferGeometry)=>void,vergeHeight?:(x:number,z:number)=>number,detailed=false){
  const {roots,counts}=fieldFoliageRoots(layout,seed,height,obstacles,vergeHeight),cache=new Map<string,THREE.BufferGeometry>();
- for(const p of roots){const key=p.kind+':'+p.variant;if(!cache.has(key))cache.set(key,makeFoliageGeometry(p.kind,seed^Math.imul(p.variant+1,7331)));const g=cache.get(key)!.clone();g.rotateY(p.yaw);g.translate(p.x,p.y,p.z);add(g);}
+ for(const p of roots){const key=p.kind+':'+p.variant;if(!cache.has(key))cache.set(key,makeFoliageGeometry(p.kind,seed^Math.imul(p.variant+1,7331),detailed));const g=cache.get(key)!.clone();g.rotateY(p.yaw);g.translate(p.x,p.y,p.z);add(g);}
  cache.forEach(g=>g.dispose());return counts;
 }
+

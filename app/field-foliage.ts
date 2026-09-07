@@ -44,8 +44,8 @@ function vertex(buffers: Buffers, point: Point, u: number, t: number, colors: TH
 }
 
 function blade(buffers: Buffers, start: Point, angle: number, height: number, width: number,
-  bend: number, low: boolean, colors: THREE.Color[], gain: number) {
-  const samples = low ? [0, .53] : [0, .40, .74];
+  bend: number, low: boolean, colors: THREE.Color[], gain: number, detailed=false) {
+  const samples = low ? [0, .53] : detailed ? [0, .25, .50, .72, .90] : [0, .40, .74];
   const forward = { x: Math.sin(angle), z: Math.cos(angle) };
   const twist = Math.sin(angle * 2.7) * .65;
   const rows: number[] = [];
@@ -86,7 +86,7 @@ function stem(buffers: Buffers, start: Point, end: Point, radius: number, colors
 }
 
 /** Cache a small number of seeded variants; clone, rotate and translate before existing 24m batching. */
-export function makeFoliageGeometry(kind: FoliageKind, seed = 1) {
+export function makeFoliageGeometry(kind: FoliageKind, seed = 1, detailed=false) {
   const random = randomSequence(seed), buffers: Buffers = { p: [], uv: [], c: [], ix: [] };
   if (kind === 'reed') {
     const height = .66 + random() * .32, colors = palette(random() < .35);
@@ -103,7 +103,7 @@ export function makeFoliageGeometry(kind: FoliageKind, seed = 1) {
       const start = { x: THREE.MathUtils.lerp(s.start.x, s.end.x, t), y: s.end.y * t,
         z: THREE.MathUtils.lerp(s.start.z, s.end.z, t) };
       blade(buffers, start, random() * Math.PI * 2, height * (.23 + random() * .12),
-        .012 + random() * .012, .11 + random() * .12, false, colors, .9 + random() * .17);
+        .018 + random() * .018, .11 + random() * .12, false, colors, .9 + random() * .17, detailed);
     }
   } else {
     const low = kind === 'short', height = low ? .06 + random() * .07 : .28 + random() * .34;
@@ -112,8 +112,8 @@ export function makeFoliageGeometry(kind: FoliageKind, seed = 1) {
       const angle = phase + index * Math.PI * 2 / blades + (random() - .5) * .65;
       const start = { x: (random() - .5) * spread, y: 0, z: (random() - .5) * spread };
       const h = height * (.62 + random() * .38), dry = random() < (low ? .14 : .23);
-      blade(buffers, start, angle, h, low ? .006 + random() * .008 : .009 + random() * .012,
-        h * (.20 + random() * .25), low||index>=2, palette(dry), .9 + random() * .16);
+      blade(buffers, start, angle, h, low ? .006 + random() * .008 : .016 + random() * .026,
+        h * (.20 + random() * .25), low||!detailed&&index>=2, palette(dry), .9 + random() * .16, detailed);
     }
   }
   const geometry = new THREE.BufferGeometry();
@@ -129,5 +129,8 @@ export function makeFoliageGeometry(kind: FoliageKind, seed = 1) {
   geometry.computeBoundingSphere();
   return geometry;
 }
+
+
+
 
 
