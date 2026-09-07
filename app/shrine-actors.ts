@@ -54,6 +54,28 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
     };
     part(new THREE.CylinderGeometry(.32,.67,1.75,12,5),cloth,0,.98,0);
     part(new THREE.CylinderGeometry(.34,.38,.23,12),gold,0,1.4,0);
+    // Distinct silhouettes: shrine bearer, listening bell, many-eyed sentinel,
+    // crouching crawler, and the broad crowned pursuer.
+    if(enemy.kind==='normal'){
+      part(new THREE.BoxGeometry(.09,2.8,.09),black,.85,1.4,0);
+      part(new THREE.CylinderGeometry(.22,.28,.7,8),glow,.85,2.2,0);
+      part(new THREE.ConeGeometry(.55,.35,8),gold,0,2.45,0);
+    }
+    if(enemy.kind==='listener'){
+      const bell=part(new THREE.CylinderGeometry(.35,.7,.95,12),gold,0,2.2,0);bell.scale.z=.8;
+      for(const side of [-1,1])part(new THREE.TorusGeometry(.4,.07,6,16),black,side*.75,1.6,0);
+    }
+    if(enemy.kind==='watcher'){
+      for(let j=0;j<5;j++){const a=(j-2)*.48;part(new THREE.SphereGeometry(.12,8,6),glow,Math.sin(a)*.9,2.5+Math.cos(a)*.35,.2);}
+      part(new THREE.ConeGeometry(.85,1.1,6),cloth,0,1.75,-.2);
+    }
+    if(enemy.kind==='stalker'){
+      for(const side of [-1,1])for(let j=0;j<3;j++){const leg=part(new THREE.CylinderGeometry(.06,.13,1.3,6),black,side*(.6+j*.16),.55,-.25+j*.3);leg.rotation.z=side*(.7+j*.12);}
+      part(new THREE.ConeGeometry(.35,.95,6),mask,0,1.75,.6).rotation.x=Math.PI/2;
+    }
+    if(enemy.kind==='danger'){
+      for(const side of [-1,1]){part(new THREE.BoxGeometry(.55,.65,.75),gold,side*.85,1.75,0);part(new THREE.ConeGeometry(.16,1.3,6),glow,side*.55,2.9,-.1);}
+    }
     if(enemy.kind==='listener')for(const side of [-1,1]){
       const ear=part(new THREE.TorusGeometry(.23,.045,7,20),gold,side*.35,2.1,0);ear.rotation.y=Math.PI/2;
       part(new THREE.SphereGeometry(.09,8,6),glow,side*.37,2.1,0);

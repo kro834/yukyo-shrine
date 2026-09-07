@@ -29,7 +29,7 @@ export default function Shrine(){
   const [prefs,setPrefs]=useState<Preferences>(DEFAULTS),[pad,setPad]=useState(false),[connected,setConnected]=useState(false);
   const [ready,setReady]=useState(false),[error,setError]=useState(''),[menu,setMenu]=useState(false),[light,setLight]=useState(true),[locked,setLocked]=useState(false);
   const [calStep,setCalStep]=useState(-1),[notice,setNotice]=useState('');
-  const [collection,setCollection]=useState({blue:0,red:0,blueOffered:0,redOffered:0,unlocked:false,area:'blue' as 'blue'|'red'});
+  const [collection,setCollection]=useState({blue:0,red:0,gold:0,areaName:"祭殿回廊",blueOffered:0,redOffered:0,unlocked:false,area:'blue' as 'blue'|'red'});
   const [altarNear,setAltarNear]=useState(false);
   const [won,setWon]=useState(false),[goalBearing,setGoalBearing]=useState({angle:0,distance:0});
   const [burstRemaining,setBurstRemaining]=useState(0);
@@ -65,7 +65,7 @@ export default function Shrine(){
   const toggleLight=useCallback(()=>setFlashlight(!state.current.light),[setFlashlight]);
   const burst=useCallback(()=>{if(state.current.paused||!worldRef.current)return;burstInput.current.request(performance.now());},[]);
   const stopTime=useCallback(()=>{const world=worldRef.current;if(state.current.paused||!world)return;if(world.stopTime()){setStopRemaining(10);setStopCooldown(30);setNotice('時間停止 · 10秒間、敵が動かなくなります');}else setNotice('時間停止の再使用まで '+Math.ceil(world.timeStopCooldown)+'秒');},[]);
-  const interact=useCallback(()=>{if(state.current.paused)return;const opened=worldRef.current?.interact();if(opened==='offered')setNotice(worldRef.current?.collection().unlocked?'奉納が完了しました。祭壇の奥の扉へ進んでください。':'青勾玉を祭壇に捧げました。');else if(opened==='empty')setNotice(worldRef.current?.collection().unlocked?'祭壇の奥の扉が開いています。':'青勾玉5個、または赤勾玉1個を捧げると扉が開きます。');else if(!opened)setNotice('祭壇かふすまに近づいて、そちらを向いて〇を押してください。');},[]);
+  const interact=useCallback(()=>{if(state.current.paused)return;const opened=worldRef.current?.interact();if(opened==='offered')setNotice(worldRef.current?.collection().unlocked?'奉納が完了しました。祭壇の奥の扉へ進んでください。':'青勾玉を祭壇に捧げました。');else if(opened==='empty')setNotice(worldRef.current?.collection().unlocked?'祭壇の奥の扉が開いています。':'青勾玉5個、または赤・金勾玉1個を捧げると扉が開きます。');else if(!opened)setNotice('祭壇かふすまに近づいて、そちらを向いて〇を押してください。');},[]);
   useLayoutEffect(()=>{
     document.documentElement.dataset.shrinePlaying=String(!menu&&!won);
     document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(menu||won));
@@ -153,7 +153,7 @@ export default function Shrine(){
           if(mapping){session.current.setMapping(poll.pad,mapping);try{localStorage.setItem('yukyo-pad:'+mappingKey(poll.pad),JSON.stringify(mapping));}catch{};calibration.current=null;setCalStep(-1);setNotice('スティックとL1の調整を保存しました。');}
         }
       } else if(calibration.current&&!poll.pad){calibration.current=null;setCalStep(-1);setNotice('コントローラーの接続が切れました。');}
-      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setAltarNear(world.nearAltar());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));setStopRemaining(Math.ceil(world.timeStopRemaining));setStopCooldown(Math.ceil(world.timeStopCooldown));const found=world.collection();setCollection(old=>old.blue===found.blue&&old.red===found.red&&old.blueOffered===found.blueOffered&&old.redOffered===found.redOffered&&old.unlocked===found.unlocked&&old.area===found.area?old:found);setGoalBearing(world.goalDirection());lastHud=time;}
+      if(time-lastHud>150){setConnected(!!poll.pad);setDoorNear(world.nearDoor());setAltarNear(world.nearAltar());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));setStopRemaining(Math.ceil(world.timeStopRemaining));setStopCooldown(Math.ceil(world.timeStopCooldown));const found=world.collection();setCollection(old=>old.gold===found.gold&&old.areaName===found.areaName&&old.blue===found.blue&&old.red===found.red&&old.blueOffered===found.blueOffered&&old.redOffered===found.redOffered&&old.unlocked===found.unlocked&&old.area===found.area?old:found);setGoalBearing(world.goalDirection());lastHud=time;}
       const s=state.current,p=prefRef.current;
       if(canExplore){
         const k=keys.current,t=touch.current,game=poll.mode==='gamepad';
@@ -175,7 +175,7 @@ export default function Shrine(){
           const pos=world.move(x,z,s.yaw,sprint,steps.dt);
           moving=Math.hypot(pos.x-world.camera.position.x,pos.z-world.camera.position.z)>.0001;
           world.camera.position.set(pos.x,pos.y+(p.motion&&moving?Math.sin(time*(sprint?.016:.01))*(sprint?.03:.018):0),pos.z);
-          if(world.step(steps.dt)){setCaughtPulse(v=>v+1);clearInput();s.yaw=0;s.pitch=0;break;}
+          if(world.step(steps.dt)){setCaughtPulse(v=>v+1);setNotice("別の場所で目覚めました。勾玉と奉納は失われました。");clearInput();s.yaw=0;s.pitch=0;break;}
           if(world.completed)break;
           firePending();
         }
@@ -212,16 +212,16 @@ export default function Shrine(){
     return()=>lifecycle.abort();
   },[applyPreferences,setFlashlight]);
   const pointerEvents=(kind:'move'|'look'|'sprint')=>({
-    onPointerDown:(e:React.PointerEvent<HTMLElement>)=>{if(state.current.paused||!touchMode(e))return;e.preventDefault();if(touch.current.start(e.pointerId,kind,e.clientX,e.clientY))e.currentTarget.setPointerCapture(e.pointerId);},
-    onPointerMove:(e:React.PointerEvent<HTMLElement>)=>{if(session.current.mode==='gamepad'||state.current.paused)return;const d=touch.current.move(e.pointerId,e.clientX,e.clientY);const delta=viewDelta('touch',d.yaw,d.pitch,0,prefRef.current);state.current.yaw+=delta.yaw;state.current.pitch=clampPitch(state.current.pitch+delta.pitch);if(kind==='move')setStickPosition({x:touch.current.x,z:touch.current.z});},
-    onPointerUp:(e:React.PointerEvent<HTMLElement>)=>{touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
-    onPointerCancel:(e:React.PointerEvent<HTMLElement>)=>{touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
-    onLostPointerCapture:(e:React.PointerEvent<HTMLElement>)=>{touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
+    onPointerDown:(e:React.PointerEvent<HTMLElement>)=>{if(e.pointerType==='mouse'||state.current.paused||(kind==='look'&&e.target instanceof Element&&!!e.target.closest('button,.toolbar,.settings-dialog,.touch-pad:not(.look-pad)'))||!touchMode(e))return;e.stopPropagation();e.preventDefault();if(touch.current.start(e.pointerId,kind,e.clientX,e.clientY))e.currentTarget.setPointerCapture(e.pointerId);},
+    onPointerMove:(e:React.PointerEvent<HTMLElement>)=>{e.stopPropagation();if(session.current.mode==='gamepad'||state.current.paused)return;const d=touch.current.move(e.pointerId,e.clientX,e.clientY);const delta=viewDelta('touch',d.yaw,d.pitch,0,prefRef.current);state.current.yaw+=delta.yaw;state.current.pitch=clampPitch(state.current.pitch+delta.pitch);if(kind==='move')setStickPosition({x:touch.current.x,z:touch.current.z});},
+    onPointerUp:(e:React.PointerEvent<HTMLElement>)=>{e.stopPropagation();touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
+    onPointerCancel:(e:React.PointerEvent<HTMLElement>)=>{e.stopPropagation();touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
+    onLostPointerCapture:(e:React.PointerEvent<HTMLElement>)=>{e.stopPropagation();touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
   });
   const change=(key:keyof Preferences,value:number|boolean|string)=>applyPreferences({...prefRef.current,[key]:value});
   const range=(key:RangeKey,label:string,min:number,max:number,step:number,suffix:string)=><div className="setting" data-setting={key}><label id={'label-'+key}>{label}<output aria-live="polite">{prefs[key].toFixed(key==='fov'?0:2)}{suffix}</output></label><div className="range-controls"><button type="button" aria-label={label+'を下げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,-1))}>−</button><Slider aria-labelledby={'label-'+key} min={min} max={max} step={step} value={[prefs[key]]} onValueChange={v=>change(key,Array.isArray(v)?v[0]:v)}/><button type="button" aria-label={label+'を上げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,1))}>＋</button></div></div>;
   const blockControllerClick=(e:React.SyntheticEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&document.pointerLockElement===document.documentElement){e.preventDefault();e.stopPropagation();}};
-  return <main className="experience" data-playing={!menu&&!won} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
+  return <main {...pointerEvents('look')} className="experience" data-playing={!menu&&!won} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
     <canvas ref={canvas} tabIndex={-1} inputMode="none" aria-label="祭殿の一人称回廊" onPointerDown={e=>{if(e.pointerType==='mouse'&&session.current.mode==='gamepad'){void requestLock();return;}touchMode(e);}} onClick={e=>{if(e.detail===2&&session.current.mode!=='gamepad')void requestLock();}}/>
     <div className="vignette"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%) rotate('+e.angle+'rad)',color:e.stunned?'#b8ffff':(e.id===4?'#ff201e':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id%4]),opacity:Math.max(.4,1-e.distance/160)}}>⌃</span>)}</div>}<div className="reticle" aria-hidden="true"/>
     {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
@@ -235,7 +235,7 @@ export default function Shrine(){
       <button aria-label="全画面を切替" onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else setNotice('このブラウザでは全画面切替を利用できません。');}catch{setNotice('全画面表示を開始できませんでした。');}}}><Maximize size={18}/></button>
       <button aria-label="設定と操作ガイド" onClick={()=>setMenuOpen(true)}><Settings size={19}/></button>
     </nav>
-    {ready&&!menu&&!won&&<><div className="collection-status"><div role="status" aria-live="polite"><span className="blue-bead">◕ 青 {collection.blue}</span>　<span className="red-bead">◕ 赤 {collection.red}</span></div><small>{collection.unlocked?'奉納完了 · 祭壇の奥の扉へ':`奉納：青 ${collection.blueOffered}/5 または 赤 ${collection.redOffered}/1`}</small><small className={collection.area==='red'?'red-bead':''}>{collection.area==='red'?'危険区域':'青勾玉の回廊'}</small></div><div className="altar-compass" role="img" aria-label={`赤い針は祭壇の方向。距離${Math.round(goalBearing.distance)}メートル`}><div className="compass-dial"><i style={{transform:'rotate('+goalBearing.angle+'rad)'}}/><b/></div><span>祭壇 {Math.round(goalBearing.distance)}m</span></div></>}
+    {ready&&!menu&&!won&&<><div className="collection-status"><div role="status" aria-live="polite"><span className="blue-bead">◕ 青 {collection.blue}</span>　<span className="red-bead">◕ 赤 {collection.red}</span>　<span style={{color:"#edc765"}}>◕ 金 {collection.gold}</span></div><small>{collection.unlocked?'奉納完了 · 祭壇の奥の扉へ':`奉納：青 ${collection.blueOffered}/5 または 赤 ${collection.redOffered}/1・金1`}</small><small className={collection.area==='red'?'red-bead':'blue-bead'}>{collection.areaName}</small></div><div className="altar-compass" role="img" aria-label={`赤い針は祭壇の方向。距離${Math.round(goalBearing.distance)}メートル`}><div className="compass-dial"><i style={{transform:'rotate('+goalBearing.angle+'rad)'}}/><b/></div><span>祭壇 {Math.round(goalBearing.distance)}m</span></div></>}
     {won&&<section className="clear-screen" role="dialog" aria-modal="true" aria-labelledby="clear-title"><span aria-hidden="true">◕</span><h1 id="clear-title">封印解除</h1><p>勾玉を揃え、封門を越えました。</p><strong>CLEAR</strong><button autoFocus onClick={()=>location.reload()}>もう一度挑戦</button><small>コントローラーは × で再挑戦</small></section>}
     {pad&&burstRemaining>0&&!menu&&!won&&<div className="burst-cooldown">R2 再使用まで {burstRemaining}秒</div>}
     {ready&&!menu&&!won&&<div className={'time-stop-status'+(stopRemaining>0?' active':'')}><Clock3 size={15}/>{stopRemaining>0?`時間停止 ${stopRemaining}秒`:stopCooldown>0?`L2 再使用 ${stopCooldown}秒`:'L2 時間停止'}</div>}

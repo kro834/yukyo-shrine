@@ -18,7 +18,7 @@ test('spatial broad phase includes every intersecting wall, including negative c
 });
 test('every room has one collectible, with wall and floor separation and no duplicate pickup',()=>{
  const l=createLayout(),beads=placeMagatama(l.rooms,l.obstacles,[...upperPartitions,...upperBarriers]);
- assert.equal(beads.length,l.rooms.length+2);assert.equal(new Set(beads.map(b=>b.id)).size,beads.length);
+ assert.equal(beads.length,l.rooms.filter(r=>!r.id.startsWith('expansion-')).length+2);assert.equal(new Set(beads.map(b=>b.id)).size,beads.length);
  const b=beads[0],p={x:b.position.x-.5,z:b.position.z};
  const wall={minX:p.x+.2,maxX:p.x+.3,minZ:p.z-1,maxZ:p.z+1};
  assert.equal(collectMagatama(beads,p,0,[wall]),0);

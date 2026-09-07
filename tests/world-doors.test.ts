@@ -21,7 +21,7 @@ test('actual furnished world recognises and opens ground doors from both sides',
  const actual=actualEnemies!,first=actual.nodes.keys().next().value!,reachable=new Set([first]),queue=[first];
  for(let i=0;i<queue.length;i++)for(const n of actual.graph.get(queue[i])??[])if(!reachable.has(n)){reachable.add(n);queue.push(n);}
  assert.equal(reachable.size,actual.nodes.size,'furniture must not isolate any ground patrol node');
- assert.equal(actual.patrolTargets.filter(t=>t.id.startsWith('room:')&&!t.id.startsWith('room:red-')).length,15);
+ assert.equal(actual.patrolTargets.filter(t=>t.id.startsWith('room:')&&!t.id.startsWith('room:red-')&&!t.id.startsWith('room:gold-')).length,15);
  for(const d of createLayout().doors)for(const side of [-1,1]){
    const nx=d.alongX?0:side,nz=d.alongX?side:0;
    world.camera.position.set(d.x+nx*1,1.68,d.z+nz*1);world.camera.rotation.y=Math.atan2(nx,nz);
@@ -64,12 +64,12 @@ test('furnished random worlds collect and offer either route, then allow entry t
    assert.equal(targets.length,color==='red'?1:5);
    for(const p of targets){world.camera.position.set(p.position.x,1.68,p.position.z);world.step(.05);}
    assert.equal(world.collection()[color],targets.length);assert.equal(world.collection().unlocked,false);
-   world.camera.position.set(ALTAR.x,1.68,ALTAR.z-2);world.camera.rotation.y=Math.PI;
+   world.camera.position.set(world.altarPosition.x,1.68,world.altarPosition.z-2);world.camera.rotation.y=Math.PI;
    assert.equal(world.nearAltar(),true);assert.ok(Math.abs(world.goalDirection().angle)<1e-6);
    assert.equal(world.interact(),'offered');assert.equal(world.collection()[color],0);assert.equal(world.collection().unlocked,true);
    assert.equal(world.interact(),'empty','beads cannot be offered twice');
    for(let i=0;i<45;i++)world.step(.05);
-   world.camera.position.set(0,1.68,14);
+   world.camera.position.set(world.goalPosition.x,1.68,world.goalPosition.z-1.5);
    for(let i=0;i<8;i++){const p=world.move(0,1,0,true,.05);world.camera.position.set(p.x,p.y,p.z);world.step(.05);}
    assert.equal(world.completed,true,`${color} route can enter the goal: ${JSON.stringify({position:world.camera.position,obstacles:world.obstacles.filter(o=>o.minX<2&&o.maxX>-2&&o.minZ<18&&o.maxZ>14)})}`);
   }finally{world.dispose();}
@@ -77,3 +77,22 @@ test('furnished random worlds collect and offer either route, then allow entry t
 });
 
 
+
+test('random altar and gold route survive defeat with empty inventory and a new safe spawn',t=>{
+ let defeat=false; t.mock.method(Enemies.prototype,'update',()=>defeat);t.mock.method(Enemies.prototype,'hear',()=>0);
+ const addTargets=Enemies.prototype.addPatrolTargets;let points:Parameters<Enemies['addPatrolTargets']>[0]=[];let actual:Enemies;
+ t.mock.method(Enemies.prototype,'addPatrolTargets',function(this:Enemies,p:typeof points){actual=this;points=p;return addTargets.call(this,p);});
+ const g=globalThis as unknown as Record<string,unknown>;g.innerWidth=1280;g.innerHeight=720;g.devicePixelRatio=1;
+ const canvas={getContext:()=>({createRadialGradient:()=>({addColorStop(){}}),fillRect(){}})};
+ g.document={addEventListener(){},removeEventListener(){},createElement:()=>canvas,createElementNS:()=>({addEventListener(){},removeEventListener(){},set src(_v:string){}})};
+ const renderer={setPixelRatio(){},setSize(){},shadowMap:{},capabilities:{getMaxAnisotropy:()=>1},dispose(){}} as unknown as THREE.WebGLRenderer;
+ const altars=new Set<string>(),spawns=new Set<string>();
+ for(const seed of [3,21,87]){const w=createWorld(canvas as unknown as HTMLCanvasElement,renderer,seed);try{
+  altars.add(JSON.stringify(w.altarPosition));const gold=points.find(p=>p.id==='room:gold-yokocho')!;assert.ok(gold);
+  w.camera.position.set(gold.position.x,1.68,gold.position.z);w.step(.05);assert.equal(w.collection().gold,1);assert.equal(w.collection().area,'red');assert.ok(w.collection().areaName.includes('横丁'));
+  w.camera.position.set(w.altarPosition.x,1.68,w.altarPosition.z-2);w.camera.rotation.y=Math.PI;assert.equal(w.interact(),'offered');assert.equal(w.collection().unlocked,true);
+  for(let i=0;i<2;i++){const old=w.camera.position.clone();defeat=true;assert.equal(w.step(.05),true);defeat=false;const c=w.collection();assert.equal(c.gold+c.blue+c.red+c.blueOffered+c.redOffered,0);assert.equal(c.unlocked,false);assert.ok(w.camera.position.distanceTo(old)>24);assert.ok(actual!.actors.every(e=>Math.hypot(e.position.x-w.camera.position.x,e.position.z-w.camera.position.z)>24));assert.ok(!w.obstacles.some(o=>w.camera.position.x>o.minX-.5&&w.camera.position.x<o.maxX+.5&&w.camera.position.z>o.minZ-.5&&w.camera.position.z<o.maxZ+.5));spawns.add(w.camera.position.toArray().join(','));}
+  w.camera.position.set(gold.position.x,1.68,gold.position.z);w.step(.05);assert.equal(w.collection().gold,1,'gold can be collected again after defeat');
+ }finally{w.dispose();}}
+ assert.ok(altars.size>1);assert.equal(spawns.size,6);
+});

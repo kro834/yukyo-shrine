@@ -38,10 +38,10 @@ test('original fifteen beads are blue; each formerly empty wing receives a reach
   assert.ok(nav.nodes.has(Math.round(b.position.x/4)+','+Math.round(b.position.z/4)));
   assert.ok(!walls.some(w=>b.position.x>w.minX-.85&&b.position.x<w.maxX+.85&&b.position.z>w.minZ-.85&&b.position.z<w.maxZ+.85));
  }
- assert.equal(nav.actors.length,28);assert.ok(nav.actors.slice(16).every(e=>areaAt(e.home)==='red'));
+ assert.equal(nav.actors.length,8);assert.equal(areaAt(nav.actors[4].home),'red');
  nav.update(.05,{x:-1000,z:-1000},walls);
  const kind=(p:{x:number;z:number})=>l.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;
- for(const e of nav.actors.slice(16))assert.equal(kind(e.patrol!.point),kind(e.home),'red guards patrol their own wing');
+ for(const e of nav.actors.filter(e=>e.kind==='danger'))assert.equal(kind(e.patrol!.point),kind(e.home),'red guards patrol their own wing');
 });
 
 test('five blue beads can be offered incrementally; holding them alone never unlocks the gate',()=>{
@@ -49,15 +49,15 @@ test('five blue beads can be offered incrementally; holding them alone never unl
  for(const b of beads.slice(0,3))b.collected=true;
  assert.equal(g.unlocked,false);spendBeads(beads,g.offer(beadInventory(beads)));
  assert.equal(g.blueOffered,3);assert.equal(g.unlocked,false);assert.equal(beadInventory(beads).blue,0);
- assert.deepEqual(g.offer(beadInventory(beads)),{blue:0,red:0});
+ assert.deepEqual(g.offer(beadInventory(beads)),{blue:0,red:0,gold:0});
  for(const b of beads.slice(3,7))b.collected=true;
  spendBeads(beads,g.offer(beadInventory(beads)));
  assert.equal(g.blueOffered,5);assert.equal(g.unlocked,true);assert.equal(beadInventory(beads).blue,2);
- assert.deepEqual(g.offer(beadInventory(beads)),{blue:0,red:0});
+ assert.deepEqual(g.offer(beadInventory(beads)),{blue:0,red:0,gold:0});
 });
 
 test('one red bead unlocks the altar without consuming blue beads',()=>{
- const g=new ShrineGoal();assert.deepEqual(g.offer({blue:4,red:2}),{blue:0,red:1});
+ const g=new ShrineGoal();assert.deepEqual(g.offer({blue:4,red:2}),{blue:0,red:1,gold:0});
  assert.equal(g.redOffered,1);assert.equal(g.blueOffered,0);assert.equal(g.unlocked,true);
 });
 

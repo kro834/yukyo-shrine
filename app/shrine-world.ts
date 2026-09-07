@@ -13,12 +13,13 @@ import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,
 import {RunningSteps,createFootstepAudio} from './footsteps.ts';
 import {placeMagatama,placeRedMagatama,collectMagatama,beadInventory,spendBeads} from './magatama.ts';
 import {createMagatamaMeshes} from './magatama-mesh.ts';
-import {ShrineGoal,ALTAR,GOAL_WALLS} from './shrine-goal.ts';
+import {ShrineGoal,GOAL} from './shrine-goal.ts';
 import {seededRandom} from './seeded-random.ts';
 import {createAreaLookup} from './area-rules.ts';
 import {createGoalMeshes} from './goal-mesh.ts';
 import {BurstRecharge} from './burst-recharge.ts';
 import {PerformanceBudget} from './performance-budget.ts';
+import {AREA_THEMES} from './expansion-areas.ts';
 import {TimeStop} from './time-stop.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff)) {
@@ -26,14 +27,17 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const budget=new PerformanceBudget({touch:(device?.maxTouchPoints??0)>1||/Android|iPhone|iPad/i.test(device?.userAgent??''),cores:device?.hardwareConcurrency,memory:device?.deviceMemory});
   const renderer=rendererOverride??new THREE.WebGLRenderer({canvas,antialias:!budget.mobile,powerPreference:'high-performance'});
   renderer.setPixelRatio(budget.pixelRatio('medium',innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);
-  renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.25;
+  renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.ACESFilmicToneMapping;renderer.toneMappingExposure=1.1;
   const scene=new THREE.Scene();scene.background=new THREE.Color('#050809');scene.fog=new THREE.FogExp2('#080c0d',.027);
   const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.08,180);camera.position.set(SPAWN.x,1.68,SPAWN.z);camera.rotation.order='YXZ';
   let environment:THREE.WebGLRenderTarget|undefined;
   if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=.065;room.dispose();pmrem.dispose();}
-  scene.add(new THREE.HemisphereLight('#91a2af','#30271d',.18));
-  const moon=new THREE.DirectionalLight('#8c9aa6',.18);moon.position.set(-10,18,5);scene.add(moon);
+  scene.add(new THREE.HemisphereLight('#91a2af','#30271d',.12));
+  const moon=new THREE.DirectionalLight('#8c9aa6',.10);moon.position.set(-10,18,5);scene.add(moon);
   const layout=createLayout(seed),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
+  const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>r.x2-r.x1>=3&&r.z2-r.z1>=3);
+  const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5});
+  const areaName=()=>{const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r)return AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2);const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
     wood:new THREE.MeshStandardMaterial({color:'#685044',roughness:.42,metalness:.07}),
@@ -107,6 +111,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   };
   for(const c of layout.cells){
     const x=c.x*CELL,z=c.z*CELL;
+    if(c.kind==='yokocho'){
+      box(x,-.14,z,4,.28,4,'stone');box(x,.006,z,4,.012,.025,'black');
+      for(const side of [-1,1]){box(x+side*1.17,.025,z,.13,.04,4,'steel');for(let j=-3;j<=3;j++)box(x+side*1.17,.048,z+j*.5,.14,.008,.04,'black');}
+      if((c.x+c.z)%3===0){box(x,.015,z,.8,.018,1.5,'water');lantern(x+.85,3.1,z);}
+      if(c.z%4===0){box(x,4.2,z,4,.018,.018,'black');box(x,4.05,z+.2,4,.018,.018,'black');}
+      continue;
+    }
     if(c.kind==='cave'){
       box(x,-.17,z,4,.34,4,'rock');rock(x,c.h+.45,z,4.18,.9,4.18);
       for(const [dx,dz] of [[1,0],[0,1]]){const n=layout.grid.get((c.x+dx)+','+(c.z+dz));if(n&&n.h!==c.h&&n.kind==='cave'){const h=Math.abs(n.h-c.h);rock(x+dx*2,Math.min(n.h,c.h)+h/2,z+dz*2,dx?.45:4.1,h,dz?.45:4.1);}}
@@ -153,6 +164,17 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     if(c.kind==='passage'&&(c.x+c.z)%3===0){lantern(x,c.h-.68,z);box(x,c.h-.12,z,.025,.65,.025,'gold');}
   }
   for(const w of layout.walls){
+    if(w.kind==='yokocho'){
+      const x=w.x+w.insideX*.19,z=w.z+w.insideZ*.19;
+      box(w.x,3.2,w.z,w.alongX?4:.3,6.4,w.alongX?.3:4,'concrete');
+      box(x,1.45,z,w.alongX?3.4:.08,2.7,w.alongX?.08:3.4,'steel');
+      for(let j=0;j<12;j++)box(x, .2+j*.22,z,w.alongX?3.5:.13,.025,w.alongX?.13:3.5,'rust');
+      box(x,3.15,z,w.alongX?3.7:1.1,.16,w.alongX?1.1:3.7,'dark');
+      box(x,4.6,z,w.alongX?1.6:.12,1,w.alongX?.12:1.6,'black');
+      for(const side of [-1,1])cylinder(x+(w.alongX?side*1.8:0),2.1,z+(w.alongX?0:side*1.8),.055,4.2,'rust');
+      box(x,3.9,z,w.alongX?1:.38,.48,w.alongX?.38:1,'steel');
+      continue;
+    }
     if(w.kind==='cave'){
       rock(w.x-w.insideX*.75,w.h/2,w.z-w.insideZ*.75,w.alongX?4.2:1.5,w.h,w.alongX?1.5:4.2);continue;
     }
@@ -255,8 +277,25 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   for(const x of [42,44,46])for(const z of [-68,-71,-74]){lantern(x,3.4,z,true);box(x,4.8,z,.025,2,.025,'gold');}
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
+    if(room.id===altarRoom.id)continue;
     const cx=(room.x1+room.x2)*2,cz=(room.z1+room.z2)*2;
     lantern(cx,room.h-.7,cz,true);box(cx,room.h-.2,cz,.03,.8,.03,'dark');
+    if(room.id.startsWith('expansion-')){
+      const theme=(Number(room.id.slice(-2))-1)%9;
+      const accents:MaterialKey[]=['steel','gold','red','stone','wood','water','paper','dark','gold'];
+      const m=accents[theme];
+      box(cx,.012,cz,(room.x2-room.x1+1)*4-1,.024,(room.z2-room.z1+1)*4-1,theme===4?'tatami':theme===3?'stone':'wood');
+      for(const side of [-1,1]){
+        const x=cx+side*3,z=cz+side*3;
+        if(theme===0){box(x,1.55,z,1.7,2.8,.12,'steel');box(x,3,z,1.9,.13,.22,'gold');}
+        else if(theme===2){cylinder(x,room.h/2,z,.28,room.h,'red');}
+        else if(theme===5){box(x,.35,z,2,.7,1.5,'stone');box(x,.72,z,1.8,.03,1.3,'water');}
+        else if(theme===7){for(const y of [.5,1.2,1.9]){box(x,y,z,1.7,.1,1,'wood');for(let j=0;j<6;j++)box(x-.65+j*.24,y+.18,z,.15,.28,.65,'paper');}}
+        else {cylinder(x,.7,z,.55,1.4,m,.7);cylinder(x,1.5,z,.7,.18,'gold');}
+        block(x,z,1.9,1.7,theme===2?room.h:theme===0?3:theme===5?.8:2.3);
+      }
+      continue;
+    }
     if(room.style==='tatami'){
       for(let x=room.x1*4-1;x<=room.x2*4+1;x+=2)for(let z=room.z1*4;z<=room.z2*4;z+=4){box(x,.025,z,1.96,.05,3.96,'tatami');box(x-.96,.055,z,.035,.01,3.95,'dark');}
       const offset=Math.min(5,(room.z2-room.z1+1)*2-3),cushion=Math.min(7,(room.z2-room.z1+1)*2-1.5);
@@ -381,12 +420,16 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   const staticChunks:{mesh:THREE.Mesh;center:THREE.Vector3;radius:number}[]=[];
   for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=true;mesh.receiveShadow=true;mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
-  obstacles.push(...GOAL_WALLS);
+  obstacles.push(...goal.walls);
   const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
   const upperFixed=[...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
-  const beads=[...placeMagatama(layout.rooms,obstacles,upperFixed),...placeRedMagatama(layout.cells,enemies.nodes.values(),obstacles,seededRandom(seed^0x5231))],beadMeshes=createMagatamaMeshes(scene,beads);
-  enemies.addPatrolTargets(beads.map(b=>({id:'room:'+b.id,position:b.position,floor:b.floor})));
-  const goal=new ShrineGoal(),goalMeshes=createGoalMeshes(scene,goal);
+  const beads=[...placeMagatama(layout.rooms,obstacles,upperFixed),...placeRedMagatama(layout.cells,enemies.nodes.values(),obstacles,seededRandom(seed^0x5231))];
+  const goldPoints=[...enemies.nodes.values()].filter(p=>p.z>=176&&layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind==='yokocho'&&!obstacles.some(o=>p.x>o.minX-1&&p.x<o.maxX+1&&p.z>o.minZ-1&&p.z<o.maxZ+1));
+  if(!goldPoints.length)throw new Error('No accessible gold location');
+  beads.push({id:'gold-yokocho',position:{...goldPoints[Math.floor(runRandom()*goldPoints.length)]},floor:0,color:'gold',collected:false,offered:false});
+  const beadMeshes=createMagatamaMeshes(scene,beads);
+  enemies.addPatrolTargets([...beads.map(b=>({id:'room:'+b.id,position:b.position,floor:b.floor})),...layout.expansionAreas.map(r=>({id:r.id,position:{x:(r.x1+r.x2)*2,z:(r.z1+r.z2)*2},floor:0}))]);
+  const goalMeshes=createGoalMeshes(scene,goal);
   const burstRecharge=new BurstRecharge(),timeStop=new TimeStop();let environmentTime=0;
   let goalBlockers=goal.blockers();
   let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
@@ -397,7 +440,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
   for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
   dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
-  const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ff9b49',10,14,2);scene.add(p);return p;});
+  const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ff9b49',7,11,2);scene.add(p);return p;});
   const flashlight=new THREE.SpotLight('#e6efff',46,36,.52,.65,1.5);flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
   renderer.shadowMap.type=THREE.PCFShadowMap;flashlight.castShadow=true;flashlight.shadow.mapSize.set(1024,1024);flashlight.shadow.bias=-.00015;flashlight.shadow.normalBias=.03;flashlight.shadow.camera.near=.1;flashlight.shadow.camera.far=36;
   const glowCanvas=document.createElement('canvas');glowCanvas.width=64;glowCanvas.height=64;const ctx=glowCanvas.getContext('2d')!;
@@ -410,26 +453,28 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   mats.light.color.multiplyScalar(1.35);mats.coolLight.color.multiplyScalar(1.15);
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#080c0d')};
-  new THREE.TextureLoader().load('/cedar.png',texture=>{if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());mats.wood.map=texture;mats.wood.color.set('#b7a596');mats.wood.needsUpdate=true;mats.red.map=texture;mats.red.needsUpdate=true;});
+  new THREE.TextureLoader().load('/cedar.png',texture=>{if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());mats.wood.map=texture;mats.wood.color.set('#b7a596');const grain=texture.clone();grain.colorSpace=THREE.NoColorSpace;grain.needsUpdate=true;surfaceTextures.push(grain);mats.wood.bumpMap=grain;mats.wood.bumpScale=.035;mats.wood.roughnessMap=grain;mats.wood.roughness=.85;mats.wood.needsUpdate=true;mats.red.bumpMap=grain;mats.red.bumpScale=.025;mats.red.map=texture;mats.red.needsUpdate=true;});
   const surfaceTextures:THREE.Texture[]=[];
   for(const [url,targets,bump] of [['/weathered-concrete.png',[mats.concrete,mats.stone,mats.rock,mats.earth],.045],['/rusted-steel.png',[mats.rust,mats.steel],.025]] as [string,THREE.MeshStandardMaterial[],number][]){
     new THREE.TextureLoader().load(url,texture=>{
       if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
       const relief=texture.clone();relief.colorSpace=THREE.NoColorSpace;relief.needsUpdate=true;surfaceTextures.push(texture,relief);
-      for(const m of targets){m.map=texture;m.bumpMap=relief;m.bumpScale=bump;if(m!==mats.earth&&m!==mats.rock)m.color.set('#a2a49e');m.needsUpdate=true;}
+      for(const m of targets){m.map=texture;m.bumpMap=relief;m.bumpScale=bump;m.roughnessMap=relief;if(m!==mats.earth&&m!==mats.rock)m.color.set('#a2a49e');m.needsUpdate=true;}
     });
   }
   const floorLevel=()=>elevation>UPPER_HEIGHT-.3?UPPER_HEIGHT:0;
   return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
     observeFrame(ms:number,active:boolean){if(budget.observe(ms,active))resizeTargets();},
+    get altarPosition(){return {...goal.altar};},
+    get goalPosition(){return {x:GOAL.x+goal.offset.x,z:GOAL.z+goal.offset.z};},
     get completed(){return goal.completed;},
     get burstCooldown(){return burstRecharge.remaining;},
     get timeStopped(){return timeStop.active;},
     get timeStopRemaining(){return timeStop.remaining;},
     get timeStopCooldown(){return timeStop.cooldown;},
     stopTime(){return !goal.completed&&timeStop.use();},
-    goalDirection(){return enemyDirection(camera.position,ALTAR,camera.rotation.y);},
-    collection(){return {...beadInventory(beads),blueOffered:goal.blueOffered,redOffered:goal.redOffered,unlocked:goal.unlocked,area:areaAt(camera.position,elevation)};},
+    goalDirection(){return enemyDirection(camera.position,goal.altar,camera.rotation.y);},
+    collection(){return {...beadInventory(beads),areaName:areaName(),blueOffered:goal.blueOffered,redOffered:goal.redOffered,unlocked:goal.unlocked,area:areaAt(camera.position,elevation)};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
       if(goal.completed)return {x:camera.position.x,z:camera.position.z,y:camera.position.y};
       refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
@@ -438,12 +483,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     enemyDirections(){return enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned'}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
     nearAltar(){return goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
-    interact(){if(goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
+    interact(){if(goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
     burst(){if(goal.completed||!burstRecharge.use())return null;return enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x);},
     step(dt:number){
       if(goal.completed)return false;
       burstRecharge.step(dt);
       const liveDt=timeStop.step(dt);environmentTime+=liveDt*1000;
+      const detectable=flashlight.visible||(lastMotion.running&&lastMotion.moving);
       if(runningSteps.update(dt,lastMotion.running,lastMotion.moving)){
         if(liveDt>1e-6)enemies.hear(camera.position,elevation);
         const cell=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4));footsteps.play(['stone','factory','bath','cistern','cave'].includes(cell?.kind??''));
@@ -454,10 +500,12 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       collectMagatama(beads,camera.position,elevation,collision);
       goal.update(dt,camera.position,elevation);refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
       if(goal.completed)return false;
-      if(liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision)){elevation=0;camera.position.set(SPAWN.x,1.68,SPAWN.z);enemies.reset();return true;}return false;
+      if(liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable)){elevation=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
+        const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
+        const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
     },
     configure(p:Preferences){
-      renderer.toneMappingExposure=p.brightness;
+      renderer.toneMappingExposure=p.brightness*.88;
       camera.fov=p.fov;camera.updateProjectionMatrix();
       selectedQuality=p.quality;const quality=budget.quality(p.quality);
       if(configuredQuality===quality)return;
@@ -488,7 +536,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         lastLight=time;
       }
       flashlight.position.copy(camera.position);flashlight.position.y-=.12;camera.getWorldDirection(direction);flashlight.target.position.copy(camera.position).addScaledVector(direction,10);
-      lightPool.forEach((l,i)=>l.intensity=10*(1+.02*Math.sin(environmentTime*.0021+i*2.3)));
+      lightPool.forEach((l,i)=>l.intensity=7*(1+.02*Math.sin(environmentTime*.0021+i*2.3)));
       enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125);
       beadMeshes.update(environmentTime);
       goalMeshes.update();

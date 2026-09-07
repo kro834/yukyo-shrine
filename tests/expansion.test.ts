@@ -18,14 +18,14 @@ test('six distinct stage wings contain distinct materials and join the existing 
 });
 test('exactly one danger enemy detects farther, moves faster, but can be outrun and stunned',()=>{
  const l=createLayout(),enemies=new Enemies(l.cells,l.obstacles);
- assert.equal(enemies.actors.length,28);assert.equal(enemies.actors.filter(e=>e.kind==='danger').length,1);
+ assert.equal(enemies.actors.length,8);assert.equal(enemies.actors.filter(e=>e.kind==='danger').length,1);
  const boss=enemies.actors.find(e=>e.kind==='danger')!;
  assert.ok(ENEMY_PROFILES.danger.sight>ENEMY_PROFILES.normal.sight*2);
  assert.ok(ENEMY_PROFILES.danger.chase>ENEMY_PROFILES.normal.chase);
  assert.ok(ENEMY_PROFILES.danger.chase<SPRINT_SPEED);
  boss.position={x:0,z:0};boss.facing=0;
  enemies.update(.05,{x:0,z:12},[]);assert.equal(boss.brain.mode,'chase');
- assert.ok(boss.position.z>.165&&boss.position.z<.167,'blue area reduces chase speed by sixty percent');
+ assert.ok(Math.abs(boss.position.z-ENEMY_PROFILES.danger.chase*.4*.05)<1e-6,'blue area reduces chase speed by sixty percent');
  const wall={minX:-5,maxX:5,minZ:3,maxZ:4};
  enemies.update(.7,{x:0,z:12},[wall]);assert.equal(boss.brain.mode,'patrol');
  enemies.burst({x:boss.position.x,z:boss.position.z},[]);

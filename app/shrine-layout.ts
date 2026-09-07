@@ -1,5 +1,6 @@
 import {seededRandom} from './seeded-random.ts';
-export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'|'shop'|'cave'|'field'};
+import {expandAreas} from './expansion-areas.ts';
+export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'|'shop'|'cave'|'field'|'yokocho'};
 export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean;kind?:Cell['kind']};
 export type Room = {id:string;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
 export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string;rooms?:string[];floor?:number};
@@ -123,6 +124,11 @@ export function createLayout(seed=1) {
   for(const [x1,x2] of [[28,32],[35,39],[42,46]])for(const [z1,z2] of [[-5,-2],[1,4]]){
     paddies.push({x1,x2,z1,z2});for(let x=x1;x<=x2;x++)for(let z=z1;z<=z2;z++)grid.delete(key(x,z));
   }
+  const expansionAreas=expandAreas(grid,rooms,courts);
+  // Unroofed back alleys: three cross-linked lanes behind tightly packed shops.
+  for(const x of [29,34,39])rect(x,14,x,48,4.5,'yokocho');
+  for(const z of [14,22,31,40,48])rect(29,z,39,z,4.5,'yokocho');
+  rect(22,14,29,14);rect(22,48,29,48);rect(29,45,34,48,5.5,'yokocho');
   // Generate new loops between the fixed landmark rooms. A passage always joins
   // two existing routes, so random generation cannot introduce a dead end.
   const protectedCell=(x:number,z:number)=>
@@ -194,7 +200,7 @@ export function createLayout(seed=1) {
   }
   const narrows:{x:number;z:number;alongX:boolean}[]=[];
   for(const c of grid.values()){
-    if(c.kind!=='passage'||!(c.x===-11||c.x===7||c.z===-23))continue;
+    if(!['passage','yokocho'].includes(c.kind))continue;
     const ew=grid.has(key(c.x-1,c.z))&&grid.has(key(c.x+1,c.z));
     const ns=grid.has(key(c.x,c.z-1))&&grid.has(key(c.x,c.z+1));
     const degree=[[1,0],[-1,0],[0,1],[0,-1]].filter(([dx,dz])=>grid.has(key(c.x+dx,c.z+dz))).length;
@@ -204,5 +210,5 @@ export function createLayout(seed=1) {
       ?{minX:x-2,maxX:x+2,minZ:z+sign*1.68-.32,maxZ:z+sign*1.68+.32}
       :{minX:x+sign*1.68-.32,maxX:x+sign*1.68+.32,minZ:z-2,maxZ:z+2});
   }
-  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors,courts,stages,paddies};
+  return {cells:[...grid.values()],grid,walls,obstacles,narrows,rooms,doors,courts,stages,paddies,expansionAreas};
 }
