@@ -1,7 +1,7 @@
 /** Layered clothing and articulated extremities share the actor material/merge lifecycle. */
 import * as THREE from 'three';
 import type {Enemy} from './shrine-gameplay.ts';
-import {rushPhase} from './enemy-traits.ts';
+import {finalePhase,hatredPressure,rushPhase} from './enemy-traits.ts';
 import {sculptedMask} from './sculpted-mask.ts';
 
 type Materials={cloth:THREE.Material;paleCloth:THREE.Material;sculpt:THREE.Material;skin:THREE.Material;mask:THREE.Material;black:THREE.Material;cord:THREE.Material};
@@ -13,6 +13,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
   lower.name='tailored-lower';upper.name='tailored-upper';head.name='tailored-head';
   root.add(lower,upper);upper.add(head);
   const arms:THREE.Group[]=[];
+  const hatredForearms:THREE.Group[]=[];
   const clamp=THREE.MathUtils.clamp;
   const put=(parent:THREE.Group,g:THREE.BufferGeometry,mat:THREE.Material,x=0,y=0,z=0)=>{
     const o=new THREE.Mesh(g,mat);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;parent.add(o);return o;
@@ -196,8 +197,17 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
       const cuff=garment(arm,[{y:-sleeveLength-.060,rx:.065,rz:.075,z:.020},{y:-sleeveLength-.025,rx:.067,rz:.076,z:.020}],isHatred?m.cloth:m.paleCloth,{folds:.02,hem:0,segments:20});cuff.rotation.z=side*.055;
       const wristY=isWarden?-1.24:isHatred?-1.19:isWrath?-.87:-.77;
       const elbow:V=[side*.030,-sleeveLength+.015,.015],wrist:V=[side*.035,wristY,.058];
-      limb(arm,m.skin,elbow,wrist,isWrath?.043:.030,isWrath?.026:.021,isWrath?.048:.034);
-      hand(arm,[wrist[0],wrist[1]-.020,wrist[2]+.003],side,isWrath?1.05:.90,false,isHatred?m.black:m.skin);
+      if(isHatred){
+        // A real elbow pivot lets the long black hands fold and extend without
+        // enlarging the actor's collision footprint.
+        const forearm=new THREE.Group();forearm.name='hatred-articulated-forearm';forearm.position.set(...elbow);arm.add(forearm);hatredForearms.push(forearm);
+        const localWrist:V=[wrist[0]-elbow[0],wrist[1]-elbow[1],wrist[2]-elbow[2]];
+        limb(forearm,m.skin,[0,0,0],localWrist,.030,.021,.034);
+        hand(forearm,[localWrist[0],localWrist[1]-.020,localWrist[2]+.003],side,.90,false,m.black);
+      }else{
+        limb(arm,m.skin,elbow,wrist,isWrath?.043:.030,isWrath?.026:.021,isWrath?.048:.034);
+        hand(arm,[wrist[0],wrist[1]-.020,wrist[2]+.003],side,isWrath?1.05:.90,false,m.skin);
+      }
     }
 
     if(isWarden){
@@ -232,21 +242,43 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     }
   }
 
-  for(const a of arms)merge(a);merge(head);merge(upper);merge(lower);
-  const headZ=head.rotation.z,headX=head.rotation.x;
+  for(const a of arms)merge(a);for(const forearm of hatredForearms)merge(forearm);merge(head);merge(upper);merge(lower);
+  const headZ=head.rotation.z,headX=head.rotation.x,headY=head.rotation.y;
   return {animate(e:Enemy,time:number){
     const stunned=e.brain.mode==='stunned',chasing=e.brain.mode==='chase';
-    const moving=!stunned&&!!(chasing||e.investigate||e.patrol),phase=rushPhase(e.traitTime);
+    const moving=!stunned&&!!(chasing||e.investigate||e.patrol),phase=isWrath?finalePhase('wrath',e.traitTime):rushPhase(e.traitTime),pressure=isHatred?hatredPressure(e.traitTime):0;
     const pace=time*(chasing?.010:.0048);
     let lean=isWrath?.055:0;
     if(kind==='pilgrim')lean=chasing?(phase==='windup'?.035:phase==='rush'?.100:.018):0;
+    // Hatred follows the actor's facing toward the player, then makes a small
+    // delayed head correction while its two-segment arms reach ahead.
+    if(isHatred&&chasing)lean=-.022-.018*pressure-.008*Math.sin(e.traitTime*1.75);
+    // Wrath has a readable three-beat threat: gather back, lunge, then settle.
+    if(isWrath&&chasing)lean=phase==='windup'?.055:phase==='rush'?-.060:.022;
     if(stunned)lean=0;
     const pivot=isMire?.29:waist+.055;
     upper.rotation.x=lean;upper.rotation.z=isFox&&e.flankPoint?.026:0;
     // Lower clothing and feet remain planted; the articulated torso moves above the obi.
     upper.position.set(0,pivot*(1-Math.cos(lean))+(moving?.003*Math.sin(pace):0),-pivot*Math.sin(lean));
-    arms.forEach((arm,i)=>{arm.rotation.x=stunned?0:moving?Math.sin(pace+i*Math.PI)*(isMire?.025:isWarden?.018:isHatred?.025:.045):0;});
+    hatredForearms.forEach(forearm=>forearm.rotation.set(0,0,0));
+    arms.forEach((arm,i)=>{
+      if(stunned){arm.rotation.set(0,0,0);return;}
+      if(isHatred&&chasing){
+        arm.rotation.x=-.014-.014*pressure-.008*Math.sin(e.traitTime*2.2+i*.7);
+        arm.rotation.z=(i?1:-1)*.018;
+        const forearm=hatredForearms[i];if(forearm)forearm.rotation.x=-.030-.022*pressure-.014*Math.sin(e.traitTime*2.2+i*.7);
+        return;
+      }
+      if(isWrath&&chasing){
+        arm.rotation.x=phase==='windup'?.045:phase==='rush'?-.060:.020;
+        arm.rotation.z=(i?1:-1)*(phase==='rush'?.024:.012);
+        return;
+      }
+      arm.rotation.set(moving?Math.sin(pace+i*Math.PI)*(isMire?.025:isWarden?.018:.045):0,0,0);
+    });
+    const headScan=isHatred&&chasing?Math.sin(e.traitTime*1.75)*(.060+.070*pressure):0;
+    head.rotation.y=headY+(stunned?0:headScan);
     head.rotation.z=headZ+(stunned?.10:isWarden&&e.investigate?.10:Math.sin(time*.00085)*.018);
-    head.rotation.x=headX+(stunned?.035:Math.sin(time*.0007)*.012);
+    head.rotation.x=headX+(stunned?.035:isHatred&&chasing?.055:Math.sin(time*.0007)*.012);
   }};
 }

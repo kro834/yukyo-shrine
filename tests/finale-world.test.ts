@@ -20,7 +20,10 @@ test('finale inventory, freeze, threat and death reset remain synchronized in th
   w.setMode('normal');const gold=points.find(p=>p.floor===0&&p.id.includes('gold-'))!;
   assert.ok(gold);w.camera.position.set(gold.position.x,1.68,gold.position.z);w.step(.05);
   assert.ok(w.finale);assert.equal(enemies!.actors.length,1);assert.equal(w.mirrorStatus().count,2);
-  const boss=enemies!.actors[0];boss.brain.mode='chase';w.step(.05);assert.equal(w.runStatus().pressure,1);
+  const boss=enemies!.actors[0];boss.brain.mode='chase';w.step(.05);
+  const distantPressure=w.runStatus().pressure;assert.ok(distantPressure>0&&distantPressure<1);
+  boss.position={x:w.camera.position.x+5,z:w.camera.position.z};boss.floor=0;w.step(.05);
+  assert.ok(w.runStatus().pressure>distantPressure&&w.runStatus().pressure<1,'final pursuit pressure must respond to distance');
   assert.equal(w.useMirror(),true);assert.equal(w.mirrorStatus().count,1);
   assert.equal(w.stopTime(),true);const beforeCalls=calls,position={...boss.position};
   for(let i=0;i<199;i++)w.step(.05);

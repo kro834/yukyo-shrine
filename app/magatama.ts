@@ -1,8 +1,34 @@
-import type {Position,Obstacle} from './movement.ts';
+import {RADIUS,type Position,type Obstacle} from './movement.ts';
 import type {Room,Cell} from './shrine-layout.ts';
 import {RED_AREAS} from './area-rules.ts';
 import {segmentBlocked} from './shrine-gameplay.ts';
+import {nearbyObstacles} from './spatial.ts';
 export type Bead={id:string;position:Position;floor:number;collected:boolean;color:'blue'|'red'|'gold';offered:boolean};
+/** Keep the caller's area and random choice, preferring places visible from
+ * several nearby walk nodes over blind pockets. Navigation nodes use 4 m cells.
+ * One random sample is consumed; never move a bead outside its candidate set.
+ */
+export function chooseReadableMagatama(candidates:readonly Position[],nodes:Iterable<Position>,walls:Obstacle[],random:()=>number):Position{
+ const nodeAt=new Map([...nodes].map(p=>[p.x+','+p.z,p]));
+ const clearance=walls.map(o=>({...o,minX:o.minX-RADIUS,maxX:o.maxX+RADIUS,minZ:o.minZ-RADIUS,maxZ:o.maxZ+RADIUS}));
+ const cardinal=[[1,0],[-1,0],[0,1],[0,-1]],diagonal=[[1,1],[1,-1],[-1,1],[-1,-1]];
+ const scored=candidates.filter(p=>!nearbyObstacles(walls,p.x-.85,p.z-.85,p.x+.85,p.z+.85).some(o=>p.x>o.minX-.85&&p.x<o.maxX+.85&&p.z>o.minZ-.85&&p.z<o.maxZ+.85)).map(position=>{
+  const visible=(directions:number[][])=>directions.reduce((count,[dx,dz])=>{
+   const approach=nodeAt.get((position.x+dx*4)+','+(position.z+dz*4));
+   return count+(approach&&!segmentBlocked(position,approach,clearance)?1:0);
+  },0);
+  const approaches=visible(cardinal),shortViews=visible(diagonal);
+  return {position,approaches,weight:1+approaches*.20+shortViews*.08};
+ });
+ if(!scored.length)throw new Error('No accessible readable magatama location');
+ const open=scored.filter(p=>p.approaches>=2);
+ // A sparse area keeps its varied original choices instead of collapsing to
+ // the sole junction. Broad areas can discard their least visible dead ends.
+ const pool=open.length>=Math.min(4,scored.length)?open:scored;
+ const total=pool.reduce((sum,p)=>sum+p.weight,0);let draw=Math.max(0,Math.min(1,random()))*total;
+ for(const candidate of pool){draw-=candidate.weight;if(draw<0)return {...candidate.position};}
+ return {...pool[pool.length-1].position};
+}
 export function placeMagatama(rooms:Room[],walls:Obstacle[],upperWalls:Obstacle[]):Bead[]{
   const spaces=[...rooms.filter(r=>r.bead??!r.id.startsWith('expansion-')).map(r=>({id:r.id,x1:r.x1*4+1,x2:r.x2*4-1,z1:r.z1*4+1,z2:r.z2*4-1,floor:0})),
     {id:'upper-a',x1:60,x2:68,z1:4,z2:12,floor:4.8},{id:'upper-b',x1:72,x2:80,z1:4,z2:12,floor:4.8}];
@@ -21,7 +47,7 @@ export function placeRedMagatama(cells:Cell[],nodes:Iterable<Position>,walls:Obs
  return RED_AREAS.map(area=>{
   const candidates=points.filter(p=>kinds.get(Math.round(p.x/4)+','+Math.round(p.z/4))===area&&!walls.some(o=>p.x>o.minX-.85&&p.x<o.maxX+.85&&p.z>o.minZ-.85&&p.z<o.maxZ+.85));
   if(!candidates.length)throw new Error('No reachable red magatama location: '+area);
-  const position={...candidates[Math.min(candidates.length-1,Math.floor(random()*candidates.length))]};
+  const position=chooseReadableMagatama(candidates,points,walls,random);
   return {id:'red-'+area,position,floor:0,collected:false,color:'red',offered:false};
  });
 }

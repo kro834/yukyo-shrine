@@ -41,7 +41,7 @@ import {enemyDirection,enemyFloorHint} from './enemy-direction.ts';
 import {movePlayer} from './movement.ts';
 import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,floorHeightAt} from './annex.ts';
 import {RunningSteps,createFootstepAudio} from './footsteps.ts';
-import {placeMagatama,placeRedMagatama,collectMagatama,beadInventory,spendBeads} from './magatama.ts';
+import {placeMagatama,placeRedMagatama,chooseReadableMagatama,collectMagatama,beadInventory,spendBeads} from './magatama.ts';
 import {createMagatamaMeshes} from './magatama-mesh.ts';
 import {ShrineGoal,GOAL} from './shrine-goal.ts';
 import {seededRandom} from './seeded-random.ts';
@@ -669,7 +669,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const goldPoints=[...enemies.nodes.values()].filter(p=>layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind==='yokocho'&&!obstacles.some(o=>p.x>o.minX-1&&p.x<o.maxX+1&&p.z>o.minZ-1&&p.z<o.maxZ+1));
   const pursuer=enemies.actors.find(e=>e.kind==='danger')!;if(goldPoints.length){const home=goldPoints.reduce((a,b)=>Math.hypot(a.x-SPAWN.x,a.z-SPAWN.z)>Math.hypot(b.x-SPAWN.x,b.z-SPAWN.z)?a:b);pursuer.home={...home};pursuer.position={...home};}
   if(!goldPoints.length)throw new Error('No accessible gold location');
-  beads.push({id:'gold-yokocho',position:{...goldPoints[Math.floor(runRandom()*goldPoints.length)]},floor:0,color:'gold',collected:false,offered:false});
+  beads.push({id:'gold-yokocho',position:chooseReadableMagatama(goldPoints,enemies.nodes.values(),obstacles,runRandom),floor:0,color:'gold',collected:false,offered:false});
   const beadMeshes=createMagatamaMeshes(scene,beads);
   enemies.addPatrolTargets([...beads.map(b=>({id:'room:'+b.id,position:b.position,floor:b.floor})),...layout.expansionAreas.map(r=>({id:r.id,position:{x:(r.x1+r.x2)*2,z:(r.z1+r.z2)*2},floor:0}))]);
   const goalMeshes=createGoalMeshes(scene,goal);
