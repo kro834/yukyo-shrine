@@ -12,7 +12,7 @@ Capture restores the ordinary roster, empties held/offered beads and mirrors, cl
 
 ## Modes and stages
 
-Start with Gallery, Normal or Hard. Gallery provides safe sightseeing with no active enemies. Clearing a stage unlocks the choice of **深淵 (Abyss)** or **外縁 (Outer Reach)**, or a new seed for the same stage. A stage change recreates the world and input lifecycle while retaining preferences.
+Start with Gallery, Normal or Hard. Gallery provides safe sightseeing with no active enemies. Only clearing on Hard unlocks the choice of **深淵 (Abyss)** or **外縁 (Outer Reach)**, or a new seed for the same stage. A stage change recreates the world and input lifecycle while retaining preferences.
 
 Abyss has lower cave ceilings, damp dark surfaces, fewer inter-sector links and longer enemy searches. Outer Reach emphasizes open fenced fields, moonlit sky, alleys and shops, with wider detection and faster pursuit. Both preserve all bead routes and tested ground navigation.
 
@@ -46,7 +46,7 @@ See [MATERIALS.md](MATERIALS.md) and bundled provenance JSON for official CC0 ma
 ## Development and verification
 
 - `pnpm dev` starts the local site; `pnpm build` produces the static client.
-- `node --test tests/*.test.ts` runs the145-test suite (Node24 used).
+- `node --test tests/*.test.ts` runs the146-test suite (Node24 used).
 - `node node_modules/typescript/bin/tsc --noEmit` checks types.
 
 Tests cover input transitions, concurrent touch actions, slider sensitivity, cursor state policy, all objective routes, furnished connectivity, stairs, door interaction, rendering resource/texture lifetimes, final pursuit transitions,32 real-ramp pursuit cases, mirror grants and reset, and threat/freeze/stun reliability.

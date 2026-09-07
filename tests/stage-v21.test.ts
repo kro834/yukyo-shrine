@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import {createSectorLayout} from '../app/sector-layout.ts';
-import {STAGES,stageRules,type StageId} from '../app/stage-profile.ts';
+import {STAGES,stageRules,canTransitionStage,type StageId} from '../app/stage-profile.ts';
 import {Doors,Enemies,segmentBlocked} from '../app/shrine-gameplay.ts';
 import {createWorld} from '../app/shrine-world.ts';
 import {RADIUS,type Obstacle,type Position} from '../app/movement.ts';
@@ -13,6 +13,13 @@ import {DEFAULTS,startupPreferences} from '../app/preferences.ts';
 import {ContactOcclusion} from '../app/contact-occlusion.ts';
 import {buildYokochoFront} from '../app/yokocho-front.ts';
 import {MirrorInventory} from '../app/mirror-inventory.ts';
+
+test('only a completed Hard run unlocks another stage; cleared Normal runs can retry',()=>{
+ for(const current of ['shrine','abyss','outer'] as StageId[])for(const next of ['shrine','abyss','outer'] as StageId[])for(const mode of ['gallery','normal','hard'] as const){
+  assert.equal(canTransitionStage(mode,false,current,next),false);
+  assert.equal(canTransitionStage(mode,true,current,next),mode==='hard'||current===next);
+ }
+});
 
 function navigation(input:Map<string,Position>,walls:Obstacle[]){
  const expanded=walls.map(w=>({...w,minX:w.minX-RADIUS,maxX:w.maxX+RADIUS,minZ:w.minZ-RADIUS,maxZ:w.maxZ+RADIUS}));

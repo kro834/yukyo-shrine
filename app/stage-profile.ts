@@ -1,6 +1,7 @@
 import type {Cell} from './shrine-layout.ts';
 import {modeRules,type PlayMode} from './play-mode.ts';
 export type StageId='shrine'|'abyss'|'outer';
+export const canTransitionStage=(mode:PlayMode,completed:boolean,current:StageId,next:StageId)=>completed&&(current===next||mode==='hard');
 type Profile={name:string;subtitle:string;description:string;challenge:string;links:number;salt:number;fog:string;density:number;moon:number;counts:Partial<Record<Cell['kind'],number>>;sense:number;speed:number;search:number};
 export const STAGES:Record<StageId,Profile>={
  shrine:{name:'祭殿回廊',subtitle:'封じられた社',description:'灯りの残る回廊と、忘れられた街。',challenge:'青6個・赤2個・金1個のいずれかを奉納',links:40,salt:0,fog:'#100c09',density:.0205,moon:.10,counts:{hall:5,yokocho:5,shop:4,cave:3,field:2,factory:1,bath:2,cistern:1},sense:1,speed:1,search:1},
