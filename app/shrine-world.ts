@@ -12,6 +12,7 @@ import {buildYokochoFront} from './yokocho-front.ts';
 import {buildNarrowInterior,NARROW_LAMP} from './narrow-interior.ts';
 import {chamferedBox} from './chamfered-box.ts';
 import {wainscot} from './wainscot.ts';
+import {waterFinish} from './water-finish.ts';
 import {finiteFixture,finiteSceneFixtures,pendingFixtureFinish} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -143,6 +144,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   agedFinish(mats.concreteWall,'plaster');agedFinish(mats.civicPaint,'lacquer');agedFinish(mats.civicEnamel,'lacquer');
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
   terrainFinish(mats.earth);terrainFinish(mats.rock);terrainFinish(mats.bank);
+  const waterClock={value:0};waterFinish(mats.water,waterClock);
+  if(stage==='outer')mats.water.envMapIntensity=0;
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
   lampFinish(mats.circusGlow,'diffuser');
   for(const m of [mats.circusRed,mats.circusIvory])circusFabric(m);
@@ -447,6 +450,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   };
   const cisternSector=layout.sectors.find(s=>s.kind==='cistern')!,poolPosition={x:(cisternSector.x1+cisternSector.x2)*2,z:(cisternSector.z1+cisternSector.z2)*2};
   const water=new THREE.Mesh(new THREE.PlaneGeometry(4.85,6.85),new THREE.MeshPhysicalMaterial({color:'#17332f',metalness:0,roughness:.13,ior:1.333,clearcoat:0}));water.rotation.x=-Math.PI/2;water.position.set(poolPosition.x,.024,poolPosition.z);scene.add(water);
+  waterFinish(water.material,waterClock);
   const scannedPlacements:ScannedPlacement[]=[];
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
@@ -660,7 +664,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
   surfaces.setLightingFinish(finiteFixture);
-  surfaces.preserveBaseFinish(mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory,mats.tatamiTrim);
+  surfaces.preserveBaseFinish(mats.water,mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory,mats.tatamiTrim);
   const linenTargets=circus?[mats.circusRed,mats.circusIvory]:gothic?[]:[mats.tatamiTrim];
   if(linenTargets.length)surfaces.add('/materials/textile/rough_linen_diff_1k.jpg',linenTargets,{normal:'/materials/textile/rough_linen_nor_gl_1k.jpg',roughness:'/materials/textile/rough_linen_rough_1k.jpg',repeat:[1/.2707081393,1/.2712999880],normalStrength:.4,preserveFinish:true,lowSize:256,ultra:{full:'/materials/textile/rough_linen_diff_2k.jpg',normal:'/materials/textile/rough_linen_nor_gl_2k.jpg',roughness:'/materials/textile/rough_linen_rough_2k.jpg'}});
   surfaces.add('/cedar.png',[mats.red],{bump:.003,tint:gothic?'#462129':undefined});
@@ -760,8 +764,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       camera.fov=p.fov;camera.updateProjectionMatrix();
       selectedQuality=p.quality;const quality=budget.quality(p.quality);
       if(stage==='outer'){
-        if(quality!=='low'&&!nightSky&&!skyRequested&&!rendererOverride){skyRequested=true;new HDRLoader().load('/materials/outer/qwantani_moonrise_puresky_1k.hdr',texture=>{if(disposed){texture.dispose();return;}texture.mapping=THREE.EquirectangularReflectionMapping;nightSky=texture;if(configuredQuality!=='low')scene.background=texture;});}
-        scene.background=quality!=='low'&&nightSky?nightSky:backgroundColor;scene.backgroundIntensity=.018;
+        if(quality!=='low'&&!nightSky&&!skyRequested&&!rendererOverride){skyRequested=true;new HDRLoader().load('/materials/outer/qwantani_moonrise_puresky_1k.hdr',texture=>{if(disposed){texture.dispose();return;}texture.mapping=THREE.EquirectangularReflectionMapping;nightSky=texture;if(configuredQuality!=='low'){scene.background=texture;mats.water.envMap=texture;mats.water.envMapIntensity=.018;mats.water.needsUpdate=true;}});}
+        scene.background=quality!=='low'&&nightSky?nightSky:backgroundColor;scene.backgroundIntensity=.018;const waterSky=quality!=='low'?nightSky??null:null;if(mats.water.envMap!==waterSky){mats.water.envMap=waterSky;mats.water.needsUpdate=true;}mats.water.envMapIntensity=waterSky?.018:0;
       }
       if(configuredQuality===quality)return;
       const wasUltra=configuredQuality==='ultra',ultra=quality==='ultra',high=quality==='high'||ultra;
@@ -779,7 +783,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       reflectionEnabled=!circus&&quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!circus&&!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
       effects?.configure(quality);glowMat.opacity=quality==='low'?.26:.12;
     },
-    render(time:number){
+    render(time:number){waterClock.value=environmentTime/1000;
       if(circusRuntime)circusMeshes?.update(circusRuntime.snapshot(),environmentTime/1000,camera.position);
       const area=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind;
       moodTarget.copy(area==='shop'||area==='factory'||area==='bath'||area==='cistern'||area==='cave'||area==='field'?moods[area]:moods.shrine);
