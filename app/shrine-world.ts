@@ -12,6 +12,7 @@ import {buildYokochoFront} from './yokocho-front.ts';
 import {buildNarrowInterior,NARROW_LAMP} from './narrow-interior.ts';
 import {chamferedBox} from './chamfered-box.ts';
 import {wainscot} from './wainscot.ts';
+import {finiteFixture,finiteSceneFixtures} from './finite-fixture.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {Reflector} from 'three/addons/objects/Reflector.js';
@@ -197,7 +198,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   let fixtureFloor=0;const fixtureFloors=new Map<THREE.Vector3,number>();
   const fixtureColors=new Map<THREE.Vector3,string>();
   const fixtureShadowPositions=new Map<THREE.Vector3,THREE.Vector3>();
-  const fixture=(x:number,y:number,z:number,color:string,floor=fixtureFloor,shadowDrop=0)=>{if(groundGeometry&&y>4.5&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5))return;const p=new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z);lanterns.push(p);fixtureColors.set(p,color);fixtureFloors.set(p,floor);if(shadowDrop&&p.y-shadowDrop>floor+1.9)fixtureShadowPositions.set(p,p.clone().add(new THREE.Vector3(0,-shadowDrop,0)));};
+  const fixturePowers=new Map<THREE.Vector3,number>();
+  const fixture=(x:number,y:number,z:number,color:string,floor=fixtureFloor,shadowDrop=0,power=7)=>{if(groundGeometry&&y>4.5&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5))return;const p=new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z);lanterns.push(p);fixtureColors.set(p,color);fixtureFloors.set(p,floor);fixturePowers.set(p,power);if(shadowDrop&&p.y-shadowDrop>floor+1.9)fixtureShadowPositions.set(p,p.clone().add(new THREE.Vector3(0,-shadowDrop,0)));};
   // Put the pooled shadow emitter below the fitted cap so the housing cannot
   // eclipse its own light. Reuse the existing single desktop shadow atlas.
   const circusFixture=(x:number,y:number,z:number,color:string)=>fixture(x,y,z,color,fixtureFloor,.31);
@@ -381,7 +383,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       for(const side of [-1,1])box(fx+(w.alongX?side*.19:0),.65,fz+(w.alongX?0:side*.19),.026,.82,.026,'dark');
       for(const y of [.45,.82])box(fx,y,fz,w.alongX?.36:.018,.018,w.alongX?.018:.36,'wood');
       for(const y of [.25,1.05])box(px,y,pz,w.alongX?.44:.16,.055,w.alongX?.16:.44,'dark');
-      fixture(px+w.insideX*.18,.8,pz+w.insideZ*.18,'#f1a052');
+      fixture(px+w.insideX*.18,.8,pz+w.insideZ*.18,'#ffd2a0',fixtureFloor,0,2.2);
     }
   }
   for(const n of layout.narrows){
@@ -637,7 +639,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
   for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
   dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
-  const fixtureLighting=new FixtureLighting(),fixtureShadow=new FixtureShadow(scene),lightFixtures=lanterns.map((position,id)=>({id,position,floor:fixtureFloors.get(position)??0,color:fixtureColors.get(position)??'#ffc184',shadowPosition:fixtureShadowPositions.get(position)}));
+  const fixtureLighting=new FixtureLighting(),fixtureShadow=new FixtureShadow(scene),lightFixtures=lanterns.map((position,id)=>({id,position,floor:fixtureFloors.get(position)??0,color:fixtureColors.get(position)??'#ffc184',shadowPosition:fixtureShadowPositions.get(position),power:fixturePowers.get(position)??7}));
   const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ffc184',0,11,2);scene.add(p);return p;});
   const flashlight=new THREE.SpotLight('#edf1ee',42,36,.72,.4,2),flashlightRight=new THREE.Vector3();flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
   renderer.shadowMap.type=THREE.PCFShadowMap;flashlight.castShadow=true;flashlight.shadow.mapSize.set(1024,1024);flashlight.shadow.bias=-.00015;flashlight.shadow.normalBias=.03;flashlight.shadow.camera.near=.1;flashlight.shadow.camera.far=36;
@@ -656,6 +658,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
+  surfaces.setLightingFinish(finiteFixture);
   surfaces.preserveBaseFinish(mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory,mats.tatamiTrim);
   const linenTargets=circus?[mats.circusRed,mats.circusIvory]:gothic?[]:[mats.tatamiTrim];
   if(linenTargets.length)surfaces.add('/materials/textile/rough_linen_diff_1k.jpg',linenTargets,{normal:'/materials/textile/rough_linen_nor_gl_1k.jpg',roughness:'/materials/textile/rough_linen_rough_1k.jpg',repeat:[1/.2707081393,1/.2712999880],normalStrength:.4,preserveFinish:true,lowSize:256,ultra:{full:'/materials/textile/rough_linen_diff_2k.jpg',normal:'/materials/textile/rough_linen_nor_gl_2k.jpg',roughness:'/materials/textile/rough_linen_rough_2k.jpg'}});
@@ -682,7 +685,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const floorLevel=()=>floorBand(elevation);
   const fixedFor=(level:number)=>level>9?thirdFixed:level>4?upperFixed:obstacles;
   const collisionFor=()=>elevation>9.3?thirdFixed:elevation>4.5?upperCollision:groundCollision;
-  return {renderer,scene,camera,layout,stage,scannedReady:scannedProps.ready,
+  finiteSceneFixtures(scene);
+  const scannedReady=scannedProps.ready.then(()=>{if(!disposed)finiteSceneFixtures(scene);});
+  return {renderer,scene,camera,layout,stage,scannedReady,
     setMode(mode:PlayMode){circusRuntime?.reset();refreshCollision();playMode=mode;if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=stageRules(stage,mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
     get playMode(){return playMode;},
     get riding(){return circusRuntime?.riding??false;},
@@ -794,7 +799,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const movingShadow=!!circusRuntime&&(circusRuntime.snapshot().moving||circusRuntime.snapshot().devices.some(d=>d.progress!==d.target))||(playMode!=='gallery'&&enemies.actors.some(e=>Math.abs(e.floor-shadowOrigin.y)<5&&Math.hypot(e.position.x-shadowOrigin.x,e.position.z-shadowOrigin.z)<11))||doors.states.some(d=>d.progress>0&&d.progress<1&&Math.hypot(d.spec.x-shadowOrigin.x,d.spec.z-shadowOrigin.z)<11)||beads.some(b=>!b.collected&&Math.abs(b.floor-shadowOrigin.y)<5&&Math.hypot(b.position.x-shadowOrigin.x,b.position.z-shadowOrigin.z)<11)||(goal.progress>0&&goal.progress<1&&Math.hypot(goal.offset.x-shadowOrigin.x,GOAL.z+goal.offset.z-shadowOrigin.z)<11);
       fixtureShadow.update(fixtureLighting.slots,camera.position,lightDt,time,movingShadow);
       if(gothic)fixtureShadow.light.intensity*=.55;
-      lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=(gothic?3.8:7)*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
+      lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=(gothic?3.8:7)*((slot.current?.power??7)/7)*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
       doorMeshes.update(camera.position,configuredQuality==='low'?72:110);
       scannedProps.update(camera.position);
       enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);

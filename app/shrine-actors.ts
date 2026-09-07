@@ -6,6 +6,7 @@ import {agedFinish} from './surface-finish.ts';
 import {SurfaceLibrary} from './surface-library.ts';
 import {surfaceUV} from './surface-uv.ts';
 import {chamferedBox} from './chamfered-box.ts';
+import {finiteFixture} from './finite-fixture.ts';
 import {fabricFinish} from './fabric-finish.ts';
 import {organicFinish} from './organic-finish.ts';
 import {slidingDoorLeaf} from './sliding-door-leaf.ts';
@@ -16,7 +17,7 @@ export function createDoorMeshes(scene:THREE.Scene,doors:Doors,gothic=false){
   const paper=new THREE.MeshStandardMaterial({color:gothic?'#716658':'#b7af9b',roughness:.97,vertexColors:true});
   agedFinish(paper,gothic?'wood':'paper');
   const metal=new THREE.MeshStandardMaterial({color:gothic?'#55524b':'#5e5141',metalness:.55,roughness:.65,vertexColors:true});
-  const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.add('/materials/wood_planks_diff.jpg',[wood],{tint:gothic?'#837563':'#d9d0c2',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.65,ultra:{full:'/materials/ultra/wood_planks_diff_2k.jpg',normal:'/materials/ultra/wood_planks_nor_gl_2k.jpg',roughness:'/materials/ultra/wood_planks_rough_2k.jpg'}});
+  const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.setLightingFinish(finiteFixture);surfaces.add('/materials/wood_planks_diff.jpg',[wood],{tint:gothic?'#837563':'#d9d0c2',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.65,ultra:{full:'/materials/ultra/wood_planks_diff_2k.jpg',normal:'/materials/ultra/wood_planks_nor_gl_2k.jpg',roughness:'/materials/ultra/wood_planks_rough_2k.jpg'}});
   const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>{const g=chamferedBox(w,h,d).translate(x,y,z);surfaceUV(g,.38,'timber-photo');return g;};
   if(gothic)surfaces.add('/materials/wood_planks_diff.jpg',[paper],{tint:'#716658',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.5,preserveFinish:true});
   else surfaces.add('/materials/interior/decrepit_wallpaper/decrepit_wallpaper_diff_1k.jpg',[paper],{tint:'#d7cdb9',normal:'/materials/interior/decrepit_wallpaper/decrepit_wallpaper_nor_gl_1k.jpg',roughness:'/materials/interior/decrepit_wallpaper/decrepit_wallpaper_rough_1k.jpg',normalStrength:.35,lowSize:256});
@@ -68,7 +69,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const cord=new THREE.MeshStandardMaterial({color:'#6a5c40',roughness:1});
   const aura=new THREE.MeshBasicMaterial({color:'#a7c4c0',transparent:true,opacity:.23,depthWrite:false,depthTest:false,fog:false});
   let enabled=true;
-  const surfaces=new SurfaceLibrary([cloth,paleCloth,skin,mask,sculpt],4);surfaces.preserveBaseFinish(cloth,paleCloth);surfaces.add('/horror-hemp.png',[cloth,paleCloth],{bump:.0015});
+  const surfaces=new SurfaceLibrary([cloth,paleCloth,skin,mask,sculpt],4);surfaces.setLightingFinish(finiteFixture);surfaces.preserveBaseFinish(cloth,paleCloth);surfaces.add('/horror-hemp.png',[cloth,paleCloth],{bump:.0015});
   const part=(parent:THREE.Group,g:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z:number)=>{const mesh=new THREE.Mesh(g,m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=m!==aura;parent.add(mesh);return mesh;};
   const robe=(top:number,bottom:number,height:number)=>{const g=new THREE.CylinderGeometry(top,bottom,height,24,8);const p=g.getAttribute('position');for(let i=0;i<p.count;i++){const a=Math.atan2(p.getZ(i),p.getX(i)),fold=1+Math.sin(a*11+p.getY(i)*1.6)*.065;p.setX(i,p.getX(i)*fold);p.setZ(i,p.getZ(i)*fold*.72);}g.computeVertexNormals();return g;};
   const echoRig=(root:THREE.Group)=>{
@@ -117,3 +118,4 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
     }
   },dispose(){surfaces.dispose();for(const m of [cloth,paleCloth,sculpt,skin,mask,black,cord,aura])m.dispose();}};
 }
+

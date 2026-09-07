@@ -1,7 +1,7 @@
 import {lightBlocked} from './flash-visibility.ts';
 import type {Obstacle,Position} from './movement.ts';
 type Point3=Position&{y:number};
-export type LightFixture={id:number;position:Point3;floor:number;color:string;shadowPosition?:Point3};
+export type LightFixture={id:number;position:Point3;floor:number;color:string;shadowPosition?:Point3;power?:number};
 type Slot={current:LightFixture|null;target:LightFixture|null;gain:number};
 /** Stable fixture ownership: fade out before moving a pooled light to another lamp. */
 export class FixtureLighting {

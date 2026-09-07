@@ -17,6 +17,7 @@ export class SurfaceLibrary {
   private programs:Map<THREE.MeshStandardMaterial,{compile:THREE.MeshStandardMaterial['onBeforeCompile'];key:()=>string}>;
   private anisotropy:number;
   private loader:THREE.TextureLoader;
+  private lightingFinish?: (material:THREE.MeshStandardMaterial)=>void;
   constructor(materials:THREE.Material[],anisotropy:number,loader=new THREE.TextureLoader()){
     this.anisotropy=anisotropy;this.loader=loader;
     this.programs=new Map(materials.filter((m):m is THREE.MeshStandardMaterial=>m instanceof THREE.MeshStandardMaterial).map(m=>[m,{compile:m.onBeforeCompile,key:m.customProgramCacheKey.bind(m)}]));
@@ -50,6 +51,7 @@ export class SurfaceLibrary {
     });
   }
   setQuality(quality:Preferences['quality']){this.quality=quality;if(quality==='high'||quality==='ultra')for(const load of this.details)load();if(quality==='ultra')for(const load of this.ultraDetails)load();this.apply();}
+  setLightingFinish(finish:(material:THREE.MeshStandardMaterial)=>void){this.lightingFinish=finish;this.apply();}
   preserveBaseFinish(...materials:THREE.MeshStandardMaterial[]){for(const m of materials)this.baseFinishes.add(m);this.apply();}
   private apply(){
     const ultra=this.quality==='ultra',high=this.quality==='high'||ultra,low=this.quality==='low';
@@ -66,6 +68,7 @@ export class SurfaceLibrary {
         for(const t of [surface.full,surface.relief,surface.normal,surface.roughness,surface.metalness,...Object.values(surface.ultra)])if(t){const anisotropy=Math.min(ultra?16:high?8:4,this.anisotropy);if(t.anisotropy!==anisotropy){t.anisotropy=anisotropy;t.needsUpdate=true;}}
         surface.small.anisotropy=1;
       }
+      this.lightingFinish?.(m);
       if(changed)m.needsUpdate=true;
     }
   }

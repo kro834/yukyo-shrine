@@ -39,7 +39,7 @@ export class FixtureShadow {
    if(next?.shadowPosition){this.light.position.set(next.shadowPosition.x,next.shadowPosition.y,next.shadowPosition.z);this.light.target.position.set(next.shadowPosition.x,next.floor+.05,next.shadowPosition.z);this.light.color.set(next.color);}
   }
   const gain=(same?ownerSlot?.gain:slots.find(s=>s.current?.id===this.owner?.id)?.gain)??0;
-  this.light.intensity=this.owner?5.25*this.blend*gain:0;
+  this.light.intensity=this.owner?5.25*((this.owner.power??7)/7)*this.blend*gain:0;
   this.light.visible=this.light.intensity>0&&this.owner!==null;
   // Static rooms reuse the atlas; moving doors/actors refresh at up to 30 Hz.
   const refresh=this.light.intensity>0&&(this.lastUpdate===-Infinity||(dynamic||this.dynamicLastFrame)&&time-this.lastUpdate>=1000/30);
