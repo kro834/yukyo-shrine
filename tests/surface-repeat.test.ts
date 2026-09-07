@@ -11,8 +11,9 @@ test('physical texture scale remains identical through delayed detail loads and 
  library.add('albedo',[material],{repeat,normal:'normal',roughness:'rough',ultra:{full:'ultra',normal:'ultraNormal',roughness:'ultraRough'}});
  const supply=(key:string)=>callbacks.get(key)!(new THREE.Texture({}));
  const inspect=()=>{for(const m of [material.map,material.normalMap,material.roughnessMap])if(m)assert.deepEqual(m.repeat.toArray(),repeat);};
- supply('albedo');inspect();library.setQuality('ultra');supply('ultra');supply('normal');inspect();
+ supply('albedo');inspect();assert.equal((material.map!.image as HTMLCanvasElement).width,256);assert.equal(material.map!.anisotropy,2);library.setQuality('ultra');supply('ultra');supply('normal');inspect();
  library.setQuality('low');supply('ultraNormal');supply('ultraRough');supply('rough');inspect();assert.equal(material.normalMap,null);assert.equal(material.roughnessMap,null);
  library.setQuality('ultra');inspect();assert.ok(material.normalMap&&material.roughnessMap);
  library.setQuality('high');inspect();library.dispose();material.dispose();
 });
+

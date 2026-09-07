@@ -30,7 +30,7 @@ export class SurfaceLibrary {
   add(url:string,targets:THREE.MeshStandardMaterial[],options:SurfaceOptions={}){
     this.loader.load(url,full=>{
       if(!this.own(full,true))return;
-      const canvas=document.createElement('canvas'),size=options.lowSize??128;canvas.width=canvas.height=size;canvas.getContext('2d')?.drawImage(full.image,0,0,size,size);
+      const canvas=document.createElement('canvas'),size=options.lowSize??(options.normal?256:128);canvas.width=canvas.height=size;canvas.getContext('2d')?.drawImage(full.image,0,0,size,size);
       const small=new THREE.CanvasTexture(canvas);this.own(small,true);
       const photographic=!!options.normal,surface:Surface={full,small,ultra:{},bump:options.bump??0,normalStrength:options.normalStrength??1,preserveFinish:options.preserveFinish??false,photographic,repeat:options.repeat??[1,1]};
       if(!photographic&&surface.bump){surface.relief=full.clone();this.own(surface.relief);surface.relief.needsUpdate=true;}
@@ -66,7 +66,7 @@ export class SurfaceLibrary {
         m.bumpScale=surface.bump;m.normalScale.setScalar(surface.normalStrength);
         for(const t of [surface.full,surface.small,surface.relief,surface.normal,surface.roughness,surface.metalness,...Object.values(surface.ultra)])if(t)t.repeat.set(...surface.repeat);
         for(const t of [surface.full,surface.relief,surface.normal,surface.roughness,surface.metalness,...Object.values(surface.ultra)])if(t){const anisotropy=Math.min(ultra?16:high?8:4,this.anisotropy);if(t.anisotropy!==anisotropy){t.anisotropy=anisotropy;t.needsUpdate=true;}}
-        surface.small.anisotropy=1;
+        const smallAnisotropy=Math.min(2,this.anisotropy);if(surface.small.anisotropy!==smallAnisotropy){surface.small.anisotropy=smallAnisotropy;surface.small.needsUpdate=true;}
       }
       this.lightingFinish?.(m);
       if(changed)m.needsUpdate=true;
@@ -74,3 +74,4 @@ export class SurfaceLibrary {
   }
   dispose(){this.disposed=true;for(const t of this.textures)t.dispose();this.textures.clear();this.details=[];this.ultraDetails=[];}
 }
+
