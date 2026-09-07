@@ -47,11 +47,12 @@ function blade(buffers: Buffers, start: Point, angle: number, height: number, wi
   bend: number, low: boolean, colors: THREE.Color[], gain: number) {
   const samples = low ? [0, .53] : [0, .40, .74];
   const forward = { x: Math.sin(angle), z: Math.cos(angle) };
-  const side = { x: Math.cos(angle), z: -Math.sin(angle) };
+  const twist = Math.sin(angle * 2.7) * .65;
   const rows: number[] = [];
   for (const t of samples) {
+    const side = { x: Math.cos(angle + twist * t), z: -Math.sin(angle + twist * t) };
     const center = { x: start.x + forward.x * bend * t * t,
-      y: start.y + height * t, z: start.z + forward.z * bend * t * t };
+      y: start.y + height * (t - .55 * t * t * t) / .52, z: start.z + forward.z * bend * t * t };
     const profile = t === 0 ? .26 : Math.sin(Math.PI * (t * .86 + .11));
     const halfWidth = width * .5 * profile;
     const left = vertex(buffers, { x: center.x - side.x * halfWidth, y: center.y, z: center.z - side.z * halfWidth }, 0, t, colors, gain);
@@ -62,7 +63,7 @@ function blade(buffers: Buffers, start: Point, angle: number, height: number, wi
     const a = rows[row], b = rows[row + 1];
     buffers.ix.push(a, a + 1, b, a + 1, b + 1, b);
   }
-  const tip = vertex(buffers, { x: start.x + forward.x * bend, y: start.y + height,
+  const tip = vertex(buffers, { x: start.x + forward.x * bend, y: start.y + height * (.45 / .52),
     z: start.z + forward.z * bend }, .5, 1, colors, gain);
   const last = rows[rows.length - 1];
   buffers.ix.push(last, last + 1, tip);
@@ -128,3 +129,5 @@ export function makeFoliageGeometry(kind: FoliageKind, seed = 1) {
   geometry.computeBoundingSphere();
   return geometry;
 }
+
+
