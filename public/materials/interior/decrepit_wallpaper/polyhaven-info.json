@@ -1,0 +1,51 @@
+{
+  "name": "Decrepit Wallpaper",
+  "categories": [
+    "wall",
+    "man made"
+  ],
+  "type": 1,
+  "tags": [
+    "weathered",
+    "wall",
+    "discolored",
+    "peeling",
+    "scratched",
+    "wallpaper",
+    "dilapidated",
+    "worn",
+    "grungy",
+    "flaking",
+    "distressed",
+    "dirty"
+  ],
+  "authors": {
+    "Rob Tuytel": "All"
+  },
+  "max_resolution": [
+    8192,
+    8192
+  ],
+  "dimensions": [
+    2500,
+    2500
+  ],
+  "staging": null,
+  "date_published": 1727740800,
+  "files_hash": "f6841364d8ffe92586da8532834a6c59d2161476",
+  "description": "Free 8K texture of decrepit wallpaper with flaking, peeling, scratched and discolored surface, grime streaks and subtle cracks, worn, grungy wall material.",
+  "category_id": "e1c3a164-85a9-5ca0-adac-d36185e4f063",
+  "category": "Paper & Card/Wallpaper/Peeling & Distressed Wallpaper",
+  "attributes": {
+    "surface_use": "wall",
+    "condition": [
+      "weathered",
+      "damaged",
+      "worn"
+    ],
+    "origin": "man_made"
+  },
+  "img_version": "fdba728d",
+  "download_count": 7506,
+  "thumbnail_url": "https://cdn.polyhaven.com/asset_img/thumbs/decrepit_wallpaper.png?width=256&height=256"
+}

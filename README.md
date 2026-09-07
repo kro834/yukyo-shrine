@@ -18,9 +18,15 @@ Abyss has lower cave ceilings, damp dark surfaces, fewer inter-sector links and 
 
 Outer Reach also contains eight exclusive nostalgic interiors, placed in eight separate random sectors without replacing the original30 themes: 終電の去った木造駅, 夕暮れの廃校舎, 閉館した銀映館, 祭りのあとの縁日, 雨待ちの旧旅籠, 忘れ湯の浴場, 宛先のない郵便局 and 夕凪の蓄音室. Low timber ceilings, corner wall linings, shaded lamps and distinct furniture establish their identities. Room IDs, bead routes and altar selection are preserved; furnishings leave the offset entrance cross clear.
 
+Six outdoor sectors now have different returning route plans: 月見の土手, 水際の遊歩道, 終電後の高架下, 団地裏の緑道, 旧水門の管理道 and 夕暮れの農道. Walking crests stay at the navigation floor while actual banks descend0.65–2.2m to water or dry ground. Continuous slopes, shared edge normals and triangle-sampled vegetation prevent visible gaps and floating grass. Optional dead-end stubs are trimmed; protected room/upper-floor connections receive alternate routes. Every field keeps its room entrances.
+
+Weathered bus shelters, concrete underpass bays, floodgate machinery and residential service alleys occupy selected straight paths. Bench slats, roof ribs, drains, cable trays, meters, condensers and railings are modeled without text. Their real solid footprints preserve a1.6m central walking strip; perpendicular junctions, doors and stairs remain open. Structures above4.45m avoid upper-floor footprints. Placement and collision use the same final seeded grid.
+
 Orchestra Two is a dark Gothic music complex: black stone walls, pointed arches, blind tracery windows, wooden sliding doors and sparse warm fixtures. Four exclusive rooms contain a pipe organ, abandoned string instruments, a closed curtained stage and old clocks. It retains the three-floor layout, all objective routes and the existing controls, with longer enemy searches and reduced ambient light. Dedicated rooms occupy four separate sectors and leave stair volumes and door approaches clear.
 
 Selected chambers contain CC0 scanned wooden chairs, stools and ceramic vases with shared local instancing, conservative collision bounds and soft contact shading. Scans load asynchronously with fitted local fallbacks; Low disables normal and ARM sampling, while higher settings restore material detail. Sources and licenses are recorded in `public/models/SOURCES.md`. Recessed fusuma panels, dished pulls and Gothic oak panels preserve the original sliding envelope. Stage changes dispose model textures, geometry and door instance buffers.
+
+Ordinary room and door paper uses a restrained aged-wallpaper photograph, and tatami uses a measured straw-mat photograph with separate cloth edging and whole0.9×1.8m mats. All three maps share the same cropped UVs; mat crowns remain within the prior finished-floor height. Low retains256px albedo for these fine patterns while omitting their relief maps. The flashlight sits slightly below and to the right of the eye and its lower intensity preserves surface highlights.
 
 ## Controls
 
@@ -60,7 +66,7 @@ See [MATERIALS.md](MATERIALS.md) and bundled provenance JSON for official CC0 ma
 ## Development and verification
 
 - `pnpm dev` starts the local site; `pnpm build` produces the static client.
-- `node --test tests/*.test.ts` runs the168-test suite (Node24 used).
+- `node --test tests/*.test.ts` runs the regression suite (Node24 used).
 - `node node_modules/typescript/bin/tsc --noEmit` checks types.
 
 Tests cover input transitions, concurrent touch actions, slider sensitivity, cursor state policy, all objective routes, furnished connectivity, stairs, door interaction, rendering resource/texture lifetimes, final pursuit transitions,32 real-ramp pursuit cases, mirror grants and reset, and threat/freeze/stun reliability.

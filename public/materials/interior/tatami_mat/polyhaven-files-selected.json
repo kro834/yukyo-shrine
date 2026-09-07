@@ -1,0 +1,17 @@
+{
+  "diff": {
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/tatami_mat/tatami_mat_diff_1k.jpg",
+    "md5": "006ffec2cd2ead8ec1e6269cdc76ec52",
+    "size": 620119
+  },
+  "nor_gl": {
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/tatami_mat/tatami_mat_nor_gl_1k.jpg",
+    "md5": "716e1297e608bd5cda82ff6077056ef6",
+    "size": 441133
+  },
+  "rough": {
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/tatami_mat/tatami_mat_rough_1k.jpg",
+    "md5": "04bcf0374f852966a98b481fcc94f57d",
+    "size": 276540
+  }
+}

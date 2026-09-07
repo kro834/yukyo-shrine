@@ -10,7 +10,7 @@ type Layout=ReturnType<typeof createSectorLayout>;
 type Root={kind:FoliageKind;x:number;y:number;z:number;priority:number;variant:number;yaw:number};
 
 /** Plants grow around occupied ground, never creating new collision or hiding crouched enemies. */
-export function fieldFoliageRoots(layout:Layout,seed:number,height:(x:number,z:number)=>number,obstacles:Obstacle[]){
+export function fieldFoliageRoots(layout:Layout,seed:number,height:(x:number,z:number)=>number,obstacles:Obstacle[],vergeHeight:(x:number,z:number)=>number=()=>-.25){
  const candidates:Root[]=[],hash=(x:number,z:number,salt:number)=>foliageHash(x,z,seed,salt);
  const protectedAt=(x:number,z:number,r:number)=>{
   if(belowUpperDeck(x-r,x+r,z-r,z+r))return true;
@@ -44,7 +44,7 @@ export function fieldFoliageRoots(layout:Layout,seed:number,height:(x:number,z:n
    const x=w.x+(w.alongX?t:0)-w.insideX*d,z=w.z+(w.alongX?0:t)-w.insideZ*d;
    const patch=hash(Math.floor(x/3),Math.floor(z/3),601);
    if(patch<.62||hash(hx,hz,salt+2)>.8||!vacant(x,z,.45)||protectedAt(x,z,.45)||Math.max(Math.abs(x),Math.abs(z))>219.5)continue;
-   add('verge',x,-.252,z,701);
+   add('verge',x,vergeHeight(x,z)-.002,z,701);
   }
  }
  for(const p of layout.paddies){
@@ -64,8 +64,8 @@ export function fieldFoliageRoots(layout:Layout,seed:number,height:(x:number,z:n
  }
  return {roots,counts};
 }
-export function buildFieldFoliage(layout:Layout,seed:number,height:(x:number,z:number)=>number,obstacles:Obstacle[],add:(geometry:THREE.BufferGeometry)=>void){
- const {roots,counts}=fieldFoliageRoots(layout,seed,height,obstacles),cache=new Map<string,THREE.BufferGeometry>();
+export function buildFieldFoliage(layout:Layout,seed:number,height:(x:number,z:number)=>number,obstacles:Obstacle[],add:(geometry:THREE.BufferGeometry)=>void,vergeHeight?:(x:number,z:number)=>number){
+ const {roots,counts}=fieldFoliageRoots(layout,seed,height,obstacles,vergeHeight),cache=new Map<string,THREE.BufferGeometry>();
  for(const p of roots){const key=p.kind+':'+p.variant;if(!cache.has(key))cache.set(key,makeFoliageGeometry(p.kind,seed^Math.imul(p.variant+1,7331)));const g=cache.get(key)!.clone();g.rotateY(p.yaw);g.translate(p.x,p.y,p.z);add(g);}
  cache.forEach(g=>g.dispose());return counts;
 }

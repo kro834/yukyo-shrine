@@ -3,7 +3,7 @@ import type {Preferences} from './preferences.ts';
 
 type DetailMaps={full?:THREE.Texture;normal?:THREE.Texture;roughness?:THREE.Texture};
 type Surface={full:THREE.Texture;small:THREE.Texture;relief?:THREE.Texture;normal?:THREE.Texture;roughness?:THREE.Texture;metalness?:THREE.Texture;ultra:DetailMaps;bump:number;normalStrength:number;preserveFinish:boolean;photographic:boolean};
-export type SurfaceOptions={bump?:number;tint?:string;normal?:string;roughness?:string;metalness?:string;normalStrength?:number;preserveFinish?:boolean;ultra?:{full:string;normal:string;roughness:string}};
+export type SurfaceOptions={bump?:number;tint?:string;normal?:string;roughness?:string;metalness?:string;normalStrength?:number;preserveFinish?:boolean;lowSize?:128|256;ultra?:{full:string;normal:string;roughness:string}};
 /** Owns asynchronous texture loads; late High downloads cannot override a newer Low selection. */
 export class SurfaceLibrary {
   private quality:Preferences['quality']='low';
@@ -29,7 +29,7 @@ export class SurfaceLibrary {
   add(url:string,targets:THREE.MeshStandardMaterial[],options:SurfaceOptions={}){
     this.loader.load(url,full=>{
       if(!this.own(full,true))return;
-      const canvas=document.createElement('canvas');canvas.width=canvas.height=128;canvas.getContext('2d')?.drawImage(full.image,0,0,128,128);
+      const canvas=document.createElement('canvas'),size=options.lowSize??128;canvas.width=canvas.height=size;canvas.getContext('2d')?.drawImage(full.image,0,0,size,size);
       const small=new THREE.CanvasTexture(canvas);this.own(small,true);
       const photographic=!!options.normal,surface:Surface={full,small,ultra:{},bump:options.bump??0,normalStrength:options.normalStrength??1,preserveFinish:options.preserveFinish??false,photographic};
       if(!photographic&&surface.bump){surface.relief=full.clone();this.own(surface.relief);surface.relief.needsUpdate=true;}

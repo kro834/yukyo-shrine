@@ -1,0 +1,17 @@
+{
+  "diff": {
+    "size": 814172,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/decrepit_wallpaper/decrepit_wallpaper_diff_1k.jpg",
+    "md5": "25db62cc09d0350756e60c0127853bbb"
+  },
+  "nor_gl": {
+    "size": 691701,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/decrepit_wallpaper/decrepit_wallpaper_nor_gl_1k.jpg",
+    "md5": "1f8002bef047744e4d27e2f998e6caa2"
+  },
+  "rough": {
+    "size": 402582,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/decrepit_wallpaper/decrepit_wallpaper_rough_1k.jpg",
+    "md5": "9d0adc4ca540ee91f91925f8ec059722"
+  }
+}

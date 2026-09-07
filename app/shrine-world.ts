@@ -32,6 +32,8 @@ import {AREA_THEMES} from './expansion-areas.ts';
 import {agedFinish} from './surface-finish.ts';
 import {SurfaceLibrary} from './surface-library.ts';
 import {surfaceUV} from './surface-uv.ts';
+import {createTatamiGeometry,tatamiPlacementsForRectangle,TATAMI} from './tatami-geometry.ts';
+import {fabricFinish} from './fabric-finish.ts';
 import {FixtureLighting} from './fixture-lighting.ts';
 import {FixtureShadow} from './fixture-shadow.ts';
 import {fieldGround,fieldSurfaceHeight} from './field-ground.ts';
@@ -43,6 +45,10 @@ import {ORCHESTRA_AREA_NAMES} from './orchestra-layout.ts';
 import {buildFieldFoliage} from './field-landscape.ts';
 import {createCaveSurfaces,caveDeckLimit} from './cave-surfaces.ts';
 import {belowUpperDeck} from './ground-clearance.ts';
+import {LANDSCAPE_NAMES} from './outer-landform-plan.ts';
+import {createOuterLandformSurfaces} from './outer-landform-surfaces.ts';
+import {createCivicSites} from './civic-placement.ts';
+import {buildCivicScene} from './civic-scene.ts';
 import {RunProgress} from './run-progress.ts';
 import {Stamina} from './stamina.ts';
 import {TimeStop} from './time-stop.ts';
@@ -68,9 +74,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const layout=createLayout(seed,stage),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
   const visualKind=(kind:string,x:number,z:number)=>{const patch=((Math.floor((x+200)/20)+Math.floor((z+300)/20)*3+(seed%5))%5+5)%5;if(['factory','bath','cistern','shop'].includes(kind))return patch===0?'stone':patch===2?'hall':kind;return kind;};
   const cave=createCaveSurfaces(layout.cells,layout.walls,seed,{detail:budget.mobile?'low':'high',ceilingLimit:caveDeckLimit(SECOND_DECK.cells)});
+  const landforms=stage==='outer'?createOuterLandformSurfaces(layout.grid,layout.landforms,{belowUpperDeck}):undefined;
+  const civicSites=createCivicSites(layout);
   const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2);
   const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5},.7);
-  const areaName=()=>{if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
+  const areaName=()=>{if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
     wood:new THREE.MeshStandardMaterial({color:'#685044',roughness:.9,metalness:0}),
@@ -89,6 +97,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     light:new THREE.MeshStandardMaterial({color:'#b2a188',emissive:'#ffdbab',emissiveIntensity:1.35,roughness:.94}),
     rope:new THREE.MeshStandardMaterial({color:'#b19d78',roughness:1}),
     tatami:new THREE.MeshStandardMaterial({color:'#727253',roughness:.95}),
+    tatamiTrim:new THREE.MeshStandardMaterial({color:'#243421',roughness:1}),
     concrete:new THREE.MeshStandardMaterial({color:'#454946',roughness:.94}),
     rust:new THREE.MeshStandardMaterial({color:'#713d27',roughness:.85,metalness:.4}),
     steel:new THREE.MeshStandardMaterial({color:'#29393c',roughness:.56,metalness:.8}),
@@ -106,6 +115,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   };
   for(const [name,material] of Object.entries(mats))material.name=name;
   agedFinish(mats.paper,'paper');agedFinish(mats.plaster,'plaster');agedFinish(mats.tatami,'tatami');
+  fabricFinish(mats.tatamiTrim);mats.tatamiTrim.color.set('#243421');
   agedFinish(mats.red,'lacquer');agedFinish(mats.tile,'tile');agedFinish(mats.planks,'wood');agedFinish(mats.pavement,'stone');
   terrainFinish(mats.earth);terrainFinish(mats.rock);
   lampFinish(mats.light,'paper');lampFinish(mats.washiLit,'paper');lampFinish(mats.coolLight,'diffuser');
@@ -130,6 +140,14 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     if(!batches.has(key))batches.set(key,{material:m,geometries:[]});batches.get(key)!.geometries.push(g);
   };
   const box=(x:number,y:number,z:number,w:number,h:number,d:number,m:MaterialKey)=>{
+    if(m==='tatami'&&!gothic&&h<=.065&&w>=1.5&&d>=1.5){
+      const placements=tatamiPlacementsForRectangle({x,z,width:w,depth:d,floorY:y+h/2-TATAMI.maxRise,inset:.08,variation:seed+x*.7+z});
+      if(placements.length){
+        const floor=createTatamiGeometry(placements);add(floor.reed,'tatami');add(floor.border,'tatamiTrim');
+        // Keep the old finished height and let the lower perimeter frame support each mat.
+        add(new THREE.BoxGeometry(w,Math.max(.002,h-TATAMI.maxRise),d).translate(x,y-TATAMI.maxRise/2,z),'wood');return;
+      }
+    }
     const size=[w,h,d].sort((a,b)=>a-b),beveled=m==='wood'&&size[0]>.08&&size[1]<.25&&size[2]>1;
     add((beveled?chamferedBox(w,h,d):new THREE.BoxGeometry(w,h,d)).translate(x,y,z),m);
   };
@@ -157,7 +175,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     const shape=new THREE.Shape();for(let i=0;i<16;i++){const a=i/16*Math.PI*2,r=.76+.24*natureRandom(),px=Math.cos(a)*rx*r,pz=Math.sin(a)*rz*r;if(i===0)shape.moveTo(px,pz);else shape.lineTo(px,pz);}shape.closePath();
     const g=new THREE.ShapeGeometry(shape);g.rotateX(-Math.PI/2);g.translate(x,.007,z);add(g,m);
   };
-  if(stage==='outer')box(0,-.4,0,440,.3,440,'earth');
+  if(stage==='outer')box(0,-2.75,0,440,.3,440,'earth');
+  if(landforms)for(const surface of landforms.surfaces)add(surface.geometry,surface.material);
   const narrowKeys=new Set(layout.narrows.map(n=>Math.round(n.x/4)+','+Math.round(n.z/4)));
   const fieldCells=new Set(layout.cells.filter(c=>c.kind==='field'&&!belowUpperDeck(c.x*4-2,c.x*4+2,c.z*4-2,c.z*4+2)).map(c=>c.x+','+c.z));
   const isFieldCell=(x:number,z:number)=>fieldCells.has(x+','+z);
@@ -192,8 +211,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       continue;
     }
     if(kind==='field'){
-      add(fieldGround(x,z,seed,isFieldCell),'earth');
-      if((c.x+c.z)%9===0){cylinder(x+1.5,.8,z+1.5,.07,1.6,'wood');lantern(x+1.5,1.8,z+1.5);}
+      const landscape=landforms?.regionAt(x,z)?.identity,urban=landscape==='underpass'||landscape==='greenway'||landscape==='floodgate';
+      add(fieldGround(x,z,seed,isFieldCell),urban?'concrete':landscape==='riverside'?'pavement':'earth');
+      if((c.x+c.z)%9===0&&!civicSites.some(s=>Math.abs(s.x-x)<=6&&Math.abs(s.z-z)<=6)){
+        cylinder(x+1.5,.8,z+1.5,.07,1.6,urban?'steel':'wood');
+        if(urban){box(x+1.5,1.65,z+1.5,.18,.24,.18,'dark');box(x+1.5,1.66,z+1.5,.19,.14,.19,'glass');fixture(x+1.5,1.72,z+1.5,'#b4c7c2');}
+        else lantern(x+1.5,1.8,z+1.5);
+      }
       continue;
     }
     if(kind==='shop'){
@@ -255,10 +279,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
     if(kind==='field'){
       if(w.h<2){
-        box(w.x,.16,w.z,w.alongX?4:.36,.32,w.alongX?.36:4,'earth');
+        const identity=landforms?.regionAt(w.x,w.z)?.identity,metal=identity==='underpass'||identity==='floodgate'||identity==='riverside';
+        box(w.x,.16,w.z,w.alongX?4:.36,.32,w.alongX?.36:4,metal?'concrete':'earth');
         if(w.h>1){
-          for(const t of [-1.85,1.85])box(w.x+(w.alongX?t:0),.64,w.z+(w.alongX?0:t),.12,1.25,.12,'wood');
-          for(const y of [.55,1.05])box(w.x,y,w.z,w.alongX?4:.08,.085,w.alongX?.08:4,'wood');
+          for(const t of [-1.85,1.85])box(w.x+(w.alongX?t:0),.64,w.z+(w.alongX?0:t),metal?.065:.12,1.25,metal?.065:.12,metal?'steel':'wood');
+          for(const y of [.55,1.05])box(w.x,y,w.z,w.alongX?4:.08,.085,w.alongX?.08:4,metal?'steel':'wood');
         }
       }
       else {rock(w.x-w.insideX*2.2,w.h/2,w.z-w.insideZ*2.2,w.alongX?4.6:4.5,w.h+1.5,w.alongX?4.5:4.6);}
@@ -450,7 +475,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       box(x,.45,z,w.alongX?1.6:.5,.9,w.alongX?.5:1.6,'tile');box(x,.91,z,w.alongX?1.4:.42,.015,w.alongX?.42:1.4,'water');block(x,z,w.alongX?1.6:.5,w.alongX?.5:1.6,.93);
     }
   }
-  buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'));
+  if(landforms){
+    obstacles.push(...buildCivicScene(civicSites,add,landforms.height));
+    for(const s of civicSites)if(s.id==='railway-underpass-bay'){
+      const a=s.quarterTurns*Math.PI/2;fixture(s.x+1.58*Math.cos(a),2.78,s.z+1.58*Math.sin(a),'#a0b6b8');
+    }
+  }
+  buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height);
   groundGeometry=false;fixtureFloor=4.8;
   for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
     if((x===13||x===22)&&z>=2&&z<=6)continue;
@@ -553,7 +584,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
   const fixtureLighting=new FixtureLighting(),fixtureShadow=new FixtureShadow(scene),lightFixtures=lanterns.map((position,id)=>({id,position,floor:fixtureFloors.get(position)??0,color:fixtureColors.get(position)??'#ffc184',shadowPosition:fixtureShadowPositions.get(position)}));
   const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ffc184',0,11,2);scene.add(p);return p;});
-  const flashlight=new THREE.SpotLight('#edf1ee',65,36,.72,.4,2);flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
+  const flashlight=new THREE.SpotLight('#edf1ee',42,36,.72,.4,2),flashlightRight=new THREE.Vector3();flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
   renderer.shadowMap.type=THREE.PCFShadowMap;flashlight.castShadow=true;flashlight.shadow.mapSize.set(1024,1024);flashlight.shadow.bias=-.00015;flashlight.shadow.normalBias=.03;flashlight.shadow.camera.near=.1;flashlight.shadow.camera.far=36;
   const glowCanvas=document.createElement('canvas');glowCanvas.width=64;glowCanvas.height=64;const ctx=glowCanvas.getContext('2d')!;
   const grad=ctx.createRadialGradient(32,32,0,32,32,32);grad.addColorStop(0,'rgba(255,178,78,.36)');grad.addColorStop(.3,'rgba(255,112,31,.10)');grad.addColorStop(1,'rgba(255,100,20,0)');ctx.fillStyle=grad;ctx.fillRect(0,0,64,64);
@@ -578,6 +609,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   photographic('wood_planks',[mats.planks,mats.wood,mats.dark],gothic?'#847d74':undefined,true,.65);
   photographic('rock_face_03',[mats.rock],'#b6b2a7',true,.8);
   photographic('clay_plaster',[mats.plaster],'#c8b49b',true,.6);
+  const interior=(id:string,targets:THREE.MeshStandardMaterial[],normalStrength:number,tint:string)=>surfaces.add('/materials/interior/'+id+'/'+id+'_diff_1k.jpg',targets,{tint,normal:'/materials/interior/'+id+'/'+id+'_nor_gl_1k.jpg',roughness:'/materials/interior/'+id+'/'+id+'_rough_1k.jpg',normalStrength,lowSize:256});
+  interior('decrepit_wallpaper',[mats.paper],.35,'#d7cdb9');
+  interior('tatami_mat',[mats.tatami],.45,'#d2c8a7');
   photographic('rust_coarse_01',[mats.rust],'#d0b8a3',false,.7);
   mats.pavement.color.set('#9caaa4');
   photographic('cobblestone_floor_001',[mats.pavement,mats.wetPavement],undefined,true,.9);
@@ -667,6 +701,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(flashlight.shadow.mapSize.x!==size){flashlight.shadow.map?.dispose();flashlight.shadow.map=null;flashlight.shadow.mapSize.set(size,size);}
       if(quality==='low'&&flashlight.shadow.map){flashlight.shadow.map.dispose();flashlight.shadow.map=null;}
       flashlight.castShadow=quality!=='low';camera.fov=p.fov;camera.updateProjectionMatrix();
+      flashlight.shadow.normalBias=ultra?.006:high?.010:.018;
       lightPool.forEach((light,i)=>{light.visible=i<(quality==='low'?3:6);});fixtureShadow.configure(quality,budget.mobile);
       reflectionEnabled=quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
       effects?.configure(quality);glowMat.opacity=quality==='low'?.26:.12;
@@ -684,7 +719,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         mirror.visible=reflectionEnabled&&mirror.position.distanceToSquared(camera.position)<3600;water.visible=!mirror.visible;
         lastLight=time;
       }
-      flashlight.position.copy(camera.position);flashlight.position.y-=.12;camera.getWorldDirection(direction);flashlight.target.position.copy(flashlight.position).addScaledVector(direction,10);
+      camera.getWorldDirection(direction);flashlightRight.set(1,0,0).applyQuaternion(camera.quaternion);
+      flashlight.position.copy(camera.position).addScaledVector(flashlightRight,.16);flashlight.position.y-=.20;
+      flashlight.target.position.copy(camera.position).addScaledVector(direction,8);
       const lightDt=lastLightFrame?Math.min(.1,(time-lastLightFrame)/1000):.016;fixtureLighting.step(lightDt);lastLightFrame=time;
       const shadowOrigin=fixtureShadow.light.position;
       const movingShadow=(playMode!=='gallery'&&enemies.actors.some(e=>Math.abs(e.floor-shadowOrigin.y)<5&&Math.hypot(e.position.x-shadowOrigin.x,e.position.z-shadowOrigin.z)<11))||doors.states.some(d=>d.progress>0&&d.progress<1&&Math.hypot(d.spec.x-shadowOrigin.x,d.spec.z-shadowOrigin.z)<11)||beads.some(b=>!b.collected&&Math.abs(b.floor-shadowOrigin.y)<5&&Math.hypot(b.position.x-shadowOrigin.x,b.position.z-shadowOrigin.z)<11)||(goal.progress>0&&goal.progress<1&&Math.hypot(goal.offset.x-shadowOrigin.x,GOAL.z+goal.offset.z-shadowOrigin.z)<11);

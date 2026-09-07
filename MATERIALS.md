@@ -39,3 +39,9 @@ Ultra lazily loads 2048px diffuse, OpenGL normal and roughness maps for `wood_pl
 The outer stage uses the official CC0 [Qwantani Moonrise PureSky](https://polyhaven.com/a/qwantani_moonrise_puresky) 1K HDR by Greg Zaal and Jarod Guest, plus Rob Tuytel's [Grass Path2](https://polyhaven.com/a/grass_path_2) 1K albedo/normal/roughness at a1m repeat. The four files total3,156,026 bytes. Verified metadata is in `public/materials/outer/provenance.json`. HDR brightness is reduced for the night setting; it is not requested on Low.
 
 Visual QA in installed Chrome covered High wall shading, the Ultra storefront, cave and outdoor field, and desktop/mobile settings. This found and corrected discontinuities in the procedural noise, overbright flashlight highlights, and excessive sky exposure. The result is an improved realtime rendering, not a claim of photographic equivalence or physical-device performance.
+
+## Photographic indoor surfaces
+
+`public/materials/interior/` contains the official CC0 Poly Haven1K diffuse/OpenGL normal/roughness sets for `tatami_mat` (Charlotte Baglioni) and `decrepit_wallpaper` (Rob Tuytel). The latter approximates aged paper; it is not a scan of Japanese washi. Six JPGs total3,246,247 bytes, each1024×1024, verified against official file metadata. Detailed URLs, source dimensions and metadata are in that folder's `SOURCES.md`.
+
+Each tatami mat is0.9×1.8m; straw UVs crop one of the photograph's two panels and exclude the photographed cloth border. Separately modeled cloth and shallow crowns stay within the previous floor envelope. Paper and straw use256px albedo on Low to retain legibility; High/Ultra use the1K normal and roughness maps with restrained strength. Local asset callbacks preserve the currently selected quality.
