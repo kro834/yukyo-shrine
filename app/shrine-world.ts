@@ -19,6 +19,7 @@ import {createAreaLookup} from './area-rules.ts';
 import {createGoalMeshes} from './goal-mesh.ts';
 import {BurstRecharge} from './burst-recharge.ts';
 import {PerformanceBudget} from './performance-budget.ts';
+import {SECOND_DECK,THIRD_DECK,HIGH_STAIRS,highRails,highCaps,deckFurnitureWalls,floorBand,deckTheme,deckContains} from './vertical-layout.ts';
 import {AREA_THEMES} from './expansion-areas.ts';
 import {TimeStop} from './time-stop.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
@@ -35,9 +36,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   scene.add(new THREE.HemisphereLight('#91a2af','#30271d',.12));
   const moon=new THREE.DirectionalLight('#8c9aa6',.10);moon.position.set(-10,18,5);scene.add(moon);
   const layout=createLayout(seed),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
+  const visualKind=(kind:string,x:number,z:number)=>{const patch=((Math.floor((x+200)/20)+Math.floor((z+300)/20)*3+(seed%5))%5+5)%5;if(['factory','bath','cistern','shop'].includes(kind))return patch===0?'stone':patch===2?'hall':kind;if(kind==='cave'&&patch===0)return 'stone';return kind;};
   const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>r.x2-r.x1>=3&&r.z2-r.z1>=3);
   const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5});
-  const areaName=()=>{const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r)return AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2);const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
+  const areaName=()=>{if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r)return AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2);const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
     wood:new THREE.MeshStandardMaterial({color:'#685044',roughness:.42,metalness:.07}),
@@ -110,33 +112,33 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     lanterns.push(new THREE.Vector3(x,y,z));
   };
   for(const c of layout.cells){
-    const x=c.x*CELL,z=c.z*CELL;
-    if(c.kind==='yokocho'){
+    const x=c.x*CELL,z=c.z*CELL,kind=visualKind(c.kind,x,z);
+    if(kind==='yokocho'){
       box(x,-.14,z,4,.28,4,'stone');box(x,.006,z,4,.012,.025,'black');
       for(const side of [-1,1]){box(x+side*1.17,.025,z,.13,.04,4,'steel');for(let j=-3;j<=3;j++)box(x+side*1.17,.048,z+j*.5,.14,.008,.04,'black');}
       if((c.x+c.z)%3===0){box(x,.015,z,.8,.018,1.5,'water');lantern(x+.85,3.1,z);}
       if(c.z%4===0){box(x,4.2,z,4,.018,.018,'black');box(x,4.05,z+.2,4,.018,.018,'black');}
       continue;
     }
-    if(c.kind==='cave'){
+    if(kind==='cave'){
       box(x,-.17,z,4,.34,4,'rock');rock(x,c.h+.45,z,4.18,.9,4.18);
       for(const [dx,dz] of [[1,0],[0,1]]){const n=layout.grid.get((c.x+dx)+','+(c.z+dz));if(n&&n.h!==c.h&&n.kind==='cave'){const h=Math.abs(n.h-c.h);rock(x+dx*2,Math.min(n.h,c.h)+h/2,z+dz*2,dx?.45:4.1,h,dz?.45:4.1);}}
       if((c.x*7+c.z*3)%11===0){const g=new THREE.ConeGeometry(.22,1.1,7);g.rotateX(Math.PI);g.translate(x+.7,c.h-.4,z+.7);add(g,'rock');}
       if((c.x-c.z)%8===0){box(x,.025,z,.7,.04,.7,'water');fixture(x,1.5,z,'#809baa');lantern(x,2.6,z);}
       continue;
     }
-    if(c.kind==='field'){
+    if(kind==='field'){
       box(x,-.19,z,4,.38,4,'earth');
       if((c.x+c.z)%9===0){cylinder(x+1.5,.8,z+1.5,.07,1.6,'wood');lantern(x+1.5,1.8,z+1.5);}
       continue;
     }
-    if(c.kind==='shop'){
+    if(kind==='shop'){
       box(x,-.14,z,4,.28,4,'wood');box(x,c.h+.1,z,4,.2,4,'dark');box(x,.008,z,.025,.016,4,'dark');box(x,c.h-.12,z,4,.18,.15,'wood');
       if((c.x+c.z)%4===0){lantern(x,3.4,z);box(x,4,z,.03,1,.03,'dark');}
       continue;
     }
-    if(c.kind==='factory'||c.kind==='bath'||c.kind==='cistern'){
-      const factory=c.kind==='factory',bath=c.kind==='bath';
+    if(kind==='factory'||kind==='bath'||kind==='cistern'){
+      const factory=kind==='factory',bath=kind==='bath';
       box(x,-.14,z,4,.28,4,bath?'tile':'concrete');box(x,c.h+.12,z,4,.24,4,'concrete');
       box(x,c.h-.15,z,4,.3,.24,factory?'steel':'concrete');
       if(bath){for(let j=-2;j<2;j++){box(x+j,.008,z,.015,.016,4,'dark');box(x,.008,z+j,4,.016,.015,'dark');}}
@@ -152,19 +154,20 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       }
       continue;
     }
-    box(x,-.14,z,4,.28,4,c.kind==='stone'?'stone':'wood');
+    box(x,-.14,z,4,.28,4,kind==='stone'?'stone':'wood');
     box(x,c.h+.12,z,4,.24,4,'dark');
-    if(c.kind==='stone'){box(x,.004,z,.022,.008,4,'black');box(x,.004,z,4,.008,.022,'black');}
+    if(kind==='stone'){box(x,.004,z,.022,.008,4,'black');box(x,.004,z,4,.008,.022,'black');}
     else box(x,.006,z,.012,.009,4,'dark');
     box(x,c.h-.12,z,4,.22,.18,'red');
     for(const [dx,dz] of [[1,0],[0,1]]){
       const n=layout.grid.get((c.x+dx)+','+(c.z+dz));
       if(n&&n.h!==c.h){const bottom=Math.min(n.h,c.h),height=Math.abs(c.h-n.h);box(x+dx*2,bottom+height/2,z+dz*2,dx?.28:4,height,dz?.28:4,'dark');}
     }
-    if(c.kind==='passage'&&(c.x+c.z)%3===0){lantern(x,c.h-.68,z);box(x,c.h-.12,z,.025,.65,.025,'gold');}
+    if(kind==='passage'&&(c.x+c.z)%3===0){lantern(x,c.h-.68,z);box(x,c.h-.12,z,.025,.65,.025,'gold');}
   }
   for(const w of layout.walls){
-    if(w.kind==='yokocho'){
+    const kind=visualKind(w.kind??"hall",w.x+w.insideX*.2,w.z+w.insideZ*.2);
+    if(kind==='yokocho'){
       const x=w.x+w.insideX*.19,z=w.z+w.insideZ*.19;
       box(w.x,3.2,w.z,w.alongX?4:.3,6.4,w.alongX?.3:4,'concrete');
       box(x,1.45,z,w.alongX?3.4:.08,2.7,w.alongX?.08:3.4,'steel');
@@ -175,23 +178,23 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       box(x,3.9,z,w.alongX?1:.38,.48,w.alongX?.38:1,'steel');
       continue;
     }
-    if(w.kind==='cave'){
+    if(kind==='cave'){
       rock(w.x-w.insideX*.75,w.h/2,w.z-w.insideZ*.75,w.alongX?4.2:1.5,w.h,w.alongX?1.5:4.2);continue;
     }
-    if(w.kind==='field'){
+    if(kind==='field'){
       if(w.h<1){box(w.x,.2,w.z,w.alongX?4:.36,.4,w.alongX?.36:4,'earth');}
       else {rock(w.x-w.insideX*2.2,w.h/2,w.z-w.insideZ*2.2,w.alongX?4.6:4.5,w.h+1.5,w.alongX?4.5:4.6);}
       continue;
     }
-    if(w.kind==='shop'){
+    if(kind==='shop'){
       box(w.x,w.h/2,w.z,w.alongX?4:.3,w.h,w.alongX?.3:4,'wood');
       const x=w.x+w.insideX*.19,z=w.z+w.insideZ*.19;
       box(x,1.8,z,w.alongX?3.6:.07,2.4,w.alongX?.07:3.6,'paper');
       for(const y of [.6,1.8,3])box(x,y,z,w.alongX?4:.15,.1,w.alongX?.15:4,'dark');
       for(const side of [-1,1])box(x+(w.alongX?side*1.8:0),2,z+(w.alongX?0:side*1.8),.12,4,.12,'dark');continue;
     }
-    if(w.kind==='factory'||w.kind==='bath'||w.kind==='cistern'){
-      const bath=w.kind==='bath',factory=w.kind==='factory',x=w.x+w.insideX*.19,z=w.z+w.insideZ*.19;
+    if(kind==='factory'||kind==='bath'||kind==='cistern'){
+      const bath=kind==='bath',factory=kind==='factory',x=w.x+w.insideX*.19,z=w.z+w.insideZ*.19;
       box(w.x,w.h/2,w.z,w.alongX?4:.3,w.h,w.alongX?.3:4,bath?'tile':'concrete');
       box(x,.55,z,w.alongX?4:.05,1.1,w.alongX?.05:4,bath?'water':factory?'rust':'steel');
       for(const side of [-1,1])box(x+(w.alongX?side*1.9:0),w.h/2,z+(w.alongX?0:side*1.9),.16,w.h,.16,factory?'steel':'concrete');
@@ -419,10 +422,36 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     for(const side of [-1,1])box(x+(dz?side*1.88:0),1.6,z+(dx?side*1.88:0),.12,3.2,.12,metal?'steel':'wood');
   }
   const staticChunks:{mesh:THREE.Mesh;center:THREE.Vector3;radius:number}[]=[];
+  for(const [deck,y,level] of [[SECOND_DECK,4.8,1],[THIRD_DECK,9.6,2]] as const){
+    for(const c of deck.cells){
+      const x=c.x*4,z=c.z*4,hole=level===2&&HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ);
+      const theme=deckTheme({x,z},level),floor:MaterialKey=theme==='濡れ縁'?'stone':theme==='石蔵'?'concrete':'wood';
+      if(!hole)box(x,y-.12,z,4,.24,4,floor);
+      if(!HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ)||level===2)box(x,y+4.3,z,4,.2,4,'dark');box(x,y+.005,z,.02,.012,4,'dark');
+      if((c.x+c.z)%5===0)lantern(x,y+3.2,z);
+    }
+    for(const w of deck.walls){const x=(w.minX+w.maxX)/2,z=(w.minZ+w.maxZ)/2,theme=deckTheme({x,z},level),m:MaterialKey=theme==='石蔵'?'concrete':theme==='鏡廊'?'steel':theme==='朱塗りの間'?'red':'wood';box(x,y+2.1,z,w.maxX-w.minX,4.2,w.maxZ-w.minZ,m);box(x,y+.25,z,w.maxX-w.minX+.02,.5,w.maxZ-w.minZ+.02,'dark');}
+  }
+  for(const [deck,y,level] of [[SECOND_DECK,4.8,1],[THIRD_DECK,9.6,2]] as const){
+    for(let row=0;row<3;row++)for(let col=0;col<4;col++){
+      const x=(-19+col*12)*4,z=(19+row*12)*4,theme=deckTheme({x,z},level);
+      for(const side of [-1,1]){const px=x+side*7,pz=z+7;
+        if(theme==='鏡廊'){box(px,y+1.6,pz,1.5,2.7,.2,'steel');box(px,y+.2,pz,1.8,.4,.6,'dark');}
+        else if(theme==='濡れ縁'||theme==='石蔵'){box(px,y+.35,pz,2,.7,1.8,'stone');box(px,y+.71,pz,1.7,.02,1.5,'water');}
+        else {box(px,y+1,pz,1.8,2,.7,'wood');for(const h of [.4,1,1.6]){box(px,y+h,pz-.4,1.8,.08,.9,'dark');for(let i=-1;i<=1;i++)cylinder(px+i*.5,y+h+.25,pz-.35,.14,.4,theme==='祭具庫'?'gold':'rope');}}
+
+      }
+    }
+  }
+  for(const s of HIGH_STAIRS){
+    for(let i=0;i<24;i++){const d=(s.maxZ-s.minZ)/24,h=(i+1)*4.8/24;box((s.minX+s.maxX)/2,4.8+h/2,s.minZ+(i+.5)*d,4,h,d,'wood');}
+    for(const x of [s.minX,s.maxX]){const curve=new THREE.LineCurve3(new THREE.Vector3(x,5.9,s.minZ),new THREE.Vector3(x,10.7,s.maxZ));add(new THREE.TubeGeometry(curve,1,.06,6,false),'gold');}
+  }
+  for(const w of highCaps)box((w.minX+w.maxX)/2,10.15,(w.minZ+w.maxZ)/2,4,1.1,.2,'dark');
   for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=true;mesh.receiveShadow=true;mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
   obstacles.push(...goal.walls);
   const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
-  const upperFixed=[...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
+  const upperFixed=[...SECOND_DECK.walls,...deckFurnitureWalls(4.8),...highRails,...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
   const beads=[...placeMagatama(layout.rooms,obstacles,upperFixed),...placeRedMagatama(layout.cells,enemies.nodes.values(),obstacles,seededRandom(seed^0x5231))];
   const goldPoints=[...enemies.nodes.values()].filter(p=>p.z>=176&&layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind==='yokocho'&&!obstacles.some(o=>p.x>o.minX-1&&p.x<o.maxX+1&&p.z>o.minZ-1&&p.z<o.maxZ+1));
   if(!goldPoints.length)throw new Error('No accessible gold location');
@@ -432,6 +461,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const goalMeshes=createGoalMeshes(scene,goal);
   const burstRecharge=new BurstRecharge(),timeStop=new TimeStop();let environmentTime=0;
   let goalBlockers=goal.blockers();
+  const thirdFixed=[...THIRD_DECK.walls,...deckFurnitureWalls(9.6),...highRails,...highCaps];
   let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
   let groundCollision=[...obstacles,...groundDoors,...goalBlockers],groundEnemyCollision=[...enemyWalls,...groundDoors,...goalBlockers],upperCollision=[...upperFixed,...upperDoorBlocks];
   const refreshCollision=()=>{const g=doors.blockers(),u=doors.blockers(UPPER_HEIGHT),seal=goal.blockers();if(g!==groundDoors||seal!==goalBlockers){groundDoors=g;goalBlockers=seal;groundCollision=[...obstacles,...g,...seal];groundEnemyCollision=[...enemyWalls,...g,...seal];}if(u!==upperDoorBlocks){upperDoorBlocks=u;upperCollision=[...upperFixed,...u];}};
@@ -462,7 +492,9 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       for(const m of targets){m.map=texture;m.bumpMap=relief;m.bumpScale=bump;m.roughnessMap=relief;if(m!==mats.earth&&m!==mats.rock)m.color.set('#a2a49e');m.needsUpdate=true;}
     });
   }
-  const floorLevel=()=>elevation>UPPER_HEIGHT-.3?UPPER_HEIGHT:0;
+  const floorLevel=()=>floorBand(elevation);
+  const fixedFor=(level:number)=>level>9?thirdFixed:level>4?upperFixed:obstacles;
+  const collisionFor=()=>elevation>9.3?thirdFixed:elevation>4.5?upperCollision:groundCollision;
   return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
     observeFrame(ms:number,active:boolean){if(budget.observe(ms,active))resizeTargets();},
     get altarPosition(){return {...goal.altar};},
@@ -477,13 +509,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     collection(){return {...beadInventory(beads),areaName:areaName(),blueOffered:goal.blueOffered,redOffered:goal.redOffered,unlocked:goal.unlocked,area:areaAt(camera.position,elevation)};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
       if(goal.completed)return {x:camera.position.x,z:camera.position.z,y:camera.position.y};
-      refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
+      refreshCollision();collision=collisionFor();
       const pos=movePlayer(camera.position,x,z,yaw,sprint,dt,collision);lastMotion={running:sprint,moving:Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68};
     },
     enemyDirections(){return enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned'}));},
-    nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
+    nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     nearAltar(){return goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
-    interact(){if(goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,floorLevel()?upperFixed:obstacles,floorLevel());},
+    interact(){if(goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     burst(){if(goal.completed||!burstRecharge.use())return null;return enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x);},
     step(dt:number){
       if(goal.completed)return false;
@@ -495,12 +527,12 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         const cell=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4));footsteps.play(['stone','factory','bath','cistern','cave'].includes(cell?.kind??''));
       }
       lastMotion={running:false,moving:false};
-      if(liveDt>1e-6)for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>4.5?upperFixed:enemyWalls,liveDt);
-      doors.update(dt,camera.position,floorLevel());refreshCollision();collision=floorLevel()?upperCollision:groundCollision;doorMeshes.update();
+      if(liveDt>1e-6)for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>9.3?thirdFixed:e.floor>4.5?upperFixed:enemyWalls,liveDt);
+      doors.update(dt,camera.position,floorLevel());refreshCollision();collision=collisionFor();doorMeshes.update();
       collectMagatama(beads,camera.position,elevation,collision);
-      goal.update(dt,camera.position,elevation);refreshCollision();collision=floorLevel()?upperCollision:groundCollision;
+      goal.update(dt,camera.position,elevation);refreshCollision();collision=collisionFor();
       if(goal.completed)return false;
-      if(liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable)){elevation=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
+      if(liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable,thirdFixed)){elevation=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
         const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
         const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
     },

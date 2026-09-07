@@ -88,6 +88,12 @@ test('random altar and gold route survive defeat with empty inventory and a new 
  const renderer={setPixelRatio(){},setSize(){},shadowMap:{},capabilities:{getMaxAnisotropy:()=>1},dispose(){}} as unknown as THREE.WebGLRenderer;
  const altars=new Set<string>(),spawns=new Set<string>();
  for(const seed of [3,21,87]){const w=createWorld(canvas as unknown as HTMLCanvasElement,renderer,seed);try{
+  if(seed===3){
+   w.camera.position.set(52,1.68,4);
+   const walk=(x:number,z:number)=>{for(let i=0;i<900&&Math.hypot(w.camera.position.x-x,w.camera.position.z-z)>.3;i++){const dx=x-w.camera.position.x,dz=z-w.camera.position.z,d=Math.hypot(dx,dz),p=w.move(dx/d,dz/d,0,true,.025);w.camera.position.set(p.x,p.y,p.z);}assert.ok(Math.hypot(w.camera.position.x-x,w.camera.position.z-z)<.3,'walk to '+x+','+z);};
+   walk(52,28);assert.ok(Math.abs(w.camera.position.y-6.48)<.01);walk(80,28);walk(80,52);walk(44,52);walk(44,100);walk(44,128);assert.ok(Math.abs(w.camera.position.y-11.28)<.01);assert.ok(w.collection().areaName.startsWith('三層'));
+   walk(44,100);assert.ok(Math.abs(w.camera.position.y-6.48)<.01);walk(44,52);walk(80,52);walk(80,28);walk(52,28);walk(52,4);assert.ok(Math.abs(w.camera.position.y-1.68)<.01);
+  }
   altars.add(JSON.stringify(w.altarPosition));const gold=points.find(p=>p.id==='room:gold-yokocho')!;assert.ok(gold);
   w.camera.position.set(gold.position.x,1.68,gold.position.z);w.step(.05);assert.equal(w.collection().gold,1);assert.equal(w.collection().area,'red');assert.ok(w.collection().areaName.includes('横丁'));
   w.camera.position.set(w.altarPosition.x,1.68,w.altarPosition.z-2);w.camera.rotation.y=Math.PI;assert.equal(w.interact(),'offered');assert.equal(w.collection().unlocked,true);

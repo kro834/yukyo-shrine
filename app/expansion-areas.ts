@@ -3,7 +3,7 @@ export const AREA_THEMES=['鏡の間','香炉堂','朱柱の間','石灯籠庭',
 export function expandAreas(grid:Map<string,Cell>,rooms:Room[],courts:{x:number;z:number;rx:number;rz:number}[]){
  const added:Room[]=[];
  const rect=(x1:number,z1:number,x2:number,z2:number,h=3.8)=>{for(let x=x1;x<=x2;x++)for(let z=z1;z<=z2;z++)if(!grid.has(x+','+z))grid.set(x+','+z,{x,z,h,kind:'passage'});};
- const add=(x:number,z:number,w=3,d=3)=>{const n=added.length,r:Room={id:'expansion-'+String(n+1).padStart(2,'0'),x1:x,x2:x+w-1,z1:z,z2:z+d-1,h:3.8+(n%3)*.7,style:['tatami','ritual','store','stone'][n%4] as Room['style']};rect(x,z,r.x2,r.z2,r.h);for(let xx=x;xx<=r.x2;xx++)for(let zz=z;zz<=r.z2;zz++)grid.get(xx+','+zz)!.kind='hall';added.push(r);return r;};
+ const add=(x:number,z:number,w=3,d=3)=>{const n=added.length,r:Room={id:'expansion-'+String(n+1).padStart(2,'0'),x1:x,x2:x+w-1,z1:z,z2:z+d-1,h:3.8,style:['tatami','ritual','store','stone'][n%4] as Room['style']};rect(x,z,r.x2,r.z2,r.h);for(let xx=x;xx<=r.x2;xx++)for(let zz=z;zz<=r.z2;zz++)grid.get(xx+','+zz)!.kind='hall';added.push(r);return r;};
  const candidates:{x:number;z:number;score:number}[]=[];
  for(let x=-21;x<=19;x++)for(let z=-42;z<=-8;z++)candidates.push({x,z,score:Math.abs(x+1)+Math.abs(z+25)});
  candidates.sort((a,b)=>a.score-b.score);
