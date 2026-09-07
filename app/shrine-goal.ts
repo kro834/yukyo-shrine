@@ -12,8 +12,8 @@ const CLOSED:Obstacle[]=[{minX:-1.8,maxX:1.8,minZ:15.4,maxZ:15.65}],OPEN:Obstacl
 export class ShrineGoal {
  progress=0;completed=false;
  readonly required=5;blueOffered=0;redOffered=0;goldOffered=0;
- readonly offset:Position;readonly altar:Position;readonly walls:Obstacle[];private closed:Obstacle[];
- constructor(offset:Position={x:0,z:0}){this.offset=offset;this.altar={x:ALTAR.x+offset.x,z:ALTAR.z+offset.z};const shift=(w:Obstacle)=>({...w,minX:w.minX+offset.x,maxX:w.maxX+offset.x,minZ:w.minZ+offset.z,maxZ:w.maxZ+offset.z});this.walls=offset.x===0&&offset.z===0?GOAL_WALLS:GOAL_WALLS.map(shift);this.closed=CLOSED.map(shift);}
+ readonly horizontalScale:number;readonly offset:Position;readonly altar:Position;readonly walls:Obstacle[];private closed:Obstacle[];
+ constructor(offset:Position={x:0,z:0},horizontalScale=1){this.horizontalScale=horizontalScale;this.offset=offset;this.altar={x:ALTAR.x*horizontalScale+offset.x,z:ALTAR.z+offset.z};const shift=(w:Obstacle)=>({...w,minX:w.minX*horizontalScale+offset.x,maxX:w.maxX*horizontalScale+offset.x,minZ:w.minZ+offset.z,maxZ:w.maxZ+offset.z});this.walls=offset.x===0&&offset.z===0&&horizontalScale===1?GOAL_WALLS:GOAL_WALLS.map(shift);this.closed=CLOSED.map(shift);}
  reset(){this.blueOffered=this.redOffered=this.goldOffered=this.progress=0;this.completed=false;}
  get unlocked(){return this.blueOffered>=5||this.redOffered>=1||this.goldOffered>=1;}
  nearAltar(player:Position,yaw:number,floor:number,walls:Obstacle[]){
@@ -34,6 +34,6 @@ export class ShrineGoal {
   if(this.completed)return;
   const ready=this.unlocked;
   if(ready)this.progress=Math.min(1,this.progress+Math.max(0,Math.min(dt,.05))*.9);
-  if(ready&&this.progress>=.98&&Math.abs(floor)<.4&&Math.abs(player.x-this.offset.x)<1.5&&player.z-this.offset.z>16.5&&player.z-this.offset.z<17.45)this.completed=true;
+  if(ready&&this.progress>=.98&&Math.abs(floor)<.4&&Math.abs(player.x-this.offset.x)<1.5*this.horizontalScale&&player.z-this.offset.z>16.5&&player.z-this.offset.z<17.45)this.completed=true;
  }
 }

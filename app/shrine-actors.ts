@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {agedFinish} from './surface-finish.ts';
+import {SurfaceLibrary} from './surface-library.ts';
+import type {Preferences} from './preferences.ts';
 import type {Doors,Enemies} from './shrine-gameplay';
 export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
   const wood=new THREE.MeshStandardMaterial({color:'#251914',roughness:.88});
   const paper=new THREE.MeshStandardMaterial({color:'#aa9370',roughness:.97});
   agedFinish(paper,'paper');
   const metal=new THREE.MeshStandardMaterial({color:'#352e23',metalness:.65,roughness:.45});
+  const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.add('/cedar.png',[wood],{bump:.012,tint:'#685443'});
   const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>new THREE.BoxGeometry(w,h,d).translate(x,y,z);
   const merged=(parts:THREE.BufferGeometry[])=>{const geometry=mergeGeometries(parts)!;parts.forEach(g=>g.dispose());return geometry;};
   const frameGeometry=merged([box(-1.76,1.7,0,.48,3.4,.36),box(1.76,1.7,0,.48,3.4,.36),box(0,3.17,0,4,.48,.34),box(0,.035,0,4,.07,.35)]);
@@ -26,10 +29,10 @@ export function createDoorMeshes(scene:THREE.Scene,doors:Doors){
     for(const [g,m] of [[paperGeometry,paper],[leafWoodGeometry,wood],[pullGeometry,metal]] as const){const mesh=new THREE.Mesh(g,m);mesh.castShadow=mesh.receiveShadow=true;mesh.matrixAutoUpdate=false;leaf.add(mesh);}
     root.add(leaf);root.updateMatrix();root.matrixAutoUpdate=false;scene.add(root);return {root,leaf,progress:0};
   });
-  return {update(viewer?:{x:number;y?:number;z:number},range=110){
+  return {setQuality(quality:Preferences['quality']){surfaces.setQuality(quality);},update(viewer?:{x:number;y?:number;z:number},range=110){
     for(const frame of frames){const b=frame.boundingSphere!;frame.visible=!viewer||Math.hypot(b.center.x-viewer.x,b.center.z-viewer.z)<range+b.radius;}
     doors.states.forEach((d,i)=>{const p=panels[i];p.root.visible=!viewer||Math.hypot(d.spec.x-viewer.x,d.spec.z-viewer.z)<range;if(d.progress!==p.progress){p.progress=d.progress;p.leaf.position.x=d.progress*3.02;}});
-  },dispose(disposeGeometry=true){for(const m of [wood,paper,metal])m.dispose();if(disposeGeometry)for(const g of [frameGeometry,paperGeometry,leafWoodGeometry,pullGeometry])g.dispose();}};
+  },dispose(disposeGeometry=true){surfaces.dispose();for(const m of [wood,paper,metal])m.dispose();if(disposeGeometry)for(const g of [frameGeometry,paperGeometry,leafWoodGeometry,pullGeometry])g.dispose();}};
 }
 export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const mergeFixed=(group:THREE.Group,animated=new Set<THREE.Object3D>())=>{
@@ -46,110 +49,48 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
       for(const p of pieces){group.remove(p);p.geometry.dispose();}group.add(mesh);
     }
   };
-  const materials:THREE.Material[]=[];
-  const make=<T extends THREE.Material>(m:T)=>{materials.push(m);return m;};
-  const cloth=make(new THREE.MeshStandardMaterial({color:'#240d25',metalness:.35,roughness:.5}));
-  const gold=make(new THREE.MeshStandardMaterial({color:'#f2bf57',metalness:.8,roughness:.24,emissive:'#b17621',emissiveIntensity:.35}));
-  const black=make(new THREE.MeshStandardMaterial({color:'#080813',roughness:.5}));
-  const colors=['#ff386a','#5fffe0','#bb78ff','#ffbc40','#ff201e'];
-  const actors=enemies.actors.map((enemy,index)=>{
-    const root=new THREE.Group();scene.add(root);if(enemy.kind==='danger')root.scale.set(1.14,1.1,1.14);
-    if(enemy.kind==='watcher')root.scale.set(.8,1.25,.8);
-    if(enemy.kind==='stalker')root.scale.set(1.13,.82,1.1);
-    const glow=make(new THREE.MeshBasicMaterial({color:(enemy.kind==='danger'?colors[4]:colors[index%4]),toneMapped:false}));
-    const mask=make(new THREE.MeshStandardMaterial({color:'#fff2d0',metalness:.25,roughness:.3,emissive:(enemy.kind==='danger'?colors[4]:colors[index%4]),emissiveIntensity:.18}));
-    const aura=make(new THREE.MeshBasicMaterial({color:(enemy.kind==='danger'?colors[4]:colors[index%4]),transparent:true,opacity:.13,depthWrite:false,depthTest:false,fog:false,toneMapped:false}));
-    const part=(g:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z:number,parent:THREE.Group=root)=>{
-      const mesh=new THREE.Mesh(g,m);mesh.position.set(x,y,z);mesh.castShadow=m!==aura;mesh.receiveShadow=true;parent.add(mesh);return mesh;
-    };
-    part(new THREE.CylinderGeometry(.32,.67,1.75,12,5),cloth,0,.98,0);
-    part(new THREE.CylinderGeometry(.34,.38,.23,12),gold,0,1.4,0);
-    // Distinct silhouettes: shrine bearer, listening bell, many-eyed sentinel,
-    // crouching crawler, and the broad crowned pursuer.
-    if(enemy.kind==='normal'){
-      part(new THREE.BoxGeometry(.09,2.8,.09),black,.85,1.4,0);
-      part(new THREE.CylinderGeometry(.22,.28,.7,8),glow,.85,2.2,0);
-      part(new THREE.ConeGeometry(.55,.35,8),gold,0,2.45,0);
-    }
-    if(enemy.kind==='listener'){
-      const bell=part(new THREE.CylinderGeometry(.35,.7,.95,12),gold,0,2.2,0);bell.scale.z=.8;
-      for(const side of [-1,1])part(new THREE.TorusGeometry(.4,.07,6,16),black,side*.75,1.6,0);
-    }
-    if(enemy.kind==='watcher'){
-      for(let j=0;j<5;j++){const a=(j-2)*.48;part(new THREE.SphereGeometry(.12,8,6),glow,Math.sin(a)*.9,2.5+Math.cos(a)*.35,.2);}
-      part(new THREE.ConeGeometry(.85,1.1,6),cloth,0,1.75,-.2);
-    }
-    if(enemy.kind==='stalker'){
-      for(const side of [-1,1])for(let j=0;j<3;j++){const leg=part(new THREE.CylinderGeometry(.06,.13,1.3,6),black,side*(.6+j*.16),.55,-.25+j*.3);leg.rotation.z=side*(.7+j*.12);}
-      part(new THREE.ConeGeometry(.35,.95,6),mask,0,1.75,.6).rotation.x=Math.PI/2;
-    }
-    if(enemy.kind==='danger'){
-      for(const side of [-1,1]){part(new THREE.BoxGeometry(.55,.65,.75),gold,side*.85,1.75,0);part(new THREE.ConeGeometry(.16,1.3,6),glow,side*.55,2.9,-.1);}
-    }
-    if(enemy.kind==='listener')for(const side of [-1,1]){
-      const ear=part(new THREE.TorusGeometry(.23,.045,7,20),gold,side*.35,2.1,0);ear.rotation.y=Math.PI/2;
-      part(new THREE.SphereGeometry(.09,8,6),glow,side*.37,2.1,0);
-    }
-    if(enemy.kind==='watcher'){
-      const veil=part(new THREE.ConeGeometry(.58,.38,12),black,0,2.42,0);veil.scale.z=.8;
-      part(new THREE.OctahedronGeometry(.12),glow,0,2.33,.26);
-    }
-    if(enemy.kind==='stalker')for(const side of [-1,1]){
-      const claw=part(new THREE.ConeGeometry(.08,.75,5),gold,side*.6,.45,.3);claw.rotation.x=.6;
-    }
-    part(new THREE.SphereGeometry(.29,16,12),black,0,2.04,0);
-    const face=part(new THREE.SphereGeometry(.27,18,12),mask,0,2.04,.15);face.scale.set(.87,1.22,.45);
-    for(const side of [-1,1]){
-      const horn=part(new THREE.ConeGeometry(.12,.77,10),gold,side*.23,2.58,.02);horn.rotation.z=-side*.32;
-      const eye=part(new THREE.SphereGeometry(.052,10,8),glow,side*.095,2.09,.272);eye.scale.set(1.4,.38,.65);
-      const tusk=part(new THREE.ConeGeometry(.045,.2,8),gold,side*.12,1.85,.24);tusk.rotation.z=-side*.2;
-      for(let j=0;j<3;j++){
-        const armor=part(new THREE.ConeGeometry(.19,.74,4),gold,side*(.46+j*.1),1.65-j*.17,-.03);
-        armor.rotation.z=-side*(.85+j*.13);
-      }
-    }
-    const arms=[-1,1].map(side=>{const a=part(new THREE.CylinderGeometry(.19,.09,1.0,10),cloth,side*.43,1.19,.02);a.rotation.z=side*.25;part(new THREE.ConeGeometry(.13,.4,5),gold,side*.56,.62,.02);return a;});
-    const halo=new THREE.Group();halo.position.set(0,1.72,-.27);root.add(halo);
-    part(new THREE.TorusGeometry(.86,.035,8,64),gold,0,0,0,halo);
-    part(new THREE.TorusGeometry(.77,.013,6,64),glow,0,0,0,halo);
-    for(let j=0;j<12;j++){
-      const a=j*Math.PI/6,spike=part(new THREE.ConeGeometry(.075,.34,4),glow,Math.sin(a)*1.02,Math.cos(a)*1.02,0,halo);spike.rotation.z=-a;
-    }
-    const ribbons=[-1,1].flatMap(side=>[0,1,2].map(j=>{
-      const curve=new THREE.CatmullRomCurve3([new THREE.Vector3(side*.28,1.65,-.1),new THREE.Vector3(side*(.55+j*.1),1.1,-.45),new THREE.Vector3(side*(.65+j*.14),.35,-.15)]);
-      return part(new THREE.TubeGeometry(curve,14,.018,5,false),glow,0,0,0);
-    }));
-    // A faint full-body echo renders after walls, without changing enemy line of sight.
-    for(const [g,x,y,z] of [
-      [new THREE.CylinderGeometry(.34,.69,1.78,10),0,.98,0],
-      [new THREE.SphereGeometry(.3,12,10),0,2.04,.1],
-      [new THREE.TorusGeometry(.88,.035,6,40),0,1.72,-.27],
-    ] as [THREE.BufferGeometry,number,number,number][]){const echo=part(g,aura,x,y,z);echo.layers.set(1);echo.renderOrder=20;echo.castShadow=false;}
-    const ringMat=make(new THREE.MeshBasicMaterial({color:'#b8ffff',transparent:true,opacity:0,depthWrite:false,toneMapped:false}));
-    const ring=part(new THREE.TorusGeometry(.85,.025,6,48),ringMat,0,.065,0);ring.rotation.x=Math.PI/2;
-    if(enemy.kind==='danger'){
-      const crown=part(new THREE.TorusGeometry(1.18,.045,8,64),glow,0,1.65,-.4);crown.rotation.y=.35;
-      for(const side of [-1,1]){
-        const blade=part(new THREE.ConeGeometry(.15,1.3,4),gold,side*.82,1.4,-.2);blade.rotation.z=-side*.55;
-        for(let j=0;j<4;j++){const spine=part(new THREE.ConeGeometry(.08,.45,4),glow,side*(.42+j*.18),2.2-j*.18,-.35);spine.rotation.z=-side*.8;}
-      }
-      for(let j=0;j<5;j++)part(new THREE.OctahedronGeometry(.055,0),glow,0,1.1+j*.15,.36);
-    }
-    mergeFixed(halo);mergeFixed(root,new Set([...arms,...ribbons]));
-    return {root,arms,halo,ribbons,glow,aura,mask,ringMat,index};
+  const cloth=new THREE.MeshStandardMaterial({color:'#302822',metalness:0,roughness:.97});
+  const skin=new THREE.MeshStandardMaterial({color:'#928477',roughness:.94});
+  const mask=new THREE.MeshStandardMaterial({color:'#bdbaa9',roughness:.82});
+  const black=new THREE.MeshStandardMaterial({color:'#0c0a09',roughness:.98});
+  const cord=new THREE.MeshStandardMaterial({color:'#6a5c40',roughness:1});
+  const aura=new THREE.MeshBasicMaterial({color:'#a7c4c0',transparent:true,opacity:.23,depthWrite:false,depthTest:false,fog:false});
+  let enabled=true;
+  const surfaces=new SurfaceLibrary([cloth],4);surfaces.add('/horror-hemp.png',[cloth],{bump:.006,tint:'#aaa49c'});
+  const part=(parent:THREE.Group,g:THREE.BufferGeometry,m:THREE.Material,x:number,y:number,z:number)=>{const mesh=new THREE.Mesh(g,m);mesh.position.set(x,y,z);mesh.castShadow=mesh.receiveShadow=m!==aura;parent.add(mesh);return mesh;};
+  const robe=(top:number,bottom:number,height:number)=>{const g=new THREE.CylinderGeometry(top,bottom,height,24,8);const p=g.getAttribute('position');for(let i=0;i<p.count;i++){const a=Math.atan2(p.getZ(i),p.getX(i)),fold=1+Math.sin(a*11+p.getY(i)*1.6)*.065;p.setX(i,p.getX(i)*fold);p.setZ(i,p.getZ(i)*fold*.72);}g.computeVertexNormals();return g;};
+  const actors=enemies.actors.map((e,i)=>{
+    const root=new THREE.Group();root.name='horror-'+e.kind;scene.add(root);
+    const crawler=e.kind==='stalker',tall=e.kind==='watcher',large=e.kind==='danger';
+    root.scale.set(large?1.13:1,tall?1.17:large?1.1:1,1);
+    const body=new THREE.Group();root.add(body);body.rotation.x=crawler?.72:e.kind==='normal'?.13:large?.2:0;body.position.y=crawler?-.55:0;
+    part(body,robe(.24,.43,1.35),cloth,0,.94,0);
+    for(const side of [-1,1]){const collar=part(body,new THREE.BoxGeometry(.095,.57,.055),cloth,side*.11,1.44,.19);collar.rotation.z=side*.43;part(body,new THREE.BoxGeometry(.11,.22,.18),black,side*.14,.11,.05);}
+    part(body,new THREE.CylinderGeometry(.10,.11,.22,10),skin,0,1.68,0);
+    const sash=part(body,robe(.28,.29,.11),cord,0,1.03,.002);
+    const head=new THREE.Group();head.position.set(0,1.96,.04);head.rotation.z=e.kind==='listener'?.48:large?-.12:0;head.rotation.x=crawler?-.7:.08;body.add(head);
+    const skull=part(head,new THREE.SphereGeometry(.235,18,14),black,0,0,0);skull.scale.set(.78,1.23,.83);
+    const face=part(head,new THREE.SphereGeometry(.224,20,14),e.kind==='normal'||tall?mask:skin,0,-.02,.072);face.scale.set(.76,1.18,.55);
+    // Deep eye sockets and an unlit open mouth replace luminous eyes and armor.
+    for(const side of [-1,1]){const eye=part(head,new THREE.SphereGeometry(.048,10,8),black,side*.074,.028,.184);eye.scale.set(1,.46,.32);const brow=part(head,new THREE.BoxGeometry(.085,.012,.018),skin,side*.073,.077,.17);brow.rotation.z=side*.16;}
+    const nose=part(head,new THREE.ConeGeometry(.029,.115,7),skin,0,-.035,.205);nose.rotation.x=-.32;
+    const mouth=part(head,new THREE.SphereGeometry(.039,10,8),black,0,-.139,.181);mouth.scale.set(.78,large?1.5:.45,.22);
+    for(let j=0;j<13;j++){const a=(j/12)*Math.PI*1.6-Math.PI*.8;const lock=part(head,new THREE.CylinderGeometry(.024,.008,.35+(j%4)*.12,5),black,Math.sin(a)*.16,-.13,Math.cos(a)*-.13);lock.rotation.z=Math.sin(a)*.1;}
+    // Fine pale scars across the mask read only at close range.
+    for(let j=0;j<3;j++){const crack=part(head,new THREE.BoxGeometry(.005,.055+j*.02,.005),black,.11-j*.07,-.055+j*.08,.182);crack.rotation.z=.5-j*.35;}
+    const arms=[-1,1].map(side=>{const arm=new THREE.Group();arm.position.set(side*.27,1.46,0);body.add(arm);arm.rotation.z=side*.08;
+      part(arm,robe(.13,.17,.74),cloth,side*.025,-.33,0);const hand=part(arm,new THREE.SphereGeometry(.085,10,8),skin,side*.04,-.77,.01);hand.scale.set(.65,1.4,.55);
+      for(let f=0;f<4;f++){const finger=part(arm,new THREE.CylinderGeometry(.013,.009,.15+(f%2)*.025,5),skin,side*.04+(f-1.5)*.023,-.9,.019);finger.rotation.x=.18+f*.06;}mergeFixed(arm);return arm;});
+    if(e.kind==='listener'){for(const side of [-1,1]){const wrap=part(head,new THREE.SphereGeometry(.086,12,8),cloth,side*.19,.02,0);wrap.scale.set(.5,1.3,.8);}}
+    if(tall){const veil=part(body,robe(.24,.31,.75),cloth,0,1.66,-.04);veil.scale.z=.72;}
+    if(large){part(body,new THREE.SphereGeometry(.30,16,10),cloth,0,1.46,-.15);}
+    mergeFixed(head);mergeFixed(body);const echoGroup=new THREE.Group();root.add(echoGroup);
+    for(const [g,y] of [[robe(.25,.43,1.5),1],[new THREE.SphereGeometry(.24,12,10),2]] as const){const m=part(echoGroup,g,aura,0,y,0);m.layers.set(1);m.renderOrder=20;}
+    echoGroup.visible=false;return {root,body,head,arms,echoGroup,crawler,tilt:head.rotation.z};
   });
-  return {update(time:number,viewer?:{x:number;z:number},range=125){enemies.actors.forEach((e,i)=>{
-    const a=actors[i],stunned=e.brain.mode==='stunned';
-    a.root.visible=!viewer||Math.hypot(e.position.x-viewer.x,e.position.z-viewer.z)<range;
-    if(!a.root.visible)return;
-    a.root.position.set(e.position.x,e.floor+.035*Math.sin(time*.0018+i),e.position.z);a.root.rotation.y=e.facing;
-    a.arms.forEach((arm,j)=>arm.rotation.x=stunned?0:Math.sin(time*.0035+i+j)*.12);
-    a.halo.rotation.z=stunned?0:time*.00018*(i%2?1:-1);
-    a.ribbons.forEach((r,j)=>r.rotation.z=Math.sin(time*.0018+j)*.045);
-    const color=stunned?'#b8ffff':(e.kind==='danger'?colors[4]:colors[i%4]);a.glow.color.set(color);a.aura.color.set(color);
-    a.mask.emissiveIntensity=stunned?.65:e.brain.mode==='chase'?.55+Math.sin(time*.007)*.12:.22;a.ringMat.opacity=stunned?.7:0;
-  });},dispose(){materials.forEach(m=>m.dispose());}};
+  return {setQuality(quality:Preferences['quality']){surfaces.setQuality(quality);},setEnabled(value:boolean){enabled=value;for(const a of actors)a.root.visible=value;},update(time:number,viewer?:{x:number;z:number},range=125,reveal=false){enemies.actors.forEach((e,i)=>{const a=actors[i],stunned=e.brain.mode==='stunned';a.root.visible=enabled&&(!viewer||Math.hypot(e.position.x-viewer.x,e.position.z-viewer.z)<range);a.echoGroup.visible=reveal;if(!a.root.visible)return;
+    a.root.position.set(e.position.x,e.floor,e.position.z);a.root.rotation.y=e.facing;const pace=e.brain.mode==='chase'?.012:.005;
+    a.arms.forEach((arm,j)=>arm.rotation.x=stunned?.08:a.crawler?-1.05+Math.sin(time*pace+j*Math.PI)*.16:Math.sin(time*pace+j*Math.PI+i)*.12);
+    a.head.rotation.z=a.tilt+(stunned?.25:Math.sin(time*.0009+i)*.035);a.body.rotation.z=stunned?.08:Math.sin(time*pace+i)*.015;
+  });},dispose(){surfaces.dispose();for(const m of [cloth,skin,mask,black,cord,aura])m.dispose();}};
 }
-
-
-

@@ -82,6 +82,7 @@ export class Enemies {
   graph=new Map<string,string[]>();
   actors:Enemy[];
   pressure=0;
+  difficulty={enemies:true,sense:1,speed:1,search:1};
   patrolClock=0;
   readonly patrolOwners=new Map<string,number>();
   private ownerSignature='';
@@ -174,7 +175,7 @@ export class Enemies {
   hear(position:Position,floor=0){
     const balance=AREA_MULTIPLIERS[this.areaAt(position,floor)];
     let count=0;for(const e of this.actors){
-      if(e.brain.mode==='stunned'||e.brain.mode==='chase'||Math.hypot(e.position.x-position.x,e.position.z-position.z)>ENEMY_PROFILES[e.kind].hearing*balance.sense)continue;
+      if(e.brain.mode==='stunned'||e.brain.mode==='chase'||Math.hypot(e.position.x-position.x,e.position.z-position.z)>ENEMY_PROFILES[e.kind].hearing*balance.sense*this.difficulty.sense)continue;
       const nextFloor=floor>7.2?9.6:floor>2.4?UPPER_HEIGHT:0;
       if(!e.investigate||e.destinationFloor!==nextFloor){e.planIn=Math.min(e.planIn,.03*e.id);e.route=[];}
       e.investigate={...position};e.destinationFloor=nextFloor;e.searchBranches=e.kind==='listener'?3:2;e.searchTime=Math.max(45*balance.search,Math.hypot(e.position.x-position.x,e.position.z-position.z)/(3.3*balance.speed)+8*balance.search);count++;
@@ -192,10 +193,10 @@ export class Enemies {
       const base=ENEMY_PROFILES[e.kind],balance=AREA_MULTIPLIERS[this.areaAt(e.position,e.floor)];
       const dangerScale=this.wingAt(e.position)==='yokocho'?1.3:1,pressureScale=1+Math.max(0,Math.min(1,this.pressure))*.18;
       const movementScale=Math.max(.9,balance.speed);
-      const profile={...base,sight:base.sight*balance.sense*dangerScale*pressureScale,nearSight:base.nearSight*balance.sense,chase:Math.min(8.9,base.chase*movementScale*dangerScale*pressureScale),patrol:Math.max(2.6,base.patrol*movementScale*pressureScale)};
+      const profile={...base,sight:base.sight*balance.sense*dangerScale*pressureScale*this.difficulty.sense,nearSight:base.nearSight*balance.sense,chase:Math.min(8.9,base.chase*movementScale*dangerScale*pressureScale*this.difficulty.speed),patrol:Math.max(2.6,base.patrol*movementScale*pressureScale*this.difficulty.speed)};
       const sees=detectable&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+2.05},{...player,y:playerFloor+1.5},blockers);
       const previousMode=e.brain.mode,lastSeen=e.brain.lastSeen?{...e.brain.lastSeen}:null;e.brain.update(dt,sees,player);
-      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.searchBranches=e.kind==='danger'?3:e.kind==='watcher'?1:2;e.searchTime=14*balance.search;e.waypoint=null;e.route=[];e.planIn=0;}
+      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.searchBranches=e.kind==='danger'?3:e.kind==='watcher'?1:2;e.searchTime=14*balance.search*this.difficulty.search;e.waypoint=null;e.route=[];e.planIn=0;}
       if(sees&&e.brain.mode==='chase'){e.searchBranches=0;e.investigate=null;e.searchTime=0;e.lastSeenFloor=playerFloor>7.2?9.6:playerFloor>2.4?UPPER_HEIGHT:0;e.destinationFloor=e.lastSeenFloor;if(!sighting&&this.squadCooldown===0)sighting={source:e,point:{...e.brain.lastSeen!},floor:e.lastSeenFloor};}
       if(e.brain.mode==='stunned')continue;
       if(e.brain.mode==='chase'&&distance<.8&&sees){caught=true;continue;}

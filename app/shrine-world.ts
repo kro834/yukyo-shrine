@@ -3,7 +3,8 @@ import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
 import {Reflector} from 'three/addons/objects/Reflector.js';
 import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 import {createEffects,renderEnemyEcho} from './shrine-effects.ts';
-import {createLayout,CELL,SPAWN} from './shrine-layout.ts';
+import {CELL,SPAWN} from './shrine-layout.ts';
+import {createSectorLayout as createLayout} from './sector-layout.ts';
 import type {Preferences} from './preferences';
 import {Doors,Enemies,openPursuedDoor} from './shrine-gameplay.ts';
 import {createDoorMeshes,createEnemyMeshes} from './shrine-actors.ts';
@@ -20,13 +21,20 @@ import {createGoalMeshes} from './goal-mesh.ts';
 import {BurstRecharge} from './burst-recharge.ts';
 import {PerformanceBudget} from './performance-budget.ts';
 import {SECOND_DECK,THIRD_DECK,HIGH_STAIRS,highRails,highCaps,deckFurnitureWalls,floorBand,deckTheme,deckContains} from './vertical-layout.ts';
+import {horrorArea,buildHorrorArea} from './horror-areas.ts';
 import {AREA_THEMES} from './expansion-areas.ts';
 import {agedFinish} from './surface-finish.ts';
+import {SurfaceLibrary} from './surface-library.ts';
+import {belowUpperDeck} from './ground-clearance.ts';
 import {RunProgress} from './run-progress.ts';
 import {Stamina} from './stamina.ts';
 import {TimeStop} from './time-stop.ts';
+import {MirrorInventory} from './mirror-inventory.ts';
+import {createMirrorMeshes} from './mirror-mesh.ts';
+import {modeRules,type PlayMode} from './play-mode.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff)) {
+  let playMode:PlayMode='normal';
   const device=typeof navigator!=='undefined'?navigator as Navigator&{deviceMemory?:number}:undefined;
   const budget=new PerformanceBudget({touch:(device?.maxTouchPoints??0)>1||/Android|iPhone|iPad/i.test(device?.userAgent??''),cores:device?.hardwareConcurrency,memory:device?.deviceMemory});
   const renderer=rendererOverride??new THREE.WebGLRenderer({canvas,antialias:!budget.mobile,powerPreference:'high-performance'});
@@ -40,12 +48,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const moon=new THREE.DirectionalLight('#8c9aa6',.10);moon.position.set(-10,18,5);scene.add(moon);
   const layout=createLayout(seed),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
   const visualKind=(kind:string,x:number,z:number)=>{const patch=((Math.floor((x+200)/20)+Math.floor((z+300)/20)*3+(seed%5))%5+5)%5;if(['factory','bath','cistern','shop'].includes(kind))return patch===0?'stone':patch===2?'hall':kind;if(kind==='cave'&&patch===0)return 'stone';return kind;};
-  const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>r.x2-r.x1>=3&&r.z2-r.z1>=3);
-  const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5});
-  const areaName=()=>{if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r)return AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2);const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
+  const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2);
+  const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5},.7);
+  const areaName=()=>{if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
-    wood:new THREE.MeshStandardMaterial({color:'#685044',roughness:.42,metalness:.07}),
+    wood:new THREE.MeshStandardMaterial({color:'#685044',roughness:.9,metalness:0}),
+    planks:new THREE.MeshStandardMaterial({color:'#d0bdaa',roughness:1,metalness:0}),
     dark:new THREE.MeshStandardMaterial({color:'#1c1413',roughness:.52}),
     red:new THREE.MeshStandardMaterial({color:'#4e241e',roughness:.72}),
     gold:new THREE.MeshStandardMaterial({color:'#b7934c',metalness:.72,roughness:.3}),
@@ -86,10 +95,17 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   agedFinish(mats.paper,'paper');agedFinish(mats.washiLit,'paper');agedFinish(mats.plaster,'plaster');agedFinish(mats.tatami,'tatami');
   type MaterialKey=keyof typeof mats;
   const batches=new Map<string,{material:MaterialKey;geometries:THREE.BufferGeometry[]}>();
+  let groundGeometry=true;
   const add=(g:THREE.BufferGeometry,m:MaterialKey)=>{
+    if(groundGeometry){g.computeBoundingBox();const b=g.boundingBox!;
+      if(b.max.y>4.5&&belowUpperDeck(b.min.x,b.max.x,b.min.z,b.max.z)){
+        if(b.min.y>=4.5){g.dispose();return;}
+        else {const position=g.getAttribute('position');for(let i=0;i<position.count;i++)position.setY(i,Math.min(4.5,position.getY(i)));g.computeVertexNormals();}
+      }
+    }
     // World-scale UVs avoid stretched grain on walls, beams and long pipes.
-    if(['wood','red','concrete','rust','steel','stone','rock','earth','plaster','paper','tatami'].includes(m)){
-      const p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv'),scale=m==='wood'||m==='red'?.38:.3;
+    if(['planks','wood','red','concrete','rust','steel','stone','rock','earth','plaster','paper','tatami'].includes(m)){
+      const p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv'),scale=m==='planks'?1/1.5:m==='rock'?1/2.7:m==='plaster'?1/2:m==='wood'||m==='red'?.38:.3;
       for(let i=0;i<p.count;i++){
         const ax=Math.abs(n.getX(i)),ay=Math.abs(n.getY(i)),az=Math.abs(n.getZ(i));
         uv.setXY(i,(ax>ay&&ax>az?p.getZ(i):p.getX(i))*scale,(ay>ax&&ay>az?p.getZ(i):p.getY(i))*scale);
@@ -110,13 +126,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   };
   const lanterns:THREE.Vector3[]=[];
   const fixtureColors=new Map<THREE.Vector3,string>();
-  const fixture=(x:number,y:number,z:number,color:string)=>{const p=new THREE.Vector3(x,y,z);lanterns.push(p);fixtureColors.set(p,color);};
+  const fixture=(x:number,y:number,z:number,color:string)=>{if(groundGeometry&&y>4.5&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5))return;const p=new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z);lanterns.push(p);fixtureColors.set(p,color);};
   const lantern=(x:number,y:number,z:number,large=false)=>{
-    const r=large?.42:.22,h=large?.95:.6;
+    const r=large?.42:.22,h=large?.95:.6;if(groundGeometry&&y+h/2>4.5&&belowUpperDeck(x-r,x+r,z-r,z+r))return;
     cylinder(x,y,z,r,h,'light',r*.85);cylinder(x,y+h/2,z,r*1.13,.09,'dark');cylinder(x,y-h/2,z,r*1.02,.09,'dark');
     for(let j=0;j<8;j++){const a=j*Math.PI/4;box(x+Math.sin(a)*r,y,z+Math.cos(a)*r,.025,h,.025,'red');}
     for(let j=-2;j<=2;j++)cylinder(x,y+j*h/6,z,r+.007,.016,'dark');
-    lanterns.push(new THREE.Vector3(x,y,z));
+    lanterns.push(new THREE.Vector3(x,groundGeometry&&belowUpperDeck(x-.5,x+.5,z-.5,z+.5)?Math.min(y,3.6):y,z));
   };
   for(const c of layout.cells){
     const x=c.x*CELL,z=c.z*CELL,kind=visualKind(c.kind,x,z);
@@ -140,7 +156,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       continue;
     }
     if(kind==='shop'){
-      box(x,-.14,z,4,.28,4,'wood');box(x,c.h+.1,z,4,.2,4,'dark');box(x,.008,z,.025,.016,4,'dark');box(x,c.h-.12,z,4,.18,.15,'wood');
+      box(x,-.14,z,4,.28,4,'planks');box(x,c.h+.1,z,4,.2,4,'dark');box(x,.008,z,.025,.016,4,'dark');box(x,c.h-.12,z,4,.18,.15,'wood');
       if((c.x+c.z)%4===0){lantern(x,3.4,z);box(x,4,z,.03,1,.03,'dark');}
       continue;
     }
@@ -161,7 +177,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       }
       continue;
     }
-    box(x,-.14,z,4,.28,4,kind==='stone'?'stone':'wood');
+    box(x,-.14,z,4,.28,4,kind==='stone'?'stone':'planks');
     box(x,c.h+.12,z,4,.24,4,'dark');
     if(kind==='stone'){box(x,.004,z,.022,.008,4,'black');box(x,.004,z,4,.008,.022,'black');}
     else {for(let j=-3;j<=3;j++)box(x+j*.5,.006,z,.014,.009,4,'dark');if((c.x+c.z)%2===0){box(x,Math.max(2.9,c.h-.32),z,.12,.14,4,'dark');box(x,c.h-.22,z+1.15,4,.11,.1,'wood');box(x,c.h-.22,z-1.15,4,.11,.1,'wood');}}
@@ -236,7 +252,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       }
     }
     // Small andon fixtures tuck into the existing wall face, away from doorways.
-    if(!w.twoSided&&variation===1&&Math.abs(Math.round(w.x+w.z))%12===0){
+    if(!w.twoSided&&variation===1&&Math.abs(Math.round((w.x+w.z)/2))%5===0){
       const px=w.x+w.insideX*.22,pz=w.z+w.insideZ*.22;
       box(px,.16,pz,w.alongX?.46:.13,.15,w.alongX?.13:.46,'dark');
       box(px,.65,pz,w.alongX?.36:.12,.72,w.alongX?.12:.36,'light');
@@ -267,12 +283,6 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const g2=new THREE.BoxGeometry(.16,.22,.015);g2.rotateZ(-.35);g2.translate(x+offset+.025,h-1.31,z+.17);add(g2,'paper');
     }
   };
-  for(const z of [10,-2,-14])gate(0,z,8,5.3);
-  for(const z of [-25,-53,-73])gate(0,z,2.8,3.25);
-  for(const side of [-1,1])for(const z of [10,-2,-14]){
-    cylinder(side*8,3.35,z,.3,6.7,'red');cylinder(side*8,.18,z,.44,.36,'black');block(side*8,z,.9,.9);
-    lantern(side*6.8,3.3,z,true);box(side*6.8,5.1,z,.04,2.8,.04,'gold');
-  }
   const altar=(x:number,z:number,scale=1)=>{
     box(x,.2,z,4*scale,.4,1.8,'black');box(x,.7,z,3.3*scale,1,1.2,'red');box(x,1.28,z,4*scale,.14,1.5,'gold');
     box(x,1.42,z,3.9*scale,.1,1.45,'black');block(x,z,4*scale,1.8);
@@ -280,35 +290,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     const ring=new THREE.TorusGeometry(.82*scale,.055,8,48);ring.translate(x,2.65,z-.1);add(ring,'gold');
     for(const side of [-1,1]){cylinder(x+side*1.3*scale,1.8,z,.07,.65,'gold');cylinder(x+side*1.3*scale,2.16,z,.06,.12,'light');lantern(x+side*3*scale,2.5,z,true);cylinder(x+side*3*scale,1,z,.09,2,'dark');}
   };
-  altar(0,-44,1.5);gate(0,-39,6.2,5.5);
-  altar(-44,-72,.8);altar(44,-72,.8);altar(52,-30,.8);altar(-6,31,.8);
-  box(0,.18,-92,5,.36,7,'black');block(0,-92,5,7);
-  for(const sign of [-1,1]){box(sign*2.5,.35,-92,.22,.3,7.2,'stone');box(0,.35,-92+sign*3.5,5.2,.3,.22,'stone');}
-  const water=new THREE.Mesh(new THREE.PlaneGeometry(4.85,6.85),new THREE.MeshPhysicalMaterial({color:'#17332f',metalness:.75,roughness:.13,clearcoat:1}));water.rotation.x=-Math.PI/2;water.position.set(0,.37,-92);scene.add(water);
-  altar(0,-100,1.1);
-  for(const [x,z] of [[-52,-40],[-44,-72],[44,-72],[52,-28],[0,-88],[0,-100],[-6,30]]){
-    for(const side of [-1,1]){lantern(x+side*3,2.2,z,true);cylinder(x+side*3,.8,z,.14,1.6,'stone');}
-  }
-  // Tatami chamber with low lacquer table.
-  for(let x=28;x<=36;x+=2)for(let z=4;z<=12;z+=4){box(x,.025,z,1.94,.05,3.94,'tatami');box(x-.96,.058,z,.05,.01,3.95,'black');}
-  box(32,.45,8,2,.14,1.3,'dark');block(32,8,2,1.3,.52);
-  for(const x of [31.2,32.8])for(const z of [7.6,8.4])box(x,.2,z,.08,.4,.08,'dark');
-  lantern(32,2.6,8,true);
-  // Ritual storehouse: heavy shelves and unmarked ceramic vessels.
-  for(const x of [-31,-29]){
-    for(const z of [-30,-25]){box(x,1.4,z,.16,2.8,.16,'dark');}
-    for(const y of [.2,1.2,2.2])box(x,y,-27.5,1.15,.12,5.2,'wood');
-    block(x,-27.5,1.2,5.4);
-    for(const y of [.58,1.58,2.58])for(const z of [-29,-27,-26])cylinder(x,y,z,.23,.6,'stone',.3);
-  }lantern(-30,2.9,-23,true);
-  // Bell room, suspended bronze bell and crossbeam.
-  box(-34,4.4,-88,6,.4,.5,'dark');
-  cylinder(-34,3.1,-88,1.1,1.8,'gold',1.3);cylinder(-34,4.1,-88,.5,.3,'gold');cylinder(-34,4.25,-88,.1,.3,'dark');
-  box(-34,1.0,-88,3.0,2,2.8,'black');block(-34,-88,3.0,2.8);lantern(-36,2.6,-85,true);lantern(-32,2.6,-85,true);
-  // Lantern chamber: staggered rows, entirely above walking height.
-  for(const x of [42,44,46])for(const z of [-68,-71,-74]){lantern(x,3.4,z,true);box(x,4.8,z,.025,2,.025,'gold');}
+  const cisternSector=layout.sectors.find(s=>s.kind==='cistern')!,poolPosition={x:(cisternSector.x1+cisternSector.x2)*2,z:(cisternSector.z1+cisternSector.z2)*2};
+  const water=new THREE.Mesh(new THREE.PlaneGeometry(4.85,6.85),new THREE.MeshPhysicalMaterial({color:'#17332f',metalness:.75,roughness:.13,clearcoat:1}));water.rotation.x=-Math.PI/2;water.position.set(poolPosition.x,.024,poolPosition.z);scene.add(water);
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
+    if(room.themeId){buildHorrorArea(room,{box,cylinder,fixture,block},room.id===altarRoom.id);continue;}
     if(room.id===altarRoom.id)continue;
     const cx=(room.x1+room.x2)*2,cz=(room.z1+room.z2)*2;
     lantern(cx,room.h-.7,cz,true);box(cx,room.h-.2,cz,.03,.8,.03,'dark');
@@ -362,62 +348,22 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
     for(const side of [-1,1])for(let j=-1;j<=1;j++)lantern(cx+side*9,court.h-1.3,cz+j*5,true);
   }
-  // Industrial machinery flanks the through-routes, leaving the central floor clear.
-  for(const x of [120,168])for(const z of [-112,-120,-144,-152]){
-    box(x,.18,z,3.2,.36,2.5,'steel');block(x,z,3.2,2.5);
-    cylinder(x,1.4,z,1.0,2.5,'rust');cylinder(x,2.72,z,1.06,.13,'steel');
-    box(x+.86,1.5,z+.83,.5,.8,.3,'steel');
-    const wheel=new THREE.TorusGeometry(.3,.045,8,18);wheel.translate(x+.86,1.6,z+1.02);add(wheel,'rust');
-    cylinder(x,3.3,z,.12,1.05,'steel');
-  }
-  for(const x of [120,132,144,156,168]){
-    box(x,5.65,-116,.2,.3,20,'steel');box(x,5.4,-116,.08,.08,20,'rust');
-  }
-  // Silent pump galleries and low, still water basins.
-  for(const x of [-168,-120])for(const z of [-112,-120,-144,-152]){
-    box(x,.5,z,3.2,1,2.3,'concrete');box(x,1.015,z,2.9,.025,2,'water');block(x,z,3.2,2.3,1.05);
-    cylinder(x+1.4,1.75,z,.16,2.3,'steel');
-  }
-  // Long washing bays in the abandoned bathhouse, with tarnished mirrors and taps.
-  box(0,.7,-236,19.8,.06,19.8,'water');box(0,6.92,-236,20,.24,20,'concrete');
-  for(const side of [-1,1])for(const z of [-224,-232,-240,-248]){
-    const x=side*77;
-    box(x,.45,z,1,.9,2.6,'tile');block(x,z,1,2.6,.95);
-    box(x-side*.48,1.65,z,.06,1.2,1.6,'steel');
-    cylinder(x-side*.6,.85,z,.04,.3,'rust');
-    box(x-side*1.2,.18,z,.6,.36,.7,'wood');block(x-side*1.2,z,.6,.7,.4);
-  }
-  // A real upper deck, two open stairwells and adjoining upstairs guest rooms.
-  // Unlettered nostalgic sweet-shop stalls, glass jars and colourful packet racks.
-  const candy:MaterialKey[]=['candyRed','candyYellow','candyBlue','candyPink'];
-  for(const x of [-92,-84,-76,-68,-60,-52])for(const z of [8,24]){
-    box(x,.6,z,5.4,1.2,1.15,'dark');box(x,1.24,z,5.7,.12,1.35,'wood');block(x,z,5.7,1.35);
-    for(let j=0;j<8;j++){
-      const px=x-2.35+j*.67;box(px,1.45,z,.43,.3,.55,candy[(j+Math.abs(x))%4]);
-      cylinder(px,1.9,z-.38,.16,.55,'glass');cylinder(px,2.19,z-.38,.17,.06,'gold');
-      for(const y of [2.5,2.95])box(px,y,z-.55,.32,.32,.07,candy[(j+Math.floor(y))%4]);
-    }
-    for(const side of [-1,1])box(x+side*2.8,1.65,z-.65,.08,3.3,.08,'dark');
-    box(x,3.2,z-.65,5.7,.12,.16,'wood');
-    for(let j=0;j<10;j++)box(x-2.55+j*.57,3.05,z,.56,.16,1.5,j%2?'paper':'candyRed');
-  }
-  for(const z of [5,21]){box(-80.5,.95,z,1.2,1.9,2.1,'candyBlue');box(-79.86,1.2,z,.04,1.15,1.7,'glass');block(-80.5,z,1.2,2.1);}
-  // A covered market lane, back-room screens and a shallow display courtyard.
-  for(const x of [-92,-76,-60]){box(x,3.8,16,6,.14,3.6,'wood');for(const side of [-1,1])box(x+side*3,2,17.7,.1,3.8,.1,'dark');lantern(x,3.4,16,true);}
-  for(const z of [0,32])for(let x=-92;x<=-52;x+=8){box(x,1.6,z,5.8,3.2,.18,'wood');block(x,z,5.8,.18,3.2);}
-  // Paddy pools are islands in the walk graph; planted rows are batched with
-  // the terrain, so thousands of blades never become thousands of draw calls.
-  for(const p of layout.paddies){
-    const x=(p.x1+p.x2)*2,z=(p.z1+p.z2)*2,w=(p.x2-p.x1+1)*4,d=(p.z2-p.z1+1)*4;
-    box(x,-.07,z,w,.08,d,'water');
-    for(let px=p.x1*4-1;px<=p.x2*4+1;px+=1.15)for(let pz=p.z1*4-1;pz<=p.z2*4+1;pz+=1.65){
-      const h=.45+natureRandom()*.35;
-      for(const angle of [0,Math.PI/2]){const g=new THREE.PlaneGeometry(.10,h);const a=g.getAttribute('position');a.setX(0,a.getX(0)*.15);a.setX(1,a.getX(1)*.15);g.rotateY(angle+natureRandom()*.25);g.translate(px+natureRandom()*.25,h/2-.02,pz+natureRandom()*.2);add(g,'grass');}
+  for(const p of layout.paddies){const x=(p.x1+p.x2)*2,z=(p.z1+p.z2)*2,w=(p.x2-p.x1+1)*4,d=(p.z2-p.z1+1)*4;box(x,-.04,z,w,.035,d,'water');for(let px=x-w/2+.6;px<x+w/2;px+=1.1)for(let pz=z-d/2+.6;pz<z+d/2;pz+=1.3){const g=new THREE.PlaneGeometry(.06,.52);g.rotateY((px+pz)%Math.PI);g.translate(px,.2,pz);add(g,'grass');}}
+  // Fixtures follow generated walls instead of old absolute stage coordinates.
+  for(const w of layout.walls){if(w.twoSided||Math.abs(Math.round((w.x+w.z)/2))%7!==0)continue;const x=w.x+w.insideX*.35,z=w.z+w.insideZ*.35,kind=w.kind;
+    if(kind==='shop'){
+      box(x,.52,z,w.alongX?2.8:.55,1.04,w.alongX?.55:2.8,'wood');block(x,z,w.alongX?2.8:.55,w.alongX?.55:2.8,1.04);
+      for(let j=-2;j<=2;j++){const px=x+(w.alongX?j*.47:0),pz=z+(w.alongX?0:j*.47);cylinder(px,1.28,pz,.14,.42,'glass');cylinder(px,1.5,pz,.15,.035,'gold');box(px,1.1,pz,.2,.07,.2,(['candyRed','candyYellow','candyBlue','candyPink'] as const)[(j+2)%4]);}
+    }else if(kind==='factory'||kind==='cistern'){
+      cylinder(x,1.1,z,.28,2.2,'rust');cylinder(x,2.25,z,.31,.1,'steel');box(x,1.1,z,w.alongX?.8:.45,.12,w.alongX?.45:.8,'steel');block(x,z,.65,.65,2.3);
+    }else if(kind==='bath'){
+      box(x,.45,z,w.alongX?1.6:.5,.9,w.alongX?.5:1.6,'tile');box(x,.91,z,w.alongX?1.4:.42,.015,w.alongX?.42:1.4,'water');block(x,z,w.alongX?1.6:.5,w.alongX?.5:1.6,.93);
     }
   }
+  groundGeometry=false;
   for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
     if((x===13||x===22)&&z>=2&&z<=6)continue;
-    box(x*4,UPPER_HEIGHT-.12,z*4,4,.24,4,'wood');
+    box(x*4,UPPER_HEIGHT-.12,z*4,4,.24,4,'planks');
     if((x+z)%4===0)lantern(x*4,7.8,z*4);
   }
   for(const s of STAIRS){
@@ -442,6 +388,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   for(const x of [64,76]){for(let dx=-4;dx<=4;dx+=2)for(const z of [4,8,12])box(x+dx,UPPER_HEIGHT+.018,z,1.95,.036,3.95,'tatami');lantern(x,7.5,8,true);}
   // Material thresholds and overhead lintels mark changes of wing without signs
   // or new obstructions in the walkable route.
+  groundGeometry=true;
   for(const c of layout.cells)for(const [dx,dz] of [[1,0],[0,1]]){
     const n=layout.grid.get((c.x+dx)+','+(c.z+dz));
     if(!n||n.kind===c.kind||c.kind==='field'||n.kind==='field'||!['factory','bath','cistern','shop','cave'].includes(n.kind)&&!['factory','bath','cistern','shop','cave'].includes(c.kind))continue;
@@ -450,14 +397,17 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     box(x,Math.min(c.h,n.h)-.25,z,dx?.28:4,.32,dz?.28:4,metal?'rust':'red');
     for(const side of [-1,1])box(x+(dz?side*1.88:0),1.6,z+(dx?side*1.88:0),.12,3.2,.12,metal?'steel':'wood');
   }
+  groundGeometry=false;
   const staticChunks:{mesh:THREE.Mesh;center:THREE.Vector3;radius:number}[]=[];
   for(const [deck,y,level] of [[SECOND_DECK,4.8,1],[THIRD_DECK,9.6,2]] as const){
     for(const c of deck.cells){
       const x=c.x*4,z=c.z*4,hole=level===2&&HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ);
-      const theme=deckTheme({x,z},level),floor:MaterialKey=theme==='濡れ縁'?'stone':theme==='石蔵'?'concrete':'wood';
+      const theme=deckTheme({x,z},level),floor:MaterialKey=theme==='濡れ縁'?'stone':theme==='石蔵'?'concrete':'planks';
       if(!hole)box(x,y-.12,z,4,.24,4,floor);
-      if(!HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ)||level===2)box(x,y+4.3,z,4,.2,4,'dark');box(x,y+.005,z,.02,.012,4,'dark');if((c.x+c.z)%2===0){box(x,y+4.02,z,4,.18,.13,'wood');box(x,y+4.05,z,.12,.12,4,'wood');}
-      if((c.x+c.z)%5===0)lantern(x,y+3.2,z);
+      const stairOpening=HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ);
+      if(!stairOpening||level===2)box(x,y+4.3,z,4,.2,4,'dark');
+      if(!hole)box(x,y+.005,z,.02,.012,4,'dark');
+      if(!stairOpening){if((c.x+c.z)%2===0){box(x,y+4.02,z,4,.18,.13,'wood');box(x,y+4.05,z,.12,.12,4,'wood');}if((c.x+c.z)%5===0)lantern(x,y+3.2,z);}
     }
     for(const w of deck.walls){const x=(w.minX+w.maxX)/2,z=(w.minZ+w.maxZ)/2,theme=deckTheme({x,z},level),m:MaterialKey=theme==='石蔵'?'concrete':theme==='鏡廊'?'steel':theme==='朱塗りの間'?'red':'plaster';box(x,y+2.1,z,w.maxX-w.minX,4.2,w.maxZ-w.minZ,m);box(x,y+.25,z,w.maxX-w.minX+.02,.5,w.maxZ-w.minZ+.02,'dark');}
   }
@@ -477,12 +427,21 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     for(const x of [s.minX,s.maxX]){const curve=new THREE.LineCurve3(new THREE.Vector3(x,5.9,s.minZ),new THREE.Vector3(x,10.7,s.maxZ));add(new THREE.TubeGeometry(curve,1,.06,6,false),'gold');}
   }
   for(const w of highCaps)box((w.minX+w.maxX)/2,10.15,(w.minZ+w.maxZ)/2,4,1.1,.2,'dark');
+  for(const stair of [...STAIRS.map(s=>({...s,low:0,high:4.8})),...HIGH_STAIRS.map(s=>({...s,low:4.8,high:9.6}))]){
+    const mid=(stair.minX+stair.maxX)/2;
+    for(let i=0;i<24;i++){const z=stair.minZ+(i+.02)*(stair.maxZ-stair.minZ)/24,y=stair.low+(i+1)*(stair.high-stair.low)/24;box(mid,y+.012,z,stair.maxX-stair.minX-.12,.028,.07,'gold');}
+    for(const [z,y,color] of [[stair.minZ-1,stair.low,'#8daebe'],[stair.maxZ+1,stair.high,'#e7af68']] as const){
+      for(const x of [stair.minX+.08,stair.maxX-.08]){box(x,y+1.15,z,.06,2.3,.07,'gold');box(x,y+1.45,z,.085,.64,.09,'washiLit');fixture(x,y+1.7,z,color);}
+      box(mid,y+2.8,z,stair.maxX-stair.minX,.14,.18,'wood');
+    }
+  }
   for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=m!=='lightSpill';mesh.receiveShadow=m!=='lightSpill';mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
   obstacles.push(...goal.walls);
   const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors),enemyMeshes=createEnemyMeshes(scene,enemies);
   const upperFixed=[...SECOND_DECK.walls,...deckFurnitureWalls(4.8),...highRails,...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
   const beads=[...placeMagatama(layout.rooms,obstacles,upperFixed),...placeRedMagatama(layout.cells,enemies.nodes.values(),obstacles,seededRandom(seed^0x5231))];
-  const goldPoints=[...enemies.nodes.values()].filter(p=>p.z>=176&&layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind==='yokocho'&&!obstacles.some(o=>p.x>o.minX-1&&p.x<o.maxX+1&&p.z>o.minZ-1&&p.z<o.maxZ+1));
+  const goldPoints=[...enemies.nodes.values()].filter(p=>layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind==='yokocho'&&!obstacles.some(o=>p.x>o.minX-1&&p.x<o.maxX+1&&p.z>o.minZ-1&&p.z<o.maxZ+1));
+  const pursuer=enemies.actors.find(e=>e.kind==='danger')!;if(goldPoints.length){const home=goldPoints.reduce((a,b)=>Math.hypot(a.x-SPAWN.x,a.z-SPAWN.z)>Math.hypot(b.x-SPAWN.x,b.z-SPAWN.z)?a:b);pursuer.home={...home};pursuer.position={...home};}
   if(!goldPoints.length)throw new Error('No accessible gold location');
   beads.push({id:'gold-yokocho',position:{...goldPoints[Math.floor(runRandom()*goldPoints.length)]},floor:0,color:'gold',collected:false,offered:false});
   const beadMeshes=createMagatamaMeshes(scene,beads);
@@ -495,7 +454,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   let groundCollision=[...obstacles,...groundDoors,...goalBlockers],groundEnemyCollision=[...enemyWalls,...groundDoors,...goalBlockers],upperCollision=[...upperFixed,...upperDoorBlocks];
   const refreshCollision=()=>{const g=doors.blockers(),u=doors.blockers(UPPER_HEIGHT),seal=goal.blockers();if(g!==groundDoors||seal!==goalBlockers){groundDoors=g;goalBlockers=seal;groundCollision=[...obstacles,...g,...seal];groundEnemyCollision=[...enemyWalls,...g,...seal];}if(u!==upperDoorBlocks){upperDoorBlocks=u;upperCollision=[...upperFixed,...u];}};
   let elevation=0,collision=groundCollision,reflectionEnabled=true;
-  const mirror=new Reflector(new THREE.PlaneGeometry(4.7,6.7),{textureWidth:budget.mobile?1:512,textureHeight:budget.mobile?1:512,color:0x293d38});mirror.rotation.x=-Math.PI/2;mirror.position.set(0,.38,-92);scene.add(mirror);water.visible=false;
+  const mirror=new Reflector(new THREE.PlaneGeometry(4.7,6.7),{textureWidth:budget.mobile?1:512,textureHeight:budget.mobile?1:512,color:0x293d38});mirror.rotation.x=-Math.PI/2;mirror.position.set(poolPosition.x,.03,poolPosition.z);scene.add(mirror);water.visible=false;
   const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
   for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
   dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
@@ -508,23 +467,36 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const glowGeometry=new THREE.BufferGeometry().setFromPoints(lanterns.filter(p=>!fixtureColors.has(p)));scene.add(new THREE.Points(glowGeometry,glowMat));
   let lastLight=0,disposed=false,configuredQuality:Preferences['quality']|null=null;const direction=new THREE.Vector3(),moodTarget=new THREE.Color('#080c0d');
   let effects:ReturnType<typeof createEffects>|undefined;
+  const mirrorPoints=enemies.patrolTargets.filter(t=>t.floor>0||Math.hypot(t.point.x-goal.altar.x,t.point.z-goal.altar.z)>8).map(t=>({...t,random:runRandom()})).sort((a,b)=>a.random-b.random);
+  const mirrorPickups:import('./mirror-inventory.ts').MirrorPickup[]=[];
+  for(const floor of [0,4.8,9.6])for(const t of mirrorPoints.filter(t=>Math.abs(t.floor-floor)<.3)){if(mirrorPickups.filter(p=>p.floor===floor).length>=4)break;if(mirrorPickups.some(p=>p.floor===floor&&Math.hypot(p.position.x-t.point.x,p.position.z-t.point.z)<15))continue;mirrorPickups.push({id:'mirror-'+mirrorPickups.length,position:{...t.point},floor,collected:false});}
+  const mirrorInventory=new MirrorInventory(mirrorPickups),mirrorMeshes=createMirrorMeshes(scene,mirrorPickups);
   let selectedQuality:Preferences['quality']='medium';
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   mats.light.color.multiplyScalar(1.35);mats.coolLight.color.multiplyScalar(1.15);
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
-  new THREE.TextureLoader().load('/cedar.png',texture=>{if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());mats.wood.map=texture;mats.wood.color.set('#80634e');const grain=texture.clone();grain.colorSpace=THREE.NoColorSpace;grain.needsUpdate=true;surfaceTextures.push(grain);mats.wood.bumpMap=grain;mats.wood.bumpScale=.035;mats.wood.roughnessMap=grain;mats.wood.roughness=.85;mats.wood.needsUpdate=true;mats.red.bumpMap=grain;mats.red.bumpScale=.025;mats.red.map=texture;mats.red.needsUpdate=true;});
-  const surfaceTextures:THREE.Texture[]=[];
-  for(const [url,targets,bump] of [['/weathered-concrete.png',[mats.concrete,mats.stone,mats.rock,mats.earth,mats.plaster],.045],['/rusted-steel.png',[mats.rust,mats.steel],.025]] as [string,THREE.MeshStandardMaterial[],number][]){
-    new THREE.TextureLoader().load(url,texture=>{
-      if(disposed){texture.dispose();return;}texture.colorSpace=THREE.SRGBColorSpace;texture.wrapS=texture.wrapT=THREE.RepeatWrapping;texture.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
-      const relief=texture.clone();relief.colorSpace=THREE.NoColorSpace;relief.needsUpdate=true;surfaceTextures.push(texture,relief);
-      for(const m of targets){m.map=texture;m.bumpMap=relief;m.bumpScale=bump;m.roughnessMap=relief;if(m!==mats.earth&&m!==mats.rock&&m!==mats.plaster)m.color.set('#a2a49e');m.needsUpdate=true;}
-    });
-  }
+  const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
+  surfaces.add('/cedar.png',[mats.wood],{bump:.018,tint:'#ad9782'});
+  surfaces.add('/cedar.png',[mats.red,mats.dark],{bump:.014});
+  surfaces.add('/weathered-concrete.png',[mats.concrete,mats.stone],{bump:.018,tint:'#aaa9a2'});
+  surfaces.add('/rusted-steel.png',[mats.rust,mats.steel],{bump:.012,tint:'#9b9a92'});
+  const photographic=(id:string,targets:THREE.MeshStandardMaterial[],tint:string)=>surfaces.add('/materials/'+id+'_diff.jpg',targets,{tint,normal:'/materials/'+id+'_nor_gl.jpg',roughness:'/materials/'+id+'_rough.jpg'});
+  photographic('wood_planks',[mats.planks],'#d8c5ad');
+  photographic('rock_face_03',[mats.rock],'#ada99d');
+  photographic('clay_plaster',[mats.plaster],'#c1ac90');
+  surfaces.add('/materials/clay_plaster_diff.jpg',[mats.earth],{bump:.014,tint:'#686148'});
+  mats.concrete.roughness=.94;mats.stone.roughness=.78;mats.stone.metalness=0;
+  mats.rock.roughness=1;mats.plaster.roughness=1;mats.rust.roughness=.92;mats.steel.roughness=.7;
   const floorLevel=()=>floorBand(elevation);
   const fixedFor=(level:number)=>level>9?thirdFixed:level>4?upperFixed:obstacles;
   const collisionFor=()=>elevation>9.3?thirdFixed:elevation>4.5?upperCollision:groundCollision;
-  return {renderer,scene,camera,get obstacles(){return collision;},flashlight,
+  return {renderer,scene,camera,layout,
+    setMode(mode:PlayMode){playMode=mode;if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=modeRules(mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
+    get playMode(){return playMode;},
+    mirrorStatus(){return mirrorInventory.snapshot();},
+    useMirror(){return playMode!=='gallery'&&mirrorInventory.use();},
+    stairHint(){const options=[...STAIRS.map(s=>({...s,low:0,high:4.8})),...HIGH_STAIRS.map(s=>({...s,low:4.8,high:9.6}))].flatMap(s=>[{x:(s.minX+s.maxX)/2,z:s.minZ-2,floor:s.low,to:s.high,up:true},{x:(s.minX+s.maxX)/2,z:s.maxZ+2,floor:s.high,to:s.low,up:false}]).filter(s=>Math.abs(s.floor-elevation)<.6).map(s=>({...s,d:Math.hypot(s.x-camera.position.x,s.z-camera.position.z)})).sort((a,b)=>a.d-b.d);const s=options[0];return s&&s.d<22?(s.up?'↑ ':'↓ ')+(['一層','二層','三層'][Math.round(s.to/4.8)])+'への階段 · '+Math.round(s.d)+'m':'';},
+    get obstacles(){return collision;},flashlight,
     observeFrame(ms:number,active:boolean){if(budget.observe(ms,active))resizeTargets();},
     get altarPosition(){return {...goal.altar};},
     get goalPosition(){return {x:GOAL.x+goal.offset.x,z:GOAL.z+goal.offset.z};},
@@ -533,7 +505,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     get timeStopped(){return timeStop.active;},
     get timeStopRemaining(){return timeStop.remaining;},
     get timeStopCooldown(){return timeStop.cooldown;},
-    stopTime(){const used=!goal.completed&&timeStop.use();if(used)run.freezes++;return used;},
+    stopTime(){const used=playMode!=='gallery'&&!goal.completed&&timeStop.use();if(used)run.freezes++;return used;},
     runStatus(){return run.snapshot();},
     staminaStatus(){return stamina.snapshot();},
     goalDirection(){return enemyDirection(camera.position,goal.altar,camera.rotation.y);},
@@ -543,29 +515,30 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       refreshCollision();collision=collisionFor();
       const allowed=sprint&&stamina.canSprint,pos=movePlayer(camera.position,x,z,yaw,allowed,dt,collision),moving=Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001;stamina.step(dt,sprint,moving,allowed&&moving);lastMotion={running:allowed&&moving,moving};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68,running:allowed&&moving};
     },
-    enemyDirections(){return enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned',level:enemyFloorHint(elevation,e.floor),chasing:e.brain.mode==='chase'}));},
+    enemyDirections(){return !mirrorInventory.active||playMode==='gallery'?[]:enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned',level:enemyFloorHint(elevation,e.floor),chasing:e.brain.mode==='chase'}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
-    nearAltar(){return goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
-    interact(){if(goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
-    burst(){if(goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x);run.stuns+=hits;return hits;},
+    nearAltar(){return playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
+    interact(){if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
+    burst(){if(playMode==='gallery'||goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x);run.stuns+=hits;return hits;},
     step(dt:number){
       if(goal.completed)return false;
-      burstRecharge.step(dt);
+      burstRecharge.step(dt);mirrorInventory.step(dt);
       const liveDt=timeStop.step(dt);environmentTime+=liveDt*1000;
       const detectable=flashlight.visible||(lastMotion.running&&lastMotion.moving);
       if(runningSteps.update(dt,lastMotion.running,lastMotion.moving)){
-        if(liveDt>1e-6)enemies.hear(camera.position,elevation);
+        if(playMode!=='gallery'&&liveDt>1e-6)enemies.hear(camera.position,elevation);
         const cell=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4));footsteps.play(['stone','factory','bath','cistern','cave'].includes(cell?.kind??''));
       }
       lastMotion={running:false,moving:false};
-      if(liveDt>1e-6)for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>9.3?thirdFixed:e.floor>4.5?upperFixed:enemyWalls,liveDt);
+      if(playMode!=='gallery'&&liveDt>1e-6)for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>9.3?thirdFixed:e.floor>4.5?upperFixed:enemyWalls,liveDt);
       doors.update(dt,camera.position,floorLevel());refreshCollision();collision=collisionFor();
+      mirrorInventory.collect(camera.position,elevation,collision);
       const uncollected=beads.filter(b=>!b.collected);collectMagatama(beads,camera.position,elevation,collision);for(const b of uncollected)if(b.collected)run.pickup(b.color);
       const inventory=beadInventory(beads),burden=Math.max((inventory.blue+goal.blueOffered)/5,inventory.red,inventory.gold,goal.unlocked?1:0);enemies.pressure=Math.min(1,burden);
-      goal.update(dt,camera.position,elevation);refreshCollision();collision=collisionFor();
-      const caught=!goal.completed&&liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable,thirdFixed);
+      goal.update(dt,playMode==='gallery'?{x:10000,z:10000}:camera.position,elevation);refreshCollision();collision=collisionFor();
+      const caught=playMode!=='gallery'&&!goal.completed&&liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable,thirdFixed);
       run.step(dt,{chasing:enemies.actors.some(e=>e.brain.mode==='chase'),searching:enemies.actors.some(e=>e.investigate&&Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28),hidden:!detectable,frozen:timeStop.active,burden});
-      if(caught){elevation=0;run.defeated();stamina.reset();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
+      if(caught){elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
         const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
         const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
     },
@@ -575,7 +548,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       camera.fov=p.fov;camera.updateProjectionMatrix();
       selectedQuality=p.quality;const quality=budget.quality(p.quality);
       if(configuredQuality===quality)return;
-      configuredQuality=quality;
+      configuredQuality=quality;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);
       if(quality==='low'){effects?.dispose();effects=undefined;}else if(!effects&&!rendererOverride)effects=createEffects(renderer,scene,camera,budget.mobile);
       resizeTargets();
       renderer.shadowMap.enabled=quality!=='low';
@@ -604,13 +577,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       flashlight.position.copy(camera.position);flashlight.position.y-=.12;camera.getWorldDirection(direction);flashlight.target.position.copy(camera.position).addScaledVector(direction,10);
       lightPool.forEach((l,i)=>l.intensity=7*(1+.02*Math.sin(environmentTime*.0021+i*2.3)));
       doorMeshes.update(camera.position,configuredQuality==='low'?72:110);
-      enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125);
+      enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);
       beadMeshes.update(environmentTime);
       goalMeshes.update();
-      if(effects)effects.render();else {renderer.render(scene,camera);renderEnemyEcho(renderer,scene,camera);}
+      if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaceTextures.forEach(t=>t.dispose());const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
 

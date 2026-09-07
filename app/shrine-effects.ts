@@ -32,11 +32,11 @@ export function createEffects(renderer:THREE.WebGLRenderer,scene:THREE.Scene,cam
       composer.setPixelRatio(renderer.getPixelRatio());composer.setSize(innerWidth,innerHeight);
     },
     resize(){composer.setPixelRatio(renderer.getPixelRatio());composer.setSize(innerWidth,innerHeight);},
-    render(){
+    render(reveal=false){
       ao.ssaoMaterial.uniforms.cameraProjectionMatrix.value.copy(camera.projectionMatrix);
       ao.ssaoMaterial.uniforms.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
       if(enabled)composer.render();else renderer.render(scene,camera);
-      renderEnemyEcho(renderer,scene,camera);
+      if(reveal)renderEnemyEcho(renderer,scene,camera);
     },
     dispose(){for(const pass of [base,ao,bloom,output])pass.dispose();ao.ssaoMaterial.dispose();ao.noiseTexture.dispose();composer.dispose();},
   };

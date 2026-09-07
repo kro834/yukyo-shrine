@@ -10,22 +10,27 @@ import {createWorld} from './shrine-world';
 
 import {GamepadSession,PadCalibration,mappingKey,validMapping,type Pad} from './gamepad-input';
 import {ButtonEdges,TouchInput,allowMouseLook,allowExploration,needsControllerLock} from './input-actions';
-import {DEFAULTS,sanitizePreferences,type Preferences} from './preferences';
+import {DEFAULTS,sanitizePreferences,startupPreferences,type Preferences} from './preferences';
 import {adjustRange,viewDelta,hidePlayCursor,type RangeKey} from './view-controls';
 import {PointerLockPolicy} from './pointer-lock-policy';
 import {BurstInput} from './burst-input';
 import {RunProgress,formatRunTime} from './run-progress';
 import {simulationSteps} from './performance-budget';
 
+import {PLAY_MODES,type PlayMode} from './play-mode';
+import {TouchActionGate} from './touch-action';
 const pollPads=()=>{try{return Array.from(navigator.getGamepads?.()??[]).filter((p):p is Gamepad=>!!p);}catch{return [];}};
 const clampPitch=(p:number)=>Math.max(-1.3,Math.min(1.3,p));
 type ModelTool={name:string;description:string;inputSchema:object;annotations:{readOnlyHint:boolean};execute:(input:unknown)=>unknown};
 export default function Shrine(){
-  const canvas=useRef<HTMLCanvasElement>(null),dialog=useRef<HTMLDivElement>(null);
+  const canvas=useRef<HTMLCanvasElement>(null),dialog=useRef<HTMLDivElement>(null),startPanel=useRef<HTMLDivElement>(null);
+  const [started,setStarted]=useState(false),[playMode,setPlayMode]=useState<PlayMode>('normal');
+  const actionGate=useRef(new TouchActionGate());
+  const [mirrorStatus,setMirrorStatus]=useState({count:0,remaining:0}),[stairHint,setStairHint]=useState('');
   const session=useRef(new GamepadSession()),touch=useRef(new TouchInput()),keys=useRef(new Set<string>());
   const worldRef=useRef<ReturnType<typeof createWorld>|null>(null);
   const burstInput=useRef(new BurstInput());
-  const state=useRef({yaw:0,pitch:0,light:true,paused:false});
+  const state=useRef({yaw:0,pitch:0,light:true,paused:true,started:false});
   const calibration=useRef<PadCalibration|null>(null),lastPad=useRef<Pad|null>(null);
   const prefRef=useRef<Preferences>(DEFAULTS);
   const [prefs,setPrefs]=useState<Preferences>(DEFAULTS),[pad,setPad]=useState(false),[connected,setConnected]=useState(false);
@@ -54,7 +59,7 @@ export default function Shrine(){
   const clearInput=useCallback(()=>{keys.current.clear();touch.current.clear();burstInput.current.clear();setTouchSprint(false);setStickPosition({x:0,z:0});},[]);
   const applyPreferences=useCallback((next:Preferences)=>{const v=sanitizePreferences(next);prefRef.current=v;setPrefs(v);try{localStorage.setItem('yukyo-preferences-v1',JSON.stringify(v));}catch{};worldRef.current?.configure(v);return v;},[]);
   const setMenuOpen=useCallback((open:boolean)=>{
-    state.current.paused=open;setMenu(open);clearInput();
+    if(!state.current.started)return;state.current.paused=open;setMenu(open);clearInput();
     document.documentElement.dataset.shrinePlaying=String(!open);
     if(open){lockPolicy.current.openMenu(session.current.mode,document.pointerLockElement===document.documentElement);setLockRequired(false);document.exitPointerLock?.();document.documentElement.classList.remove('controller-cursor-hidden');document.documentElement.style.removeProperty('cursor');}
     else{
@@ -67,16 +72,18 @@ export default function Shrine(){
       requestAnimationFrame(()=>{if(!state.current.paused)canvas.current?.focus({preventScroll:true});});
     }
   },[clearInput,requestLock]);
+  const beginGame=useCallback((mode:PlayMode)=>{if(!worldRef.current||state.current.started)return;worldRef.current.setMode(mode);setPlayMode(mode);state.current.started=true;setStarted(true);setMenuOpen(false);},[setMenuOpen]);
+  const useMirror=useCallback(()=>{if(state.current.paused)return;const w=worldRef.current;if(w?.playMode==='gallery')return;if(w?.useMirror())setNotice('鏡を使用 · 12秒間、敵の姿が映ります');else setNotice(w?.mirrorStatus().remaining?'鏡はすでに敵を映しています':'鏡をまだ持っていません');},[]);
   const setFlashlight=useCallback((on:boolean)=>{state.current.light=on;setLight(on);if(worldRef.current)worldRef.current.flashlight.visible=on;return {enabled:on};},[]);
   const toggleLight=useCallback(()=>setFlashlight(!state.current.light),[setFlashlight]);
-  const burst=useCallback(()=>{if(state.current.paused||!worldRef.current)return;burstInput.current.request(performance.now());},[]);
-  const stopTime=useCallback(()=>{const world=worldRef.current;if(state.current.paused||!world)return;if(world.stopTime()){setStopRemaining(10);setStopCooldown(30);setNotice('時間停止 · 10秒間、敵が動かなくなります');}else setNotice('時間停止の再使用まで '+Math.ceil(world.timeStopCooldown)+'秒');},[]);
+  const burst=useCallback(()=>{if(state.current.paused||!worldRef.current||worldRef.current.playMode==='gallery')return;burstInput.current.request(performance.now());},[]);
+  const stopTime=useCallback(()=>{const world=worldRef.current;if(state.current.paused||!world||world.playMode==='gallery')return;if(world.stopTime()){setStopRemaining(10);setStopCooldown(30);setNotice('時間停止 · 10秒間、敵が動かなくなります');}else setNotice('時間停止の再使用まで '+Math.ceil(world.timeStopCooldown)+'秒');},[]);
   const interact=useCallback(()=>{if(state.current.paused)return;const opened=worldRef.current?.interact();if(opened==='offered')setNotice(worldRef.current?.collection().unlocked?'奉納が完了しました。祭壇の奥の扉へ進んでください。':'青勾玉を祭壇に捧げました。');else if(opened==='empty')setNotice(worldRef.current?.collection().unlocked?'祭壇の奥の扉が開いています。':'青勾玉5個、または赤・金勾玉1個を捧げると扉が開きます。');else if(!opened)setNotice('祭壇かふすまに近づいて、そちらを向いて〇を押してください。');},[]);
   useLayoutEffect(()=>{
-    document.documentElement.dataset.shrinePlaying=String(!menu&&!won);
-    document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(menu||won));
-    if(menu||won)document.documentElement.style.removeProperty('cursor');else document.documentElement.style.setProperty('cursor','none','important');
-  },[menu,won]);
+    document.documentElement.dataset.shrinePlaying=String(started&&!menu&&!won);
+    document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(!started||menu||won));
+    if(!started||menu||won)document.documentElement.style.removeProperty('cursor');else document.documentElement.style.setProperty('cursor','none','important');
+  },[started,menu,won]);
   const touchMode=useCallback((e:React.PointerEvent)=>{
     session.current.poll(pollPads());
     if(!session.current.useTouch()){e.preventDefault();e.stopPropagation();return false;}
@@ -89,14 +96,14 @@ export default function Shrine(){
     else{setNotice('DualSenseを接続し、×ボタンを押してからもう一度選んでください。');canvas.current?.focus({preventScroll:true});}
   },[clearInput,requestLock]);
   useEffect(()=>{
-    let restored=DEFAULTS;try{restored=sanitizePreferences(JSON.parse(localStorage.getItem('yukyo-preferences-v1')??'null'));}catch{}
+    const mobile=navigator.maxTouchPoints>1||/Android|iPhone|iPad/i.test(navigator.userAgent);let stored:unknown=null;try{stored=JSON.parse(localStorage.getItem('yukyo-preferences-v1')??'null');}catch{}const restored=startupPreferences(stored,mobile);
     prefRef.current=restored;setPrefs(restored);
     let world:ReturnType<typeof createWorld>;
     try{world=createWorld(canvas.current!);world.configure(restored);worldRef.current=world;}catch{setError('3D表示を開始できませんでした。WebGL対応のChromeまたはSafariで開いてください。');return;}
-    setReady(true);let frame=0,last=performance.now(),lastHud=0,lastPickupCount=0,lastEscapes=0,oldMode='touch',controllerBlocked=false;
+    setReady(true);let frame=0,last=performance.now(),lastHud=0,lastPickupCount=0,lastEscapes=0,oldMode='touch',controllerBlocked=false,lastStartNav=0;
     const loaded=new Set<string>(),edges=new ButtonEdges();
     const down=(e:KeyboardEvent)=>{
-      if(world.completed)return;
+      if(!state.current.started){if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();const choices=Array.from(startPanel.current?.querySelectorAll<HTMLButtonElement>('button[data-mode]')??[]),i=choices.indexOf(document.activeElement as HTMLButtonElement),direction=e.code==='ArrowUp'||e.code==='ArrowLeft'?-1:1;choices[(Math.max(0,i)+direction+choices.length)%choices.length]?.focus();}return;}if(world.completed)return;
       if(e.code==='Escape'){if(state.current.paused)setMenuOpen(false);return;}
       if(state.current.paused)return;
       if(session.current.mode==='gamepad'){e.preventDefault();e.stopPropagation();return;}
@@ -105,6 +112,7 @@ export default function Shrine(){
       if(e.code==='KeyE'&&!e.repeat)interact();
       if(e.code==='KeyQ'&&!e.repeat)burst();
       if(e.code==='KeyT'&&!e.repeat)stopTime();
+      if(e.code==='KeyV'&&!e.repeat)useMirror();
       if((e.code==='KeyP'||e.code==='KeyO')&&!e.repeat)setMenuOpen(true);
     };
     const up=(e:KeyboardEvent)=>keys.current.delete(e.code);
@@ -136,7 +144,7 @@ export default function Shrine(){
     const focusGuard=(e:FocusEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&e.target instanceof HTMLElement&&e.target.matches('input,textarea,[contenteditable=true]')&&!dialog.current?.contains(e.target)){e.target.blur();canvas.current?.focus({preventScroll:true});}};
     const gamepadConnected=()=>{const p=session.current.poll(pollPads());setConnected(!!p.pad);};
     const hidden=()=>{last=performance.now();if(document.hidden)clearInput();};
-    const wheel=(e:WheelEvent)=>{if(!state.current.paused||!dialog.current?.contains(e.target as Node))e.preventDefault();};
+    const wheel=(e:WheelEvent)=>{if(!state.current.paused||!dialog.current?.contains(e.target as Node)&&!startPanel.current?.contains(e.target as Node))e.preventDefault();};
     const touchMove=(e:TouchEvent)=>{if(!state.current.paused)e.preventDefault();};
     const menuNavigation=(buttons:ReturnType<ButtonEdges['update']>)=>{
       if(buttons.back){setMenuOpen(false);return;}
@@ -161,22 +169,29 @@ export default function Shrine(){
       const buttons=edges.update(poll.pad);
       if(world.completed&&focused&&buttons.confirm)location.reload();
       const wasPaused=state.current.paused;
-      if(focused&&buttons.menu&&!calibration.current&&!world.completed)setMenuOpen(!state.current.paused);
-      if(focused&&state.current.paused&&!calibration.current&&!world.completed)menuNavigation(buttons);
-      const canExplore=allowExploration(poll.mode,state.current.paused,focused,document.pointerLockElement===document.documentElement);
+      if(focused&&!state.current.started){
+        const choices=Array.from(startPanel.current?.querySelectorAll<HTMLButtonElement>('button[data-mode]')??[]);let selected=choices.indexOf(document.activeElement as HTMLButtonElement);
+        const direction=buttons.down||buttons.right?1:buttons.up||buttons.left?-1:Math.abs(poll.input.move.z)>.5&&time-lastStartNav>230?Math.sign(poll.input.move.z):0;
+        if(direction){selected=(Math.max(0,selected)+direction+choices.length)%choices.length;choices[selected]?.focus();lastStartNav=time;}
+        if(buttons.confirm){(choices[Math.max(0,selected)])?.click();}
+      }
+      if(focused&&state.current.started&&buttons.menu&&!calibration.current&&!world.completed)setMenuOpen(!state.current.paused);
+      if(focused&&state.current.started&&state.current.paused&&!calibration.current&&!world.completed)menuNavigation(buttons);
+      const canExplore=state.current.started&&!wasPaused&&allowExploration(poll.mode,state.current.paused,focused,document.pointerLockElement===document.documentElement);
       const blocked=needsControllerLock(poll.mode,state.current.paused,document.pointerLockElement===document.documentElement);
       if(blocked!==controllerBlocked){controllerBlocked=blocked;clearInput();setLockRequired(blocked);}
       if(canExplore&&buttons.flashlight)toggleLight();
       if(canExplore&&!wasPaused&&buttons.interact)interact();
       if(canExplore&&!wasPaused&&buttons.burst)burst();
       if(canExplore&&!wasPaused&&buttons.timeStop)stopTime();
+      if(canExplore&&buttons.mirror)useMirror();
       if(calibration.current&&poll.pad){
         if(mappingKey(poll.pad)!==calibration.current.padKey){calibration.current=null;setCalStep(-1);setNotice('接続が変わりました。もう一度調整を開始してください。');}
         else {const mapping=calibration.current.update(poll.pad);setCalStep(calibration.current.step);
           if(mapping){session.current.setMapping(poll.pad,mapping);try{localStorage.setItem('yukyo-pad:'+mappingKey(poll.pad),JSON.stringify(mapping));}catch{};calibration.current=null;setCalStep(-1);setNotice('スティックとL1の調整を保存しました。');}
         }
       } else if(calibration.current&&!poll.pad){calibration.current=null;setCalStep(-1);setNotice('コントローラーの接続が切れました。');}
-      if(time-lastHud>150){const status=world.runStatus();setRun(status);setStamina(world.staminaStatus());if(status.pickups>lastPickupCount){setNotice(({blue:'青勾玉',red:'赤勾玉',gold:'金の大勾玉'} as const)[status.lastPickup??'blue']+'を取得 · 祭壇の赤い針へ');lastPickupCount=status.pickups;}else if(status.escapes>lastEscapes)setNotice('追跡を振り切りました');lastEscapes=status.escapes;setConnected(!!poll.pad);setDoorNear(world.nearDoor());setAltarNear(world.nearAltar());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));setStopRemaining(Math.ceil(world.timeStopRemaining));setStopCooldown(Math.ceil(world.timeStopCooldown));const found=world.collection();setCollection(old=>old.gold===found.gold&&old.areaName===found.areaName&&old.blue===found.blue&&old.red===found.red&&old.blueOffered===found.blueOffered&&old.redOffered===found.redOffered&&old.unlocked===found.unlocked&&old.area===found.area?old:found);setGoalBearing(world.goalDirection());lastHud=time;}
+      if(time-lastHud>150){const status=world.runStatus();setRun(status);setMirrorStatus(world.mirrorStatus());setStairHint(world.stairHint());setStamina(world.staminaStatus());if(status.pickups>lastPickupCount&&world.playMode!=='gallery'){setNotice(({blue:'青勾玉',red:'赤勾玉',gold:'金の大勾玉'} as const)[status.lastPickup??'blue']+'を取得 · 祭壇の赤い針へ');lastPickupCount=status.pickups;}else if(status.escapes>lastEscapes)setNotice('追跡を振り切りました');lastEscapes=status.escapes;setConnected(!!poll.pad);setDoorNear(world.nearDoor());setAltarNear(world.nearAltar());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));setStopRemaining(Math.ceil(world.timeStopRemaining));setStopCooldown(Math.ceil(world.timeStopCooldown));const found=world.collection();setCollection(old=>old.gold===found.gold&&old.areaName===found.areaName&&old.blue===found.blue&&old.red===found.red&&old.blueOffered===found.blueOffered&&old.redOffered===found.redOffered&&old.unlocked===found.unlocked&&old.area===found.area?old:found);setGoalBearing(world.goalDirection());lastHud=time;}
       const s=state.current,p=prefRef.current;
       if(canExplore){
         const k=keys.current,t=touch.current,game=poll.mode==='gamepad';
@@ -221,7 +236,7 @@ export default function Shrine(){
     const lost=(e:Event)=>{e.preventDefault();setError('3D描画が中断されました。ページを再読み込みしてください。');clearInput();};
     canvas.current?.addEventListener('webglcontextlost',lost);const element=canvas.current;
     return()=>{cancelAnimationFrame(frame);worldRef.current=null;world.dispose();window.removeEventListener('keydown',down,true);window.removeEventListener('keyup',up);window.removeEventListener('blur',clearInput);window.removeEventListener('focus',hidden);window.removeEventListener('gamepadconnected',gamepadConnected);document.removeEventListener('focusin',focusGuard);document.removeEventListener('pointerdown',realTouch,true);document.removeEventListener('mousemove',mouse);document.removeEventListener('pointerlockchange',lockChanged);document.removeEventListener('pointerlockerror',lockError);document.removeEventListener('visibilitychange',hidden);window.removeEventListener('resize',world.resize);document.removeEventListener('wheel',wheel);document.removeEventListener('touchmove',touchMove);element?.removeEventListener('webglcontextlost',lost);document.documentElement.classList.remove('controller-cursor-hidden');delete document.documentElement.dataset.shrinePlaying;document.documentElement.style.removeProperty('cursor');};
-  },[clearInput,setMenuOpen,toggleLight,applyPreferences,burst,stopTime,interact,requestLock]);
+  },[clearInput,setMenuOpen,toggleLight,applyPreferences,burst,stopTime,interact,requestLock,useMirror]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),6000);return()=>clearTimeout(timer);},[notice]);
   useEffect(()=>{
     const context=(document as Document&{modelContext?:{registerTool:(tool:ModelTool,options:{signal:AbortSignal})=>void|Promise<void>}}).modelContext;
@@ -241,35 +256,42 @@ export default function Shrine(){
     onPointerCancel:(e:React.PointerEvent<HTMLElement>)=>{e.stopPropagation();touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
     onLostPointerCapture:(e:React.PointerEvent<HTMLElement>)=>{e.stopPropagation();touch.current.end(e.pointerId);if(kind==='move')setStickPosition({x:0,z:0});},
   });
+  const action=(key:string,perform:()=>void)=>({
+    onPointerDown:(e:React.PointerEvent<HTMLButtonElement>)=>{if(state.current.paused||!actionGate.current.down(key,e.pointerType,e.timeStamp)||!touchMode(e))return;e.preventDefault();e.stopPropagation();perform();},
+    onPointerUp:(e:React.PointerEvent<HTMLButtonElement>)=>{actionGate.current.end(key,e.pointerType,e.timeStamp);e.stopPropagation();},
+    onPointerCancel:(e:React.PointerEvent<HTMLButtonElement>)=>actionGate.current.end(key,e.pointerType,e.timeStamp),
+    onClick:(e:React.MouseEvent<HTMLButtonElement>)=>{if(!state.current.paused&&actionGate.current.click(key,e.detail,e.timeStamp))perform();},
+  });
   const change=(key:keyof Preferences,value:number|boolean|string)=>applyPreferences({...prefRef.current,[key]:value});
   const range=(key:RangeKey,label:string,min:number,max:number,step:number,suffix:string)=><div className="setting" data-setting={key}><label id={'label-'+key}>{label}<output aria-live="polite">{prefs[key].toFixed(key==='fov'?0:2)}{suffix}</output></label><div className="range-controls"><button type="button" aria-label={label+'を下げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,-1))}>−</button><Slider aria-labelledby={'label-'+key} min={min} max={max} step={step} value={[prefs[key]]} onValueChange={v=>change(key,Array.isArray(v)?v[0]:v)}/><button type="button" aria-label={label+'を上げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,1))}>＋</button></div></div>;
   const blockControllerClick=(e:React.SyntheticEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&document.pointerLockElement===document.documentElement){e.preventDefault();e.stopPropagation();}};
   const threatLabel={quiet:'探索中',hidden:'消灯・忍び足',search:'近くを捜索中',chase:'追跡されています',frozen:'時間停止中'}[run.state];
-  return <main {...pointerEvents('look')} className="experience" data-playing={!menu&&!won} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
+  return <main {...pointerEvents('look')} className="experience" data-playing={started&&!menu&&!won} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
     <canvas ref={canvas} tabIndex={-1} inputMode="none" aria-label="祭殿の一人称回廊" onPointerDown={e=>{lastPointerType.current=e.pointerType;if(e.pointerType==='mouse'&&session.current.mode==='gamepad'){void requestLock();return;}touchMode(e);}} onClick={e=>{if(e.detail===2&&lastPointerType.current==='mouse'&&session.current.mode!=='gamepad')void requestLock();}}/>
-    <div className="vignette"/><div className="threat-veil" data-active={!menu&&!won&&run.state==='chase'} aria-hidden="true"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" data-chasing={e.chasing} style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%)',color:e.stunned?'#b8ffff':(e.id===4?'#ff201e':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id%4]),opacity:Math.max(.4,1-e.distance/160)}}><i style={{transform:'rotate('+e.angle+'rad)'}}>⌃</i>{e.level!=='same'&&<small>{e.level==='above'?'上階':'下階'}</small>}</span>)}</div>}<div className="reticle" aria-hidden="true"/>
+    <div className="vignette"/><div className="threat-veil" data-active={started&&!menu&&!won&&run.state==='chase'} aria-hidden="true"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" data-chasing={e.chasing} style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%)',color:e.stunned?'#b8ffff':(e.id===4?'#ff201e':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id%4]),opacity:Math.max(.4,1-e.distance/160)}}><i style={{transform:'rotate('+e.angle+'rad)'}}>⌃</i>{e.level!=='same'&&<small>{e.level==='above'?'上階':'下階'}</small>}</span>)}</div>}<div className="reticle" aria-hidden="true"/>
     {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
-    {stopRemaining>0&&!menu&&!won&&<div className="time-stop-veil" aria-hidden="true"/>}
+    {stopRemaining>0&&started&&!menu&&!won&&<div className="time-stop-veil" aria-hidden="true"/>}
     {caughtPulse>0&&<div key={'caught'+caughtPulse} className="caught-pulse" aria-hidden="true"/>}
-    {(doorNear||altarNear)&&!menu&&!won&&<button className="door-action" aria-label={altarNear?'〇：勾玉を祭壇に捧げる':'〇：ふすまを開閉'} onClick={interact}>{altarNear?<Sparkles size={20}/>:<DoorOpen size={20}/>}<span>〇{altarNear?' 捧げる':''}</span></button>}
-    <nav className="toolbar" hidden={won} aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
+    {(doorNear||altarNear)&&started&&!menu&&!won&&<button className="door-action" aria-label={altarNear?'〇：勾玉を祭壇に捧げる':'〇：ふすまを開閉'} {...action('interact',interact)}>{altarNear?<Sparkles size={20}/>:<DoorOpen size={20}/>}<span>〇{altarNear?' 捧げる':''}</span></button>}
+    <nav className="toolbar" hidden={!started||won} aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
       <button aria-label="DualSenseで操作を開始してカーソルを固定" aria-pressed={pad} className={pad?'active':''} onClick={activateController}><Gamepad2 size={20}/></button>
-      <button aria-label={light?'フラッシュライトを消す':'フラッシュライトを点ける'} aria-pressed={light} onClick={toggleLight} className={light?'active':''}>{light?<Flashlight size={19}/>:<FlashlightOff size={19}/>}</button>
+      <button aria-label={light?'フラッシュライトを消す':'フラッシュライトを点ける'} aria-pressed={light} {...action('light',toggleLight)} className={light?'active':''}>{light?<Flashlight size={19}/>:<FlashlightOff size={19}/>}</button>
       <button aria-label="マウスカーソルを固定" aria-pressed={locked} onClick={()=>void requestLock()} className={locked?'active':''}><Focus size={18}/></button>
       <button aria-label="全画面を切替" onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else setNotice('このブラウザでは全画面切替を利用できません。');}catch{setNotice('全画面表示を開始できませんでした。');}}}><Maximize size={18}/></button>
       <button aria-label="設定と操作ガイド" onClick={()=>setMenuOpen(true)}><Settings size={19}/></button>
     </nav>
-    {ready&&!menu&&!won&&<><div className="collection-status"><div role="status" aria-live="polite"><span className="blue-bead">◕ 青 {collection.blue}</span>　<span className="red-bead">◕ 赤 {collection.red}</span>　<span style={{color:"#edc765"}}>◕ 金 {collection.gold}</span></div><small>{collection.unlocked?'奉納完了 · 祭壇の奥の扉へ':`奉納：青 ${collection.blueOffered}/5 または 赤 ${collection.redOffered}/1・金1`}</small><small className={collection.area==='red'?'red-bead':'blue-bead'}>{collection.areaName}</small></div><div className="altar-compass" role="img" aria-label={`赤い針は祭壇の方向。距離${Math.round(goalBearing.distance)}メートル`}><div className="compass-dial"><i style={{transform:'rotate('+goalBearing.angle+'rad)'}}/><b/></div><span>祭壇 {Math.round(goalBearing.distance)}m</span></div></>}
-    {ready&&!menu&&!won&&<aside className="play-state" data-threat={run.state} aria-label="探索状況"><span>{threatLabel}</span><div className="pressure-row"><small>警戒</small><div className="pressure-meter" role="meter" aria-label="勾玉による敵の警戒" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(run.pressure*100)}><i style={{width:run.pressure*100+'%'}}/></div><small>{formatRunTime(run.elapsed)}</small></div>{stamina.enabled&&<div className="stamina-status" data-exhausted={stamina.exhausted}><small>{stamina.exhausted?'息切れ · ダッシュ解除か停止':'スタミナ'}</small><div role="meter" aria-label="スタミナ" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(stamina.value*100)}><i style={{width:stamina.value*100+'%'}}/></div></div>}{pad&&<div className="ability-readout"><span>R2 {burstRemaining>0?burstRemaining+'秒':'バースト'}</span><span>L2 {stopRemaining>0?'停止 '+stopRemaining+'秒':stopCooldown>0?stopCooldown+'秒':'時間停止'}</span></div>}</aside>}
+    {ready&&started&&!menu&&!won&&<><div className="collection-status">{playMode!=='gallery'&&<><div role="status" aria-live="polite"><span className="blue-bead">◕ 青 {collection.blue}</span>　<span className="red-bead">◕ 赤 {collection.red}</span>　<span style={{color:"#edc765"}}>◕ 金 {collection.gold}</span></div><small>{collection.unlocked?'奉納完了 · 祭壇の奥の扉へ':`奉納：青 ${collection.blueOffered}/5 または 赤 ${collection.redOffered}/1・金1`}</small><small>鏡 {mirrorStatus.count} {mirrorStatus.remaining>0?`· 透視 ${Math.ceil(mirrorStatus.remaining)}秒`:pad?'· □ で使用':''}</small></>}<small className={collection.area==='red'?'red-bead':'blue-bead'}>{collection.areaName}</small></div><div className="altar-compass" role="img" aria-label={`赤い針は祭壇の方向。距離${Math.round(goalBearing.distance)}メートル`}><div className="compass-dial"><i style={{transform:'rotate('+goalBearing.angle+'rad)'}}/><b/></div><span>祭壇 {Math.round(goalBearing.distance)}m</span></div></>}
+    {ready&&started&&!menu&&!won&&<aside className="play-state" data-threat={run.state} aria-label="探索状況"><span>{playMode==='gallery'?'ギャラリー · 安全な散策':threatLabel}</span>{stairHint&&<strong className="stair-hint">{stairHint}</strong>}{playMode!=='gallery'&&<div className="pressure-row"><small>警戒</small><div className="pressure-meter" role="meter" aria-label="勾玉による敵の警戒" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(run.pressure*100)}><i style={{width:run.pressure*100+'%'}}/></div><small>{formatRunTime(run.elapsed)}</small></div>}{stamina.enabled&&<div className="stamina-status" data-exhausted={stamina.exhausted}><small>{stamina.exhausted?'息切れ · ダッシュ解除か停止':'スタミナ'}</small><div role="meter" aria-label="スタミナ" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(stamina.value*100)}><i style={{width:stamina.value*100+'%'}}/></div></div>}{pad&&playMode!=='gallery'&&<div className="ability-readout"><span>R2 {burstRemaining>0?burstRemaining+'秒':'バースト'}</span><span>L2 {stopRemaining>0?'停止 '+stopRemaining+'秒':stopCooldown>0?stopCooldown+'秒':'時間停止'}</span></div>}</aside>}
     {won&&<section className="clear-screen" role="dialog" aria-modal="true" aria-labelledby="clear-title"><span aria-hidden="true">◕</span><h1 id="clear-title">封印解除</h1><p>勾玉を揃え、封門を越えました。</p><strong>CLEAR</strong><dl className="run-results"><div><dt>探索時間</dt><dd>{formatRunTime(run.elapsed)}</dd></div><div><dt>復活回数</dt><dd>{run.deaths}</dd></div><div><dt>追跡回避</dt><dd>{run.escapes}</dd></div><div><dt>スタン成功</dt><dd>{run.stuns}</dd></div><div><dt>時間停止</dt><dd>{run.freezes}</dd></div><div><dt>勾玉取得</dt><dd>{run.pickups}</dd></div></dl><button autoFocus onClick={()=>location.reload()}>もう一度挑戦</button><small>コントローラーは × で再挑戦</small></section>}
     {!ready&&!error&&<div className="loading"><span/>灯りをともしています</div>}
     {error&&<div className="notice" role="alert">{error}<button className="text-button" onClick={()=>location.reload()}>再読み込み</button></div>}
-    {lockRequired&&pad&&!menu&&!won&&<div className="lock-gate"><button className="lock-resume" onClick={requestLock}>クリックしてカーソルを固定・再開</button><p>固定が完了するまで探索を一時停止しています</p></div>}
+    {lockRequired&&pad&&started&&!menu&&!won&&<div className="lock-gate"><button className="lock-resume" onClick={requestLock}>クリックしてカーソルを固定・再開</button><p>固定が完了するまで探索を一時停止しています</p></div>}
     {notice&&<div className="toast" role="status">{notice}</div>}
-    <div className="touch-controls" hidden={pad||menu||won}>
+    <div className="touch-controls" hidden={!started||pad||menu||won}>
       <div className="touch-pad" role="group" aria-label="移動タッチパッド" {...pointerEvents('move')}><span className="thumb" style={{transform:'translate('+stickPosition.x*32+'px,'+stickPosition.z*32+'px)'}}><Move size={22}/></span></div>
-      <div className="touch-right"><div className="touch-actions"><button className="sprint" aria-label={stopCooldown?`時間停止の再使用まで ${stopCooldown}秒`:'時間停止：10秒間'} disabled={stopCooldown>0} onClick={stopTime}><Clock3 size={22}/>{stopCooldown>0&&<small className="burst-timer">{stopRemaining||stopCooldown}</small>}</button><button className="sprint" aria-label={burstRemaining?`バースト再使用まで ${burstRemaining}秒`:'バースト：前方120°の敵を9秒スタン'} disabled={burstRemaining>0} onClick={burst}><Sparkles size={23}/>{burstRemaining>0&&<small className="burst-timer">{burstRemaining}</small>}</button><button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} onClick={()=>{session.current.poll(pollPads());if(!state.current.paused&&session.current.useTouch())setTouchSprint(touch.current.toggleSprint());}}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
+      <div className="touch-right"><div className="touch-actions">{playMode!=='gallery'&&<><button className="sprint" aria-label="鏡を使う" disabled={mirrorStatus.count===0||mirrorStatus.remaining>0} {...action('mirror',useMirror)}><span className="mirror-icon"/><small className="burst-timer">{mirrorStatus.count}</small></button><button className="sprint" aria-label={stopCooldown?`時間停止の再使用まで ${stopCooldown}秒`:'時間停止：10秒間'} disabled={stopCooldown>0} {...action('freeze',stopTime)}><Clock3 size={22}/>{stopCooldown>0&&<small className="burst-timer">{stopRemaining||stopCooldown}</small>}</button><button className="sprint" aria-label={burstRemaining?`バースト再使用まで ${burstRemaining}秒`:'バースト：前方120°の敵を9秒スタン'} disabled={burstRemaining>0} {...action('burst',burst)}><Sparkles size={23}/>{burstRemaining>0&&<small className="burst-timer">{burstRemaining}</small>}</button></>}<button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} {...action('sprint',()=>setTouchSprint(touch.current.toggleSprint()))}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><Scan size={24}/></div></div>
     </div>
+    {!started&&!error&&<section className="start-screen" aria-labelledby="start-title" ref={startPanel}><div className="start-heading"><span>YŪKYŌ</span><h1 id="start-title">幽境</h1><p>祭殿回廊</p></div><div className="mode-choices">{PLAY_MODES.map((m,i)=><button key={m.id} data-mode={m.id} disabled={!ready} autoFocus={i===0} onClick={()=>beginGame(m.id)}><small>{m.label}</small><strong>{m.name}</strong><span>{m.detail}</span><b aria-hidden="true">→</b></button>)}</div><p className="start-help">{ready?'タッチで選択 · 方向キーで選択 / × で開始':'回廊を準備しています…'}<br/>{prefs.quality==='low'?'描画品質：低':'描画品質：'+(prefs.quality==='high'?'高画質':'標準')} · 開始後に設定で変更できます</p></section>}
     <Dialog open={menu} onOpenChange={setMenuOpen}>
       {menu&&<DialogContent ref={dialog} className="settings-dialog" onPointerDownCapture={e=>{if(e.pointerType==='touch'||e.pointerType==='pen')touchMode(e);}} showCloseButton={false} finalFocus={false}>
         <header className="settings-heading"><div><span className="eyebrow">YŪKYŌ</span><DialogTitle>幽境<span>祭殿回廊</span></DialogTitle></div><button className="close-button" aria-label="回廊に戻る" onClick={()=>setMenuOpen(false)}><X size={20}/></button></header>
@@ -281,13 +303,13 @@ export default function Shrine(){
             <label className="switch-row">上下の視点を反転<Switch aria-label="上下の視点を反転" checked={prefs.invertY} onCheckedChange={v=>change('invertY',v)}/></label>
             <label className="switch-row">歩行時の揺れ<Switch aria-label="歩行時の揺れ" checked={prefs.motion} onCheckedChange={v=>change('motion',v)}/></label>
           </div></TabsContent>
-          <TabsContent value="graphics" className="settings-panel"><div className="setting"><label>描画品質</label><RadioGroup value={prefs.quality} onValueChange={v=>change('quality',v as string)} className="quality-options" aria-label="描画品質">{[['low','軽量'],['medium','標準'],['high','高画質']].map(([value,label])=><label key={value} className="quality-option"><RadioGroupItem value={value}/>{label}</label>)}</RadioGroup></div>
+          <TabsContent value="graphics" className="settings-panel"><div className="setting"><label>描画品質</label><RadioGroup value={prefs.quality} onValueChange={v=>change('quality',v as string)} className="quality-options" aria-label="描画品質">{[['low','低'],['medium','標準'],['high','高画質']].map(([value,label])=><label key={value} className="quality-option"><RadioGroupItem value={value}/>{label}</label>)}</RadioGroup></div>
             {range('brightness','明るさ',.7,1.8,.05,'×')}
-            <p className="setting-note">スマートフォンでは性能に合わせて画質と描画解像度を自動調整します。<br/>さらに負荷を抑える場合は「軽量」を選んでください。</p>
+            <p className="setting-note">スマートフォンは、質感を簡素化した「低」で起動します。画質はここで変更できます。負荷に応じて描画解像度を自動調整します。</p>
           </TabsContent>
           <TabsContent value="controls" className="settings-panel controls-panel">
             <div className="connection"><Gamepad2 size={17}/><span>{connected?'コントローラー接続中':'接続後、コントローラーのボタンを押してください'}</span></div>
-            <label className="switch-row stamina-option">スタミナを使用<Switch aria-label="スタミナを使用" checked={prefs.stamina} onCheckedChange={v=>change('stamina',v)}/></label><p className="setting-note">オン：連続ダッシュは約8秒。歩行・停止で回復します。使い切ったら、ダッシュを解除するか立ち止まると回復後に再開できます。オフ：ダッシュ制限なし。</p><p className="rules-note">青5個、または赤・金1個を祭壇へ。所持する勾玉が増えるほど敵の警戒が強まります。消灯して歩くと気づかれませんが、走る足音は届きます。</p><dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>〇 / R2</dt><dd>ふすま・奉納 / 前方120°バースト</dd></div><div><dt>L2 / T</dt><dd>10秒間の時間停止</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま・奉納 / バースト</dd></div></dl>
+            <label className="switch-row stamina-option">スタミナを使用<Switch aria-label="スタミナを使用" checked={prefs.stamina} onCheckedChange={v=>change('stamina',v)}/></label><p className="setting-note">オン：連続ダッシュは約8秒。歩行・停止で回復します。使い切ったら、ダッシュを解除するか立ち止まると回復後に再開できます。オフ：ダッシュ制限なし。</p><p className="rules-note">青5個、または赤・金1個を祭壇へ。所持する勾玉が増えるほど敵の警戒が強まります。消灯して歩くと気づかれませんが、走る足音は届きます。</p><dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>〇 / R2</dt><dd>ふすま・奉納 / 前方120°バースト</dd></div><div><dt>□ / V</dt><dd>拾った鏡で12秒間の透視</dd></div><div><dt>L2 / T</dt><dd>10秒間の時間停止</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま・奉納 / バースト</dd></div></dl>
             <p className="setting-note">設定内：方向キーで選択・調整、×で決定、○で戻る。<br/>タッチは左右のパッドで移動・視点、足跡ボタンでダッシュ。<br/>カーソルを固定するには、画面右上の固定ボタンをクリック。Escで解除。</p>
             {calStep>=0?<div className="calibration"><span>{['Lスティックを右へ','Lスティックを下へ','Rスティックを右へ','Rスティックを下へ','L1ボタンを押す'][Math.min(calStep,4)]}</span><small>操作ごとにスティック・ボタンを離してください。</small><button className="text-button" onClick={()=>{calibration.current=null;setCalStep(-1);}}>中止</button></div>:<button className="text-button" disabled={!connected} onClick={()=>{const p=lastPad.current;if(p){calibration.current=new PadCalibration(mappingKey(p),p);setCalStep(0);}}}>スティックが反応しない場合：手動調整</button>}
           </TabsContent>

@@ -1,3 +1,4 @@
+import {NEW_HORROR_AREAS} from './horror-areas.ts';
 import type {Cell,Room} from './shrine-layout.ts';
 export const AREA_THEMES=['鏡の間','香炉堂','朱柱の間','石灯籠庭','蔵座敷','水盤堂','供物庫','古書の間','鈴の間'];
 export function expandAreas(grid:Map<string,Cell>,rooms:Room[],courts:{x:number;z:number;rx:number;rz:number}[]){
@@ -22,5 +23,12 @@ export function expandAreas(grid:Map<string,Cell>,rooms:Room[],courts:{x:number;
   add(x,z,3+(col%2),3+(row%2));
  }
  rect(0,8,0,13);rect(6,8,6,13);rect(-25,13,22,13);
+ for(let row=0;row<6;row++)for(let col=0;col<5;col++){
+  const x=-47+col*4,z=14+row*6;
+  rect(x-1,z-1,x+3,z-1);rect(x-1,z+4,x+3,z+4);rect(x-1,z-1,x-1,z+4);rect(x+3,z-1,x+3,z+4);
+  const r=add(x,z,3,3+(row%2));r.themeId=NEW_HORROR_AREAS[row*5+col].id;
+ }
+ for(const z of [13,25,37,48])rect(-28,z,-25,z);
+ rect(-46,8,-46,13);rect(-27,8,-27,13);
  rooms.push(...added);return added;
 }

@@ -13,7 +13,7 @@ test('Circle opens doors once per press while Cross remains menu confirm',()=>{
 });
 test('six distinct stage wings contain distinct materials and join the existing complex',()=>{
  const l=createLayout();assert.equal(l.stages.length,6);assert.ok(l.cells.length>2400);
- for(const kind of ['factory','bath','cistern'])assert.ok(l.cells.filter(c=>c.kind===kind).length>300,kind);
+ for(const kind of ['bath','cistern'])assert.ok(l.cells.filter(c=>c.kind===kind).length>300,kind);const factory=l.cells.filter(c=>c.kind==='factory').length;assert.ok(factory>=150&&factory<=240,'compact factory');
  for(const k of ['27,-17','-27,-17','-16,-49','16,-49'])assert.ok(l.grid.has(k));
 });
 test('exactly one danger enemy detects farther, moves faster, but can be outrun and stunned',()=>{

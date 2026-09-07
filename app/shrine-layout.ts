@@ -2,7 +2,7 @@ import {seededRandom} from './seeded-random.ts';
 import {expandAreas} from './expansion-areas.ts';
 export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'|'shop'|'cave'|'field'|'yokocho'};
 export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean;kind?:Cell['kind']};
-export type Room = {id:string;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
+export type Room = {id:string;themeId?:string;bead?:boolean;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
 export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string;rooms?:string[];floor?:number};
 export const CELL=4;
 export const SPAWN={x:0,z:14};
@@ -85,12 +85,17 @@ export function createLayout(seed=1) {
     {id:'shop',x1:-24,x2:-12,z1:-1,z2:8,kind:'shop' as const},
     {id:'cave',x1:-47,x2:-25,z1:-8,z2:8,kind:'cave' as const},
     {id:'field',x1:25,x2:48,z1:-7,z2:8,kind:'field' as const},
-    {id:'factory',x1:25,x2:48,z1:-46,z2:-10,kind:'factory' as const},
+    {id:'factory',x1:25,x2:41,z1:-38,z2:-16,kind:'factory' as const},
     {id:'bath',x1:-22,x2:22,z1:-70,z2:-47,kind:'bath' as const},
     {id:'cistern',x1:-48,x2:-25,z1:-46,z2:-10,kind:'cistern' as const},
   ];
   rect(-24,-1,-12,8,4.5,'shop');rect(-12,1,-8,1);rect(-12,5,-8,5);
   for(const side of [-1,1]){
+    if(side===1){
+      rect(22,-17,46,-17);rect(22,-37,40,-37);ring(27,-37,40,-17);ring(30,-33,37,-21);
+      rect(27,-27,40,-27);rect(27,-31,40,-31);rect(33,-37,33,-17);rect(27,-17,27,-7);rect(46,-17,46,-7);
+      for(const x of [29,36])for(const z of [-35,-25])rect(x,z,x+2,z+2,3.6,'hall');continue;
+    }
     const a=Math.min(side*22,side*48),b=Math.max(side*22,side*48);
     rect(a,-17,b,-17);rect(a,-37,b,-37);
     const left=Math.min(side*27,side*46),right=Math.max(side*27,side*46);
@@ -126,8 +131,8 @@ export function createLayout(seed=1) {
   }
   const expansionAreas=expandAreas(grid,rooms,courts);
   // Unroofed back alleys: three cross-linked lanes behind tightly packed shops.
-  for(const x of [29,34,39])rect(x,14,x,48,4.5,'yokocho');
-  for(const z of [14,22,31,40,48])rect(29,z,39,z,4.5,'yokocho');
+  for(const x of [29,34,39,44,48])rect(x,14,x,48,4.5,'yokocho');
+  for(const z of [14,22,31,40,48])rect(29,z,48,z,4.5,'yokocho');
   rect(22,14,29,14);rect(22,48,29,48);rect(29,45,34,48,5.5,'yokocho');
   // Generate new loops between the fixed landmark rooms. A passage always joins
   // two existing routes, so random generation cannot introduce a dead end.
@@ -151,7 +156,7 @@ export function createLayout(seed=1) {
   }
   for(const c of grid.values()){
     const s=stages.find(s=>c.x>=s.x1&&c.x<=s.x2&&c.z>=s.z1&&c.z<=s.z2);
-    if(s){c.kind=s.kind;c.h=Math.max(c.h,s.kind==='factory'?4.8:s.kind==='cistern'?4.6:s.kind==='cave'?5.8:3.8);}
+    if(s){c.kind=s.kind;c.h=Math.max(c.h,s.kind==='factory'?3.9:s.kind==='cistern'?4.6:s.kind==='cave'?5.8:3.8);}
   }
   // Clip only single-cell stubs; circulation and all rooms remain connected.
   let removed=true;

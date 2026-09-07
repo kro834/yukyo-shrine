@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type * as THREE from 'three';
 import {createWorld} from '../app/shrine-world.ts';
-import {createLayout} from '../app/shrine-layout.ts';
+import {createSectorLayout as createLayout} from '../app/sector-layout.ts';
 import {ButtonEdges} from '../app/input-actions.ts';
 import {Enemies} from '../app/shrine-gameplay.ts';
 import {ALTAR} from '../app/shrine-goal.ts';

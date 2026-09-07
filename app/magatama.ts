@@ -4,7 +4,7 @@ import {RED_AREAS} from './area-rules.ts';
 import {segmentBlocked} from './shrine-gameplay.ts';
 export type Bead={id:string;position:Position;floor:number;collected:boolean;color:'blue'|'red'|'gold';offered:boolean};
 export function placeMagatama(rooms:Room[],walls:Obstacle[],upperWalls:Obstacle[]):Bead[]{
-  const spaces=[...rooms.filter(r=>!r.id.startsWith('expansion-')).map(r=>({id:r.id,x1:r.x1*4+1,x2:r.x2*4-1,z1:r.z1*4+1,z2:r.z2*4-1,floor:0})),
+  const spaces=[...rooms.filter(r=>r.bead??!r.id.startsWith('expansion-')).map(r=>({id:r.id,x1:r.x1*4+1,x2:r.x2*4-1,z1:r.z1*4+1,z2:r.z2*4-1,floor:0})),
     {id:'upper-a',x1:60,x2:68,z1:4,z2:12,floor:4.8},{id:'upper-b',x1:72,x2:80,z1:4,z2:12,floor:4.8}];
   return spaces.map(r=>{
     const candidates:Position[]=[];
