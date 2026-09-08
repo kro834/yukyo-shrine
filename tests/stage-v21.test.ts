@@ -33,7 +33,7 @@ test('all stage profiles generate distinct connected 5 by 5 topologies with reac
  const signatures=new Set<string>();
  for(const stage of Object.keys(STAGES) as StageId[])for(let seed=1;seed<=20;seed++){
   const l=createSectorLayout(seed,stage);assert.equal(l.sectors.length,25);assert.equal(l.rooms.length,87);assert.equal(l.rooms.filter(r=>r.bead).length,13);assert.equal(l.connections.size,STAGES[stage].links);
-  assert.ok(l.connections.has('12:13')&&l.connections.has('13:18'));assert.equal(new Set(l.rooms.flatMap(r=>r.themeId?[r.themeId]:[])).size,stage==='error'?6:stage==='outer'?38:stage==='orchestra'?34:30);
+  assert.ok(l.connections.has('12:13')&&l.connections.has('13:18'));assert.ok(stage!=='mountain'||new Set(l.rooms.map(r=>r.themeId)).size>=6);assert.equal(new Set(l.rooms.flatMap(r=>r.themeId?[r.themeId]:[])).size,stage==='mountain'?new Set(l.rooms.map(r=>r.themeId)).size:stage==='parallel'?9:stage==='error'?6:stage==='outer'?38:stage==='orchestra'?34:30);
   for(const k of [...RED_AREAS,'yokocho'])assert.ok(l.cells.some(c=>c.kind===k));
   assert.ok(l.rooms.some(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2));
   for(const r of l.rooms)assert.ok(l.doors.filter(d=>d.room===r.id||d.rooms?.includes(r.id)).length>=2);
@@ -57,7 +57,7 @@ test('new furnished stages can collect and offer every route, then physically en
  const canvas={getContext:()=>({createRadialGradient:()=>({addColorStop(){}}),fillRect(){}})};
  g.document={addEventListener(){},removeEventListener(){},createElement:()=>canvas,createElementNS:()=>({addEventListener(){},removeEventListener(){},set src(_v:string){}})};
  const renderer={setPixelRatio(){},setSize(){},shadowMap:{},capabilities:{getMaxAnisotropy:()=>1},dispose(){}} as unknown as THREE.WebGLRenderer;
- for(const stage of ['abyss','outer','orchestra','circus','error'] as StageId[])for(const [seed,color] of [[1,'blue'],[17,'red'],[71,'gold']] as const){
+ for(const stage of ['abyss','outer','orchestra','circus','error','parallel','mountain'] as StageId[])for(const [seed,color] of [[1,'blue'],[17,'red'],[71,'gold']] as const){
   const w=createWorld(canvas as unknown as HTMLCanvasElement,renderer,seed,stage);
   try{
    w.setMode('normal');assert.equal(actual!.actors.length,12);assert.deepEqual(actual!.difficulty,stageRules(stage,'normal'));w.step(.05);

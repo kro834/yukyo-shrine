@@ -1,4 +1,5 @@
 import {EXTRA_ENEMY_PROFILES,FINALE_BALANCE,finaleDistance,finalePhase,hatredIntercept,isFinale,traitSpeed,type FinaleKind} from './enemy-traits.ts';
+import {RIFT,riftDestination} from './parallel-threat.ts';
 import {movePlayer,SPRINT_SPEED,RADIUS,type Position,type Obstacle} from './movement.ts';
 import type {Cell,DoorSpec} from './shrine-layout.ts';
 import {nearbyObstacles} from './spatial.ts';
@@ -70,7 +71,7 @@ export class EnemyBrain {
 export const ENEMY_PROFILES={...EXTRA_ENEMY_PROFILES,normal:{sight:25,nearSight:4,cone:.05,chase:8.1,patrol:3.5,hearing:88},danger:{sight:56,nearSight:7,cone:-.3,chase:9.1,patrol:4,hearing:150},listener:{sight:16,nearSight:2.5,cone:.2,chase:7.7,patrol:2.9,hearing:145},watcher:{sight:44,nearSight:3.8,cone:.6,chase:7.9,patrol:2.5,hearing:72},stalker:{sight:22,nearSight:4.8,cone:-.15,chase:8.95,patrol:3.8,hearing:65}};
 export type EnemyKind=keyof typeof ENEMY_PROFILES;
 type PatrolTarget={id:string;point:Position;floor:number;visits:number;lastVisited?:number};
-export type Enemy={traitTime:number;flankPoint:Position|null;id:number;kind:EnemyKind;position:Position;home:Position;homeFloor:number;searchBranches:number;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number;patrol:PatrolTarget|null};
+export type Enemy={riftWindup?:number;traitTime:number;flankPoint:Position|null;id:number;kind:EnemyKind;position:Position;home:Position;homeFloor:number;searchBranches:number;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number;patrol:PatrolTarget|null};
 /** movePlayer caps each delta at .05. Small spatial steps preserve a boss's
  * authored speed while checking the same radius-expanded collision every time.
  * The callback updates ramp height and capture at each actual travelled point.
@@ -95,6 +96,7 @@ export function openPursuedDoor(doors:Doors,e:Enemy,walls:Obstacle[],dt:number){
   if(close&&e.doorWait>delay){d.open=true;e.doorWait=0;if(isFinale(e.kind)){e.planIn=0;e.route=[];e.waypoint=null;}return true;}return false;
 }
 export class Enemies {
+  readonly rifts=new Map<number,{cooldown:number;windup:number;serial:number}>();
   nodes=new Map<string,Position>();
   graph=new Map<string,string[]>();
   actors:Enemy[];
@@ -206,7 +208,7 @@ export class Enemies {
       e.investigate={...position};e.destinationFloor=nextFloor;e.searchBranches=e.kind==='warden'?5:e.kind==='listener'?3:2;e.searchTime=Math.max((e.kind==='warden'?65:45)*balance.search*this.difficulty.search,Math.hypot(e.position.x-position.x,e.position.z-position.z)/(3.3*balance.speed)+8*balance.search);count++;
     }return count;
   }
-  burst(player:Position&{y?:number},blockers:Obstacle[],floor=0,yaw=0,pitch=0){let count=0;for(const e of this.actors)if(flashHits({x:player.x,z:player.z,y:player.y??floor+1.5},e.position,floor,e.floor,yaw,pitch,blockers,e.kind==='mire'?[.22,.42,.58]:undefined)){e.brain.stun();e.route=[];e.investigate=null;e.searchBranches=0;e.searchTime=0;if(isFinale(e.kind)){e.planIn=0;e.waypoint=null;e.flankPoint=null;e.doorWait=0;this.finaleObservation=null;if(e.kind==='wrath')e.traitTime=0;}count++;}return count;}
+  burst(player:Position&{y?:number},blockers:Obstacle[],floor=0,yaw=0,pitch=0,terrain?:(z:number)=>number){let count=0;for(const e of this.actors)if(flashHits({x:player.x,z:player.z,y:player.y??floor+1.5},e.position,floor,e.floor,yaw,pitch,blockers,e.kind==='mire'?[.22,.42,.58]:undefined,terrain)){e.brain.stun();e.riftWindup=0;this.rifts.delete(e.id);e.route=[];e.investigate=null;e.searchBranches=0;e.searchTime=0;if(isFinale(e.kind)){e.planIn=0;e.waypoint=null;e.flankPoint=null;e.doorWait=0;this.finaleObservation=null;if(e.kind==='wrath')e.traitTime=0;}count++;}return count;}
   beginFinale(player:Position,floor:number,random:()=>number){
     if(this.finalKind)return this.finalKind;
     this.finalKind=random()<.5?'hatred':'wrath';this.regularActors=this.actors;
@@ -216,7 +218,7 @@ export class Enemies {
     const boss:Enemy={...this.actors[0],id:12,kind:this.finalKind,home:{...home},position:{...home},homeFloor:level,floor:level,destinationFloor:level,lastSeenFloor:level,brain:new EnemyBrain(),route:[],waypoint:null,investigate:null,searchTime:0,searchBranches:0,planIn:0,traitTime:0,flankPoint:null,visits:new Map(),patrol:null,doorWait:0,lastNode:null,step:0,facing:Math.atan2(player.x-home.x,player.z-home.z)};
     this.finaleObservation=null;this.actors=[boss];this.patrolOwners.clear();this.ownerSignature='';return this.finalKind;
   }
-  reset(){if(this.regularActors){this.actors=this.regularActors;this.regularActors=null;}this.finalKind=null;this.finaleObservation=null;this.squadCooldown=0;this.patrolClock=0;for(const t of this.patrolTargets){t.visits=0;t.lastVisited=0;}for(const e of this.actors){e.position={...e.home};e.traitTime=0;e.flankPoint=null;e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;e.route=[];e.planIn=0;e.investigate=null;e.searchTime=0;e.doorWait=0;e.floor=e.homeFloor;e.destinationFloor=e.homeFloor;e.searchBranches=0;e.patrol=null;}}
+  reset(){this.rifts.clear();if(this.regularActors){this.actors=this.regularActors;this.regularActors=null;}this.finalKind=null;this.finaleObservation=null;this.squadCooldown=0;this.patrolClock=0;for(const t of this.patrolTargets){t.visits=0;t.lastVisited=0;}for(const e of this.actors){e.position={...e.home};e.riftWindup=0;e.traitTime=0;e.flankPoint=null;e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;e.route=[];e.planIn=0;e.investigate=null;e.searchTime=0;e.doorWait=0;e.floor=e.homeFloor;e.destinationFloor=e.homeFloor;e.searchBranches=0;e.patrol=null;}}
   update(dt:number,player:Position,groundBlockers:Obstacle[],playerFloor=0,upperBlockers:Obstacle[]=this.upperWalls,detectable=true,thirdBlockers:Obstacle[]=this.thirdWalls,lightOn=detectable){
     if(!this.difficulty.enemies||!Number.isFinite(dt)||dt<=0)return false;
     if(this.finalKind){
@@ -264,6 +266,16 @@ export class Enemies {
       if(activeDt<1e-9)continue;
       const oldTraitTime=e.traitTime,oldPhase=finalePhase(e.kind,e.traitTime);
       e.traitTime=e.brain.mode==='chase'?e.traitTime+activeDt:0;
+      if(e.kind==='parallax'){
+        let rift=this.rifts.get(e.id);if(!rift){rift={cooldown:8,windup:0,serial:0};this.rifts.set(e.id,rift);}
+        const memory=e.brain.lastSeen??e.investigate;
+        if(!memory){rift.windup=0;e.riftWindup=0;}else if(rift.windup>0){
+          rift.windup=Math.max(0,rift.windup-activeDt);e.riftWindup=rift.windup;
+          if(rift.windup===0){const nodes=upstairs>9?this.thirdNodes:upstairs?this.upperNodes:this.nodes,target=riftDestination(nodes.values(),memory,player,[...blockers,...this.mechanismWalls],rift.serial++);rift.cooldown=RIFT.cooldown;
+            if(target){e.position=target;e.route=[];e.waypoint=null;e.planIn=0;e.facing=Math.atan2(memory.x-target.x,memory.z-target.z);}continue;
+          }continue;
+        }else {rift.cooldown=Math.max(0,rift.cooldown-activeDt);if(rift.cooldown===0&&distance>18){rift.windup=RIFT.windup;e.riftWindup=RIFT.windup;continue;}}
+      }
       if(omniscient&&oldPhase!==finalePhase(e.kind,e.traitTime)){e.planIn=0;e.route=[];e.waypoint=null;}
       if(e.brain.mode==='chase'&&distance<.8&&Math.abs(playerFloor-e.floor)<.6&&sees){caught=true;continue;}
       e.searchTime=Math.max(0,e.searchTime-dt);if(e.searchTime===0){e.investigate=null;e.searchBranches=0;}

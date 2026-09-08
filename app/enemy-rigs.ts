@@ -5,6 +5,7 @@ import {finalePhase,hatredPressure,rushPhase} from './enemy-traits.ts';
 import {sculptedMask} from './sculpted-mask.ts';
 import {EnemyLocomotion,footCycle,clothSectionValue} from './enemy-locomotion.ts';
 import {errorMask} from './error-mask.ts';
+import {crusherPhase} from './parallel-threat.ts';
 
 type Materials={cloth:THREE.Material;paleCloth:THREE.Material;sculpt:THREE.Material;skin:THREE.Material;mask:THREE.Material;black:THREE.Material;cord:THREE.Material};
 type V=[number,number,number];
@@ -72,6 +73,9 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));g.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));g.setIndex(indices);g.computeVertexNormals();
     // The UV seam duplicates vertices, but its shading must remain continuous.
     if(!(options.open??0)){const normals=g.getAttribute('normal'),n=new THREE.Vector3();for(let r=0;r<rings;r++){const a=r*(around+1),b=a+around;n.set(normals.getX(a)+normals.getX(b),normals.getY(a)+normals.getY(b),normals.getZ(a)+normals.getZ(b)).normalize();normals.setXYZ(a,n.x,n.y,n.z);normals.setXYZ(b,n.x,n.y,n.z);}}
+    if((mat===m.cloth||mat===m.paleCloth||mat===m.black)&&(y1-y0)>.26&&around>=16){
+      g.userData.drape={sections,open:options.open??0,role:parent===lower?'skirt':parent===upper?'jacket':parent===head?'hood':'sleeve'};
+    }
     clothSurfaces.set(sections,g);return put(parent,g,mat);
   };
   const frontAt=(sections:Section[],x:number,y:number)=>{
@@ -147,6 +151,22 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
   };
   let faceIndex=0;
   const mask=(parent:THREE.Group,at:V,scale:number)=>{
+    if(kind==='parallax'||kind==='crusher'){
+      const face=new THREE.Group();face.position.set(...at);face.scale.setScalar(scale);parent.add(face);
+      if(kind==='parallax'){
+        for(let row=0;row<5;row++)for(let col=0;col<3;col++){
+          const x=(col-1)*.069,y=(row-2)*.069,z=.050+Math.sin(row*4+col)*.028;
+          const shard=put(face,new THREE.BoxGeometry(.060,.061,.014),row===2?m.black:m.sculpt,x,y,z);
+          shard.rotation.y=(col-1)*-.23;shard.rotation.z=Math.sin(row*3+col)*.14;
+        }
+      }else{
+        put(face,new THREE.BoxGeometry(.245,.21,.10),m.black,0,.048,.020);
+        for(const side of [-1,1]){const jaw=put(face,new THREE.BoxGeometry(.083,.25,.12),m.sculpt,side*.095,-.095,.027);jaw.rotation.z=-side*.18;}
+        for(let i=-2;i<=2;i++)put(face,new THREE.ConeGeometry(.015,.095,5),m.sculpt,i*.033,-.105,.086);
+        for(const y of [.02,.08,.14])put(face,new THREE.BoxGeometry(.259,.018,.023),m.cord,0,y,.084);
+      }
+      return face;
+    }
     const geometry=kind==='errorWatch'||kind==='errorWeep'?errorMask(kind==='errorWeep'):sculptedMask(kind.charCodeAt(0)%7+faceIndex++);
     const o=put(parent,geometry,m.sculpt,...at);o.scale.setScalar(scale);return o;
   };
@@ -159,7 +179,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     // Mask ties return to the occiput; the face is attached to a real head.
     for(const side of [-1,1])cord(head,[[side*.105,.045,.010],[side*.12,.042,-.035],[side*.07,.03,-.105]],.0055);
   };
-  const isMire=kind==='mire',isHatred=kind==='hatred',isWrath=kind==='wrath'||kind==='errorWeep',isFox=kind==='fox',isWarden=kind==='warden';
+  const isMire=kind==='mire',isHatred=kind==='hatred',isWrath=kind==='wrath'||kind==='errorWeep'||kind==='crusher',isFox=kind==='fox',isWarden=kind==='warden';
   const waist=isHatred?1.32:isFox?.94:isWrath?1.02:1.10;
 
   if(isMire){
@@ -299,7 +319,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
   return {animate(e:Enemy,time:number){
     const stunned=e.brain.mode==='stunned',chasing=e.brain.mode==='chase';
     const gait=locomotion.sample(e,time),weight=gait.weight,pace=gait.phase;
-    const phase=kind==='wrath'?finalePhase('wrath',e.traitTime):rushPhase(e.traitTime),pressure=isHatred?hatredPressure(e.traitTime):0;
+    const phase=kind==='crusher'?crusherPhase(e.traitTime):kind==='wrath'?finalePhase('wrath',e.traitTime):rushPhase(e.traitTime),pressure=isHatred?hatredPressure(e.traitTime):0;
     const swing=Math.sin(pace)*weight,run=gait.run;
     // Foot travel is deliberately bounded by the narrow corridors' collision radius.
     feet.forEach((shoe,i)=>{
@@ -344,7 +364,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
       arm.rotation.set(Math.sin(pace+i*Math.PI)*weight*(isMire?.09:isWarden?.055:.08+.05*run),0,0);
     });
     const headScan=isHatred&&chasing?Math.sin(e.traitTime*1.75)*(.060+.070*pressure):0;
-    head.rotation.y=headY+(stunned?0:headScan);
+    head.rotation.y=headY+(stunned?0:kind==='parallax'&&e.riftWindup?Math.sin(time*.008)*.20:headScan);
     head.rotation.z=headZ+(stunned?.10:isWarden&&e.investigate?.10:Math.sin(time*.00085)*.018);
     const wrathHead=isWrath&&chasing?(phase==='rush'?.055:phase==='windup'?-.022:.012):null;
     head.rotation.x=headX+(stunned?.035:isHatred&&chasing?.055:wrathHead??Math.sin(time*.0007)*.012);

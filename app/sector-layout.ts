@@ -1,3 +1,4 @@
+import {prepareMountainLayout} from './mountain-plan.ts';
 import {circusWallHeight} from './circus-enclosure.ts';
 import {seededRandom} from './seeded-random.ts';
 import type {Cell,Room} from './shrine-layout.ts';
@@ -5,6 +6,7 @@ import {NEW_HORROR_AREAS} from './horror-areas.ts';
 import {assignOuterAreas} from './outer-areas.ts';
 import {assignOrchestraRooms} from './orchestra-layout.ts';
 import {assignErrorRooms} from './error-stage.ts';
+import {assignParallelRooms,parallelHeight} from './parallel-world.ts';
 import {encloseLayout} from './layout-envelope.ts';
 import {STAGES,sectorConnections,type StageId} from './stage-profile.ts';
 import {planOuterLandforms} from './outer-landform-plan.ts';
@@ -71,6 +73,11 @@ export function createSectorLayout(seed=1,stage:StageId='shrine'){
   for(const c of grid.values())if(stage!=='circus'&&c.kind==='hall'&&!(c.x>=11&&c.x<=27&&c.z>=0&&c.z<=13)&&!rooms.some(r=>c.x>=r.x1&&c.x<=r.x2&&c.z>=r.z1&&c.z<=r.z2))c.kind='passage';
   const landformPlan=stage==='outer'?planOuterLandforms(grid,sectors,rooms,c=>SECOND_DECK.grid.has(key(c.x,c.z))):null;
   if(landformPlan)for(const cellKey of grid.keys())if(!landformPlan.grid.has(cellKey))grid.delete(cellKey);
+  if(stage==='parallel'){
+    for(const c of grid.values())if(c.h<8)c.h=parallelHeight(c.kind);
+    assignParallelRooms(rooms,grid);
+  }
+  if(stage==='mountain')prepareMountainLayout(grid,rooms);
   const envelope=encloseLayout(grid,rooms,paddies,stage==='outer');
   if(stage==='circus'){const byCenter=new Map(envelope.obstacles.map(o=>[((o.minX+o.maxX)/2)+','+((o.minZ+o.maxZ)/2),o]));for(const w of envelope.walls){w.h=circusWallHeight(w,rooms);const o=byCenter.get(w.x+','+w.z);if(o)o.maxY=w.h;}}
  assignOuterAreas(rooms,seed,stage);

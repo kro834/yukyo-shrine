@@ -5,7 +5,7 @@ import {specialEnemyRig} from '../app/enemy-rigs.ts';
 import type {Enemy} from '../app/shrine-gameplay.ts';
 
 test('layered rigs stay inside the navigation radius throughout pursuit and stun while their soles remain grounded',()=>{
- for(const kind of ['mire','warden','fox','pilgrim','hatred','wrath']){
+ for(const kind of ['mire','warden','fox','pilgrim','hatred','wrath','parallax','crusher']){
   const material=()=>new THREE.MeshStandardMaterial(),m={cloth:material(),paleCloth:material(),sculpt:material(),skin:material(),mask:material(),black:material(),cord:material()},root=new THREE.Group();
   const rig=specialEnemyRig(root,kind,m,()=>{}),parts:{mesh:THREE.Mesh;used:number[]}[]=[];
   root.traverse(o=>{if(o instanceof THREE.Mesh){const g=o.geometry,p=g.getAttribute('position'),n=g.getAttribute('normal'),uv=g.getAttribute('uv'),used=g.index?[...new Set(Array.from(g.index.array as ArrayLike<number>))]:Array.from({length:p.count},(_,i)=>i);

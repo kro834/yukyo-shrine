@@ -13,13 +13,14 @@ export function lightBlocked(a:Point3,b:Point3,obstacles:Obstacle[]){
   return hi>=0&&lo<=1;
  });
 }
-export function flashHits(origin:Point3,target:Position,floor:number,targetFloor:number,yaw:number,pitch:number,walls:Obstacle[],bodyHeights:readonly number[]=[1.5,2.1,.85]){
+export function flashHits(origin:Point3,target:Position,floor:number,targetFloor:number,yaw:number,pitch:number,walls:Obstacle[],bodyHeights:readonly number[]=[1.5,2.1,.85],terrain?:(z:number)=>number){
  // Different storeys stay separate, while nearby enemies on a staircase can
  // be illuminated. Sample the visible body rather than only its centre.
  if(Math.abs(targetFloor-floor)>3||Math.hypot(target.x-origin.x,target.z-origin.z)>10)return false;
  for(const height of bodyHeights){
   const point={...target,y:targetFloor+height};
-  if(inFlashCone(origin,point,yaw,pitch)&&!lightBlocked(origin,point,walls))return true;
+  const worldOrigin=terrain?{...origin,y:origin.y+terrain(origin.z)}:origin,worldPoint=terrain?{...point,y:point.y+terrain(point.z)}:point;
+  if(inFlashCone(worldOrigin,worldPoint,yaw,pitch)&&!lightBlocked(origin,point,walls))return true;
  }
  return false;
 }

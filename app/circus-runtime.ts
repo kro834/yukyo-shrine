@@ -107,7 +107,10 @@ export class CircusRuntime {
     { signature: string; obstacles: Obstacle[] }
   >();
 
-  constructor(plan: CircusPlan) {
+  private readonly motion: {maxSpeed:number;acceleration:number;braking:number};
+  constructor(plan: CircusPlan, motion={maxSpeed:MAX_SPEED,acceleration:ACCELERATION,braking:BRAKING}) {
+    if(!Object.values(motion).every(v=>Number.isFinite(v)&&v>0))throw Error('Invalid cart motion');
+    this.motion={...motion};
     this.plan = validatePlan(plan);
     this.segments = makeSegments(this.plan.track);
     this.totalLength = this.segments.reduce(
@@ -428,11 +431,11 @@ export class CircusRuntime {
       this.cartSpeed = 0;
       return null;
     }
-    const desired = Math.min(MAX_SPEED, Math.sqrt(2 * BRAKING * safeRemaining));
+    const desired = Math.min(this.motion.maxSpeed, Math.sqrt(2 * this.motion.braking * safeRemaining));
     const previous = this.cartSpeed;
     if (this.cartSpeed < desired)
-      this.cartSpeed = Math.min(desired, this.cartSpeed + ACCELERATION * dt);
-    else this.cartSpeed = Math.max(desired, this.cartSpeed - BRAKING * dt);
+      this.cartSpeed = Math.min(desired, this.cartSpeed + this.motion.acceleration * dt);
+    else this.cartSpeed = Math.max(desired, this.cartSpeed - this.motion.braking * dt);
     const travel = Math.min(
       safeRemaining,
       ((previous + this.cartSpeed) / 2) * dt,

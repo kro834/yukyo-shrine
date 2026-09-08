@@ -1,4 +1,10 @@
+import {mountainAtmosphere} from './mountain-atmosphere.ts';
+import {createParallelAnomalies} from './parallel-anomalies.ts';
+import {mountainHeight,mountainGrade,mountainGeometry,mountainRender} from './mountain-terrain.ts';
+import {MINE_SPEED,MOUNTAIN_AREAS,mountainArea,mountainAltitude,createMountainPlan} from './mountain-plan.ts';
+import {buildMountainCell,buildMountainWall,buildMountainRoom,buildMountainRail,buildMountainLandscape} from './mountain-scenery.ts';
 import {createAirborneDust} from './airborne-dust.ts';
+import {PARALLEL_MATERIALS,PARALLEL_AREAS,parallelArea,parallelHeight,buildParallelCell,buildParallelWall,buildParallelRoom,buildParallelSkyline,parallelTextureUV} from './parallel-world.ts';
 import {circusFabric} from './circus-fabric.ts';
 import {circusPaint} from './circus-paint.ts';
 import {createCircusPlan} from './circus-plan.ts';
@@ -83,7 +89,7 @@ import type {PlayMode} from './play-mode.ts';
 import {STAGES,stageRules,type StageId} from './stage-profile.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff),stage:StageId='shrine') {
-  const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus';
+  const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus',parallel=stage==='parallel',mountain=stage==='mountain';
   let playMode:PlayMode='normal',phaseRevision=0;let nightSky:THREE.Texture|undefined,nightSkyTarget:THREE.WebGLRenderTarget|undefined,skyRequested=false;
   const device=typeof navigator!=='undefined'?navigator as Navigator&{deviceMemory?:number}:undefined;
   const budget=new PerformanceBudget({touch:(device?.maxTouchPoints??0)>1||/Android|iPhone|iPad/i.test(device?.userAgent??''),cores:device?.hardwareConcurrency,memory:device?.deviceMemory});
@@ -93,22 +99,31 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   // in the flashlight without raising the dark exposure of the entire scene.
   renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=THREE.AgXToneMapping;renderer.toneMappingExposure=1.1;
   const scene=new THREE.Scene();const backgroundColor=new THREE.Color('#050809');scene.background=backgroundColor;scene.fog=new THREE.FogExp2('#080c0d',.027);
-  const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.08,180);camera.position.set(SPAWN.x,1.68,SPAWN.z);camera.rotation.order='YXZ';
+  const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.08,mountain?350:180);camera.position.set(SPAWN.x,1.68,SPAWN.z);camera.rotation.order='YXZ';
   let environment:THREE.WebGLRenderTarget|undefined;
   if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=gothic?.025:.065;room.dispose();pmrem.dispose();}
   scene.add(new THREE.HemisphereLight(gothic?'#757d98':'#91a2af',gothic?'#171219':'#30271d',gothic?.048:stage==='abyss'||stage==='error'?.045:.12));
   const moon=new THREE.DirectionalLight('#8c9aa6',stageProfile.moon);moon.position.set(-10,18,5);scene.add(moon);
   const layout=createLayout(seed,stage),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
-  const circusPlan=circus?createCircusPlan(seed,layout):undefined,circusRuntime=circusPlan?new CircusRuntime(circusPlan):undefined;
+  const circusPlan=mountain?createMountainPlan(layout):circus?createCircusPlan(seed,layout):undefined,circusRuntime=circusPlan?new CircusRuntime(circusPlan,mountain?{maxSpeed:MINE_SPEED,acceleration:8,braking:10}:undefined):undefined;
   const visualKind=(kind:string,x:number,z:number)=>{if(stage==='outer')return kind;const patch=((Math.floor((x+200)/20)+Math.floor((z+300)/20)*3+(seed%5))%5+5)%5;if(['factory','bath','cistern','shop'].includes(kind))return patch===0?'stone':patch===2?'hall':kind;return kind;};
   const cave=createCaveSurfaces(layout.cells,layout.walls,seed,{detail:budget.mobile?'low':'high',ceilingLimit:caveDeckLimit(SECOND_DECK.cells)});
   const landforms=stage==='outer'?createOuterLandformSurfaces(layout.grid,layout.landforms,{belowUpperDeck,subdivisions:budget.mobile?4:6}):undefined;
   const civicSites=createCivicSites(layout);
   const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2);
   const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5},.7);
-  const areaName=()=>{if(stage==='error'){if(elevation>4.5)return elevation>9.3?'三層 · 面裏の桟敷':'二層 · 終わらない橋掛かり';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?(horrorArea(r.themeId)?.name??'無終の能舞台'):'歪んだ舞台裏の回廊';}if(circus){if(elevation>4.5)return elevation>9.3?'三層 · 吊り道具の回廊':'二層 · 空中桟橋';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?circusRoomName(r):CIRCUS_AREA_NAMES[layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind??'hall'];}if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(stage==='abyss'&&kind==='field')return '埋没した排水路';if(stage==='abyss'&&kind==='yokocho')return '地底の封鎖横丁 · 最危険';if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
+  const originalAreaName=()=>{if(stage==='error'){if(elevation>4.5)return elevation>9.3?'三層 · 面裏の桟敷':'二層 · 終わらない橋掛かり';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?(horrorArea(r.themeId)?.name??'無終の能舞台'):'歪んだ舞台裏の回廊';}if(circus){if(elevation>4.5)return elevation>9.3?'三層 · 吊り道具の回廊':'二層 · 空中桟橋';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?circusRoomName(r):CIRCUS_AREA_NAMES[layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind??'hall'];}if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(stage==='abyss'&&kind==='field')return '埋没した排水路';if(stage==='abyss'&&kind==='yokocho')return '地底の封鎖横丁 · 最危険';if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
+  const areaName=()=>mountain?(MOUNTAIN_AREAS[mountainArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))??{x:0,z:0,kind:'hall'})]+' · 標高 '+mountainAltitude(camera.position.z)+'m'):parallel?((elevation>9.3?'三層 · ':elevation>4.5?'二層 · ':'')+PARALLEL_AREAS[parallelArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind??'hall')]):originalAreaName();
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
+    parallelPaint:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelPaint),
+    parallelCarpet:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelCarpet),
+    parallelVelvet:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelVelvet),
+    parallelTiles:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelTiles),
+    parallelBlue:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelBlue),
+    parallelCeiling:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelCeiling),
+    parallelWindow:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelWindow),
+    parallelGreen:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelGreen),
     circusRed:new THREE.MeshPhysicalMaterial({...CIRCUS_MATERIALS.circusRed,sheen:.35,sheenColor:0xb37277,sheenRoughness:1}),
     circusIvory:new THREE.MeshPhysicalMaterial({...CIRCUS_MATERIALS.circusIvory,sheen:.35,sheenColor:0xd7cbb2,sheenRoughness:1}),
     circusDark:new THREE.MeshStandardMaterial(CIRCUS_MATERIALS.circusDark),
@@ -179,6 +194,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const batches=new Map<string,{material:MaterialKey;geometries:THREE.BufferGeometry[]}>();
   let groundGeometry=true,gothicRoomProps=false;
   const add=(g:THREE.BufferGeometry,m:MaterialKey)=>{
+    if(mountain){if(['paper','plaster','red'].includes(m))m='concreteWall';else if(m==='tatami')m='concrete';else if(m==='dark')m='steel';}
+    if(parallel){
+      if(m==='paper'||m==='plaster'||m==='red')m='parallelPaint';
+      else if(m==='dark'||m==='wood')m='steel';
+      else if(m==='tatami')m='parallelCarpet';
+      parallelTextureUV(g,m);
+    }
     if(circus){if(m==='tatami')m='planks';else if(m==='paper'||m==='plaster')m='circusIvory';else if(m==='red')m='circusPaint';}
     if((m==='circusRed'||m==='circusIvory')&&g.userData.surfaceUV!=='authored'){surfaceUV(g,1);g.userData.surfaceUV='authored';}
     if(gothic){if(m==='tatami')m='stone';else if(m==='paper'&&!gothicRoomProps)m='red';else if(m==='plaster')m='concrete';}
@@ -197,6 +219,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const scale=(m==='pavement'||m==='wetPavement')?1/2.4:m==='rust'?1/2.2:m==='concreteWall'?1/2.16:m==='concrete'?1/3:m==='planks'?1/1.5:m==='rock'?1/2.7:m==='plaster'?1/2:m==='earth'?1:['wood','red','dark'].includes(m)?.38:.3;
       surfaceUV(g,scale,['wood','dark'].includes(m)?'timber-photo':m==='red'?'timber':m==='planks'?'floor':undefined);
     }
+    if(mountain){if(!g.index)g.setIndex(Array.from({length:g.getAttribute('position').count},(_,i)=>i));mountainGeometry(g);}
     g.computeBoundingBox();const center=g.boundingBox!.getCenter(new THREE.Vector3());
     const key=m+':'+Math.floor(center.x/24)+':'+Math.floor(center.z/24);
     if(!batches.has(key))batches.set(key,{material:m,geometries:[]});batches.get(key)!.geometries.push(g);
@@ -207,7 +230,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       add(plankFloor(x,z,w,d,finishedY),'planks');
       add(new THREE.BoxGeometry(w,Math.max(.001,h-.004),d).translate(x,y-.002,z),'dark');return;
     }
-    if(m==='tatami'&&!gothic&&!circus&&h<=.065&&w>=1.5&&d>=1.5){
+    if(m==='tatami'&&!gothic&&!circus&&!parallel&&!mountain&&h<=.065&&w>=1.5&&d>=1.5){
       const placements=tatamiPlacementsForRectangle({x,z,width:w,depth:d,floorY:y+h/2-TATAMI.maxRise,inset:.08,variation:seed+x*.7+z});
       if(placements.length){
         const floor=createTatamiGeometry(placements);add(floor.reed,'tatami');add(floor.border,'tatamiTrim');
@@ -253,6 +276,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const fieldCells=new Set(layout.cells.filter(c=>c.kind==='field'&&!belowUpperDeck(c.x*4-2,c.x*4+2,c.z*4-2,c.z*4+2)).map(c=>c.x+','+c.z));
   const isFieldCell=(x:number,z:number)=>fieldCells.has(x+','+z);
   for(const c of layout.cells){
+    if(mountain){buildMountainCell(c,layout.grid,add,(x,y,z,color)=>fixture(x,y,z,color,0,.12,6));continue;}
+    if(parallel){buildParallelCell(c,layout.grid,add,(x,y,z,color)=>fixture(x,y,z,color,0,.05,6));continue;}
     if(circus){buildCircusCell(c,add,circusFixture);continue;}
     const x=c.x*CELL,z=c.z*CELL,kind=visualKind(c.kind,x,z);
     if(gothic){
@@ -330,6 +355,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   const wallPosts=createWallPostCollector();
   for(const w of layout.walls){
+    if(parallel){const cell=layout.grid.get(Math.round((w.x+w.insideX*2)/4)+','+Math.round((w.z+w.insideZ*2)/4));const kind=cell?.kind??'hall';buildParallelWall(w,kind,add);if(w.twoSided)buildParallelWall({...w,insideX:-w.insideX,insideZ:-w.insideZ},kind,add);continue;}
+    if(mountain){buildMountainWall(w,w.kind??'hall',add);continue;}
     if(circus){buildCircusWall(w,add,budget.mobile);continue;}
     const kind=visualKind(w.kind??"hall",w.x+w.insideX*.2,w.z+w.insideZ*.2);
     if(gothic){
@@ -434,9 +461,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   // ceiling; a taller room must not expose the sky above its closed doorway.
   if(!circus)for(const d of layout.doors){
     const top=Math.max(...layout.rooms.filter(r=>(d.rooms??[d.room]).includes(r.id)).map(r=>r.h));
-    if(top>3.41)box(d.x,(top+3.40)/2,d.z,d.alongX?4:.30,top-3.40,d.alongX?.30:4,gothic?'concrete':'dark');
+    const frameTop=parallel||mountain?2.93:3.40;if(top>frameTop+.01)box(d.x,(top+frameTop)/2,d.z,d.alongX?4:.30,top-frameTop,d.alongX?.30:4,parallel?'parallelPaint':gothic?'concrete':'dark');
   }
   for(const n of layout.narrows){
+    if(parallel){const kind=layout.grid.get(Math.round(n.x/4)+','+Math.round(n.z/4))?.kind??'hall';for(const sign of [-1,1]){const x=n.x+(n.alongX?0:sign*1.51),z=n.z+(n.alongX?sign*1.51:0);buildParallelWall({x,z,h:parallelHeight(kind),alongX:n.alongX,insideX:n.alongX?0:-sign,insideZ:n.alongX?-sign:0,twoSided:true},kind,add);}continue;}
+    if(mountain){for(const sign of [-1,1])buildMountainWall({x:n.x+(n.alongX?0:sign*1.51),z:n.z+(n.alongX?sign*1.51:0),alongX:n.alongX,h:3.8,insideX:n.alongX?0:-sign,insideZ:n.alongX?-sign:0},'hall',add);continue;}
     if(circus){for(const sign of [-1,1]){const x=n.x+(n.alongX?0:sign*1.68),z=n.z+(n.alongX?sign*1.68:0);box(x,1.8,z,n.alongX?4:.64,3.6,n.alongX?.64:4,'circusDark');buildCircusWall({x:n.x+(n.alongX?0:sign*1.40),z:n.z+(n.alongX?sign*1.40:0),h:3.6,alongX:n.alongX,insideX:n.alongX?0:-sign,insideZ:n.alongX?-sign:0},add);}continue;}
     if(gothic){
       const top=4.1;
@@ -505,6 +534,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
+    if(parallel){buildParallelRoom(room,add,block,room.id===altarRoom.id);continue;}
+    if(mountain){buildMountainRoom(room,add,block,room.id===altarRoom.id);continue;}
     if(circus){buildCircusRoom(room,add,block,circusFixture,room.id===altarRoom.id);continue;}
     if(room.themeId){gothicRoomProps=room.themeId.startsWith('orchestra-');buildHorrorArea(room,{box,cylinder,fixture,block,jar},room.id===altarRoom.id);gothicRoomProps=false;continue;}
     if(room.id===altarRoom.id)continue;
@@ -568,7 +599,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   for(const p of circus?[]:layout.paddies){const x=(p.x1+p.x2)*2,z=(p.z1+p.z2)*2,w=(p.x2-p.x1+1)*4,d=(p.z2-p.z1+1)*4;box(x,-.04,z,w,.035,d,'water');}
   // Fixtures follow generated walls instead of old absolute stage coordinates.
-  for(const w of circus?[]:layout.walls){if(w.twoSided||Math.abs(Math.round((w.x+w.z)/2))%7!==0)continue;const x=w.x+w.insideX*.35,z=w.z+w.insideZ*.35,kind=w.kind;
+  for(const w of circus||parallel||mountain?[]:layout.walls){if(w.twoSided||Math.abs(Math.round((w.x+w.z)/2))%7!==0)continue;const x=w.x+w.insideX*.35,z=w.z+w.insideZ*.35,kind=w.kind;
     if(kind==='shop'){
       box(x,.52,z,w.alongX?2.8:.55,1.04,w.alongX?.55:2.8,'wood');block(x,z,w.alongX?2.8:.55,w.alongX?.55:2.8,1.04);
       for(let j=-2;j<=2;j++){const px=x+(w.alongX?j*.47:0),pz=z+(w.alongX?0:j*.47);cylinder(px,1.28,pz,.14,.42,'glass');cylinder(px,1.5,pz,.15,.035,'gold');box(px,1.1,pz,.2,.07,.2,(['candyRed','candyYellow','candyBlue','candyPink'] as const)[(j+2)%4]);}
@@ -584,8 +615,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const a=s.quarterTurns*Math.PI/2;fixture(s.x+1.58*Math.cos(a),2.78,s.z+1.58*Math.sin(a),'#a0b6b8');
     }
   }
-  if(circusPlan)buildCircusScenery(circusPlan,layout,add,circusFixture);
-  if(!circus)buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height,!budget.mobile);
+  if(circusPlan&&!mountain)buildCircusScenery(circusPlan,layout,add,circusFixture);
+  if(!circus&&!parallel&&!mountain)buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height,!budget.mobile);
+  if(mountain){groundGeometry=false;buildMountainRail(circusPlan!,add,(x,y,z,color)=>fixture(x,y,z,color,0,.14,7));buildMountainLandscape(new Map([...layout.grid,...SECOND_DECK.cells.map(c=>[c.x+','+c.z,c] as const)]),add,seed);}
+  if(parallel){groundGeometry=false;buildParallelSkyline(add,seed);}
   groundGeometry=false;fixtureFloor=4.8;
   for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
     if((x===13||x===22)&&z>=2&&z<=6)continue;
@@ -631,11 +664,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const theme=deckTheme({x,z},level),floor:MaterialKey=theme==='濡れ縁'?'stone':theme==='石蔵'?'concrete':'planks';
       if(!hole)box(x,y-.12,z,4,.24,4,floor);
       const stairOpening=HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ);
-      if(!stairOpening||level===2)box(x,y+4.3,z,4,.2,4,'dark');
+      if(!mountain&&!parallel&&(!stairOpening||level===2))box(x,y+4.3,z,4,.2,4,'dark');
       if(!hole)box(x,y+.005,z,.02,.012,4,'dark');
-      if(!stairOpening){if((c.x+c.z)%2===0){box(x,y+4.02,z,4,.18,.13,'wood');box(x,y+4.05,z,.12,.12,4,'wood');}if((c.x+c.z)%5===0)lantern(x,y+3.2,z);}
+      if(!stairOpening){if(!mountain&&!parallel&&(c.x+c.z)%2===0){box(x,y+4.02,z,4,.18,.13,'wood');box(x,y+4.05,z,.12,.12,4,'wood');}if((c.x+c.z)%5===0)lantern(x,y+3.2,z);}
     }
-    for(const w of deck.walls){const x=(w.minX+w.maxX)/2,z=(w.minZ+w.maxZ)/2,theme=deckTheme({x,z},level),m:MaterialKey=theme==='石蔵'?'concrete':theme==='鏡廊'?'steel':theme==='朱塗りの間'?'red':'plaster';box(x,y+2.1,z,w.maxX-w.minX,4.2,w.maxZ-w.minZ,m);box(x,y+.25,z,w.maxX-w.minX+.02,.5,w.maxZ-w.minZ+.02,'dark');}
+    for(const w of deck.walls){const x=(w.minX+w.maxX)/2,z=(w.minZ+w.maxZ)/2,theme=deckTheme({x,z},level),m:MaterialKey=theme==='石蔵'?'concrete':theme==='鏡廊'?'steel':theme==='朱塗りの間'?'red':'plaster';box(x,y+(mountain||parallel?.6:2.1),z,w.maxX-w.minX,mountain||parallel?1.2:4.2,w.maxZ-w.minZ,mountain||parallel?'steel':m);box(x,y+.25,z,w.maxX-w.minX+.02,.5,w.maxZ-w.minZ+.02,'dark');}
   }
   for(const [deck,y,level] of [[SECOND_DECK,4.8,1],[THIRD_DECK,9.6,2]] as const){
     for(let row=0;row<3;row++)for(let col=0;col<4;col++){
@@ -661,13 +694,14 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       box(mid,y+2.8,z,stair.maxX-stair.minX,.14,.18,'wood');
     }
   }
-  for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=!['lightSpill','light','coolLight','grass'].includes(m);mesh.receiveShadow=mesh.castShadow||m==='grass';mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
+  for(const {material:m,geometries} of batches.values()){const merged=mergeGeometries(geometries);if(merged){const mesh=new THREE.Mesh(merged,mats[m]);mesh.castShadow=!['lightSpill','light','coolLight','grass'].includes(m);mesh.receiveShadow=mesh.castShadow||m==='grass';mesh.updateMatrixWorld(true);mesh.matrixAutoUpdate=false;mesh.matrixWorldAutoUpdate=false;mesh.userData.mountainTerrain=mountain;merged.computeBoundingSphere();staticChunks.push({mesh,center:merged.boundingSphere!.center,radius:merged.boundingSphere!.radius});scene.add(mesh);}geometries.forEach(g=>g.dispose());}
   for(const body of lanternTemplates){body.shade.dispose();body.caps.dispose();body.ribs.dispose();}
-  const circusMeshes=circusPlan?createCircusDynamics(circusPlan,mats):undefined;if(circusMeshes)scene.add(circusMeshes.group);
+  const circusMeshes=circusPlan?createCircusDynamics(circusPlan,mountain?{...mats,circusPaint:mats.rust,circusBrass:mats.steel,circusDark:mats.steel}:mats):undefined;if(circusMeshes){scene.add(circusMeshes.group);if(mountain){const cart=circusMeshes.group.getObjectByName('circus-rideable-cart');if(cart){circusMeshes.group.remove(cart);scene.add(cart);}circusMeshes.group.userData.mountainTerrain=true;}}
+  const anomalies=parallel?createParallelAnomalies(scene,layout.cells,mats.parallelWindow):undefined;
   const scannedProps=new ScannedProps(scene,scannedPlacements,!rendererOverride);
   const shrubs=new ShrubMeshes(scene,landforms?shrubPlacements(layout,seed,landforms.height,obstacles):[],budget.mobile,!rendererOverride);
   obstacles.push(...goal.walls);
-  const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls,stage==='error'?['errorWatch','errorWeep']:undefined),doorMeshes=createDoorMeshes(scene,doors,gothic),enemyMeshes=createEnemyMeshes(scene,enemies);
+  const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls,stage==='error'?['errorWatch','errorWeep']:parallel?['parallax','crusher','parallax','warden']:undefined),doorMeshes=createDoorMeshes(scene,doors,gothic,parallel||mountain),enemyMeshes=createEnemyMeshes(scene,enemies);
   const upperFixed=[...SECOND_DECK.walls,...deckFurnitureWalls(4.8),...highRails,...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
   const beads=[...placeMagatama(layout.rooms,obstacles,upperFixed),...placeRedMagatama(layout.cells,enemies.nodes.values(),obstacles,seededRandom(seed^0x5231))];
   const goldPoints=[...enemies.nodes.values()].filter(p=>layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind==='yokocho'&&!obstacles.some(o=>p.x>o.minX-1&&p.x<o.maxX+1&&p.z>o.minZ-1&&p.z<o.maxZ+1));
@@ -716,7 +750,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
-  surfaces.setLightingFinish(finiteFixture);
+  if(parallel){
+    const textile='/materials/parallel/dirty_carpet',tile='/materials/parallel/interior_tiles';
+    for(const [root,targets,normalStrength] of [[textile,[mats.parallelCarpet,mats.parallelVelvet],.75],[tile,[mats.parallelTiles],.6]] as const)surfaces.add(root+'_diff_1k.jpg',[...targets],{normal:root+'_nor_gl_1k.jpg',roughness:root+'_rough_1k.jpg',normalStrength,lowSize:256,ultra:{full:root+'_diff_2k.jpg',normal:root+'_nor_gl_2k.jpg',roughness:root+'_rough_2k.jpg'}});
+    surfaces.add('/materials/urban/concrete_wall_007_diff_1k.jpg',[mats.parallelPaint,mats.parallelCeiling],{normal:'/materials/urban/concrete_wall_007_nor_gl_1k.jpg',roughness:'/materials/urban/concrete_wall_007_rough_1k.jpg',normalStrength:.25,lowSize:256});
+  }
+  const terrainFinishes=new WeakMap<THREE.Material,THREE.Material['onBeforeCompile']>();
+  surfaces.setLightingFinish(material=>{if(terrainFinishes.get(material)===material.onBeforeCompile)return;finiteFixture(material);if(mountain&&material===mats.rock)mountainAtmosphere(material);terrainFinishes.set(material,material.onBeforeCompile);});
   surfaces.preserveBaseFinish(mats.water,mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory,mats.tatamiTrim,mats.outdoorTimber);
   const linenTargets=circus?[mats.circusRed,mats.circusIvory]:gothic?[]:[mats.tatamiTrim];
   if(linenTargets.length)surfaces.add('/materials/textile/rough_linen_diff_1k.jpg',linenTargets,{normal:'/materials/textile/rough_linen_nor_gl_1k.jpg',roughness:'/materials/textile/rough_linen_rough_1k.jpg',repeat:[1/.2707081393,1/.2712999880],normalStrength:.4,preserveFinish:true,lowSize:256,ultra:{full:'/materials/textile/rough_linen_diff_2k.jpg',normal:'/materials/textile/rough_linen_nor_gl_2k.jpg',roughness:'/materials/textile/rough_linen_rough_2k.jpg'}});
@@ -746,7 +786,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const collisionFor=()=>elevation>9.3?thirdFixed:elevation>4.5?upperCollision:groundCollision;
   finiteSceneFixtures(scene);
   const scanLighting=pendingFixtureFinish(scannedProps.ready,scene);
-  return {renderer,scene,camera,layout,stage,scannedReady:Promise.all([scanLighting.ready,shrubs.ready]),
+  return {renderer,scene,camera,layout,stage,terrainHeight:mountain?mountainHeight:(_z:number)=>0,scannedReady:Promise.all([scanLighting.ready,shrubs.ready]),
     setMode(mode:PlayMode){circusRuntime?.reset();refreshCollision();playMode=mode;if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=stageRules(stage,mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
     get playMode(){return playMode;},
     get riding(){return circusRuntime?.riding??false;},
@@ -782,12 +822,12 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     nearAltar(){return playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
     interact(){if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
-    burst(){if(playMode==='gallery'||goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x);run.stuns+=hits;return hits;},
+    burst(){if(playMode==='gallery'||goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x,mountain?mountainHeight:undefined);run.stuns+=hits;return hits;},
     step(dt:number){
       if(goal.completed)return false;
       burstRecharge.step(dt);mirrorInventory.step(dt);
       const liveDt=timeStop.step(dt);environmentTime+=liveDt*1000;
-      if(circusRuntime){const occupants=[...(circusRuntime.riding?[]:[{x:camera.position.x,z:camera.position.z,y:elevation+1.68}]),...(playMode==='gallery'?[]:enemies.actors.map(e=>({...e.position,y:e.floor+1.68})))];const ride=circusRuntime.step(liveDt,occupants);if(ride.position){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=0;lastMotion={running:false,moving:false};}if(ride.lure&&playMode!=='gallery'&&liveDt>0)enemies.hear(ride.lure,0);}
+      if(circusRuntime){const occupants=[...(circusRuntime.riding?[]:[{x:camera.position.x,z:camera.position.z,y:elevation+1.68}]),...(playMode==='gallery'||mountain?[]:enemies.actors.map(e=>({...e.position,y:e.floor+1.68})))];const ride=circusRuntime.step(liveDt,occupants);if(ride.position){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=0;lastMotion={running:false,moving:false};}if(ride.lure&&playMode!=='gallery'&&liveDt>0)enemies.hear(ride.lure,0);}
       const detectable=flashlight.visible||(lastMotion.running&&lastMotion.moving);
       if(runningSteps.update(dt,lastMotion.running,lastMotion.moving)){
         if(playMode!=='gallery'&&liveDt>1e-6)enemies.hear(camera.position,elevation);
@@ -837,12 +877,12 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       // Keep the angular filter footprint stable as the shadow atlas grows.
       flashlight.shadow.radius=size/1024*1.5;
       lightPool.forEach((light,i)=>{light.visible=i<(quality==='low'?3:6);});fixtureShadow.configure(quality,budget.mobile);
-      reflectionEnabled=!circus&&quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!circus&&!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
+      reflectionEnabled=!circus&&!mountain&&quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!circus&&!mountain&&!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
       effects?.configure(quality);glowMat.opacity=quality==='low'?.26:.12;
     },
     render(time:number){waterClock.value=environmentTime/1000;dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);
-      syncBankPath();
-      if(circusRuntime)circusMeshes?.update(circusRuntime.snapshot(),environmentTime/1000,camera.position);
+      syncBankPath();anomalies?.update(environmentTime);
+      if(circusRuntime){const status=circusRuntime.snapshot();circusMeshes?.update(status,environmentTime/1000,camera.position);if(mountain&&circusMeshes){const cart=circusMeshes.cart,grade=mountainGrade(status.cart.z);cart.rotation.order='YXZ';cart.rotation.x=-Math.atan(grade*Math.cos(status.yaw));cart.rotation.z=-Math.atan(grade*Math.sin(status.yaw));}}
       const area=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind;
       moodTarget.copy(area==='shop'||area==='factory'||area==='bath'||area==='cistern'||area==='cave'||area==='field'?moods[area]:moods.shrine);
       if(stage!=='shrine')moodTarget.lerp(stageFog,.72);
@@ -851,8 +891,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(time-lastLight>220){
         fixtureLighting.select(camera.position,floorBand(elevation),lightFixtures,collisionFor(),configuredQuality==='low'?3:6);
         // At this distance exponential fog is already opaque; keep nearby detail intact.
-        for(const c of staticChunks){const foliage=(c.mesh.material as THREE.Material).name==='grass',range=foliage?(configuredQuality==='low'?36:configuredQuality==='ultra'?72:60):configuredQuality==='low'?area==='field'?85:72:110;c.mesh.visible=c.center.distanceToSquared(camera.position)<(range+c.radius)**2;}
-        mirror.visible=reflectionEnabled&&mirror.position.distanceToSquared(camera.position)<3600;water.visible=!circus&&!mirror.visible;
+        for(const c of staticChunks){const foliage=(c.mesh.material as THREE.Material).name==='grass',range=mountain&&(c.mesh.material as THREE.Material).name==='rock'?300:foliage?(configuredQuality==='low'?36:configuredQuality==='ultra'?72:60):configuredQuality==='low'?area==='field'?85:72:110;c.mesh.visible=c.center.distanceToSquared(camera.position)<(range+c.radius)**2;}
+        mirror.visible=reflectionEnabled&&mirror.position.distanceToSquared(camera.position)<3600;water.visible=!circus&&!mountain&&!mirror.visible;
         lastLight=time;
       }
       camera.getWorldDirection(direction);flashlightRight.set(1,0,0).applyQuaternion(camera.quaternion);
@@ -871,15 +911,15 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       goalMeshes.update();
       if(outdoorReflection){
         const active=outdoorReflection.update(renderer,scene,camera,time,configuredQuality==='ultra'&&area==='field'&&elevation<3,reflectionExcluded);
-        if(active){mirror.visible=false;water.visible=!circus;}
+        if(active){mirror.visible=false;water.visible=!circus&&!mountain;}
       }
-      if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}
+      const restoreTerrain=mountain?mountainRender(scene,camera,flashlight):undefined;
+      try {if(mountain)dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}}finally{restoreTerrain?.();}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;anomalies?.dispose();scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();circusMeshes?.cart.removeFromParent();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
-
 
 
 
