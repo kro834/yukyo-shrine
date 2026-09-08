@@ -1,6 +1,7 @@
 import {hotelDoors} from './hotel-doors.ts';
 import {HOTEL_AREAS,HOTEL_ROOMS,hotelArea,hotelRoomHeight,hotelLiftBlockers} from './hotel-layout.ts';
 import {HotelElevator} from './hotel-elevator.ts';
+import {HotelAtmosphere} from './hotel-atmosphere.ts';
 import {HotelBeds} from './hotel-beds.ts';
 import {HOTEL_MATERIALS,buildHotelCell,buildHotelWall,buildHotelRoom,hotelTextureUV,hotelLamp,hotelSofa,createHotelElevatorMeshes,type HotelBed} from './hotel-scenery.ts';
 import {mountainAtmosphere} from './mountain-atmosphere.ts';
@@ -95,7 +96,7 @@ import {STAGES,stageRules,type StageId} from './stage-profile.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff),stage:StageId='shrine') {
   const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus',parallel=stage==='parallel',mountain=stage==='mountain',hotel=stage==='ultrareal';
-  const elevator=hotel?new HotelElevator():undefined;let hotelMotion={x:0,z:0};
+  const elevator=hotel?new HotelElevator():undefined,hotelAtmosphere=hotel?new HotelAtmosphere():undefined;let hotelMotion={x:0,z:0};
   let playMode:PlayMode='normal',phaseRevision=0;let nightSky:THREE.Texture|undefined,nightSkyTarget:THREE.WebGLRenderTarget|undefined,skyRequested=false;
   const device=typeof navigator!=='undefined'?navigator as Navigator&{deviceMemory?:number}:undefined;
   const budget=new PerformanceBudget({touch:(device?.maxTouchPoints??0)>1||/Android|iPhone|iPad/i.test(device?.userAgent??''),cores:device?.hardwareConcurrency,memory:device?.deviceMemory});
@@ -107,8 +108,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const scene=new THREE.Scene();const backgroundColor=new THREE.Color('#050809');scene.background=backgroundColor;scene.fog=new THREE.FogExp2('#080c0d',.027);
   const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.08,mountain?350:180);camera.position.set(SPAWN.x,1.68,SPAWN.z);camera.rotation.order='YXZ';
   let environment:THREE.WebGLRenderTarget|undefined;
-  if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=hotel?.045:gothic?.025:.065;room.dispose();pmrem.dispose();}
-  scene.add(new THREE.HemisphereLight(gothic?'#757d98':'#91a2af',gothic?'#171219':'#30271d',gothic?.048:stage==='abyss'||stage==='error'?.045:.12));
+  if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=hotel?.022:gothic?.025:.065;room.dispose();pmrem.dispose();}
+  scene.add(new THREE.HemisphereLight(gothic?'#757d98':'#91a2af',gothic?'#171219':'#30271d',hotel?.055:gothic?.048:stage==='abyss'||stage==='error'?.045:.12));
   const moon=new THREE.DirectionalLight('#8c9aa6',stageProfile.moon);moon.position.set(-10,18,5);scene.add(moon);
   const layout=createLayout(seed,stage),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors].map(d=>hotel?{...d,opening:1.35}:d)),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
   const circusPlan=mountain?createMountainPlan(layout):circus?createCircusPlan(seed,layout):undefined,circusRuntime=circusPlan?new CircusRuntime(circusPlan,mountain?{maxSpeed:MINE_SPEED,acceleration:8,braking:10}:undefined):undefined;
@@ -766,6 +767,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   let selectedQuality:Preferences['quality']='medium';
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
+  if(hotelAtmosphere)for(const m of [mats.hotelBulb,mats.hotelLampShade])hotelAtmosphere.finish(m);
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
   if(parallel||hotel){
     const textile='/materials/parallel/dirty_carpet',tile='/materials/parallel/interior_tiles';
@@ -779,6 +781,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const terrainFinishes=new WeakMap<THREE.Material,THREE.Material['onBeforeCompile']>();
   surfaces.setLightingFinish(material=>{if(terrainFinishes.get(material)===material.onBeforeCompile)return;finiteFixture(material);if(mountain&&material===mats.rock)mountainAtmosphere(material);terrainFinishes.set(material,material.onBeforeCompile);});
   surfaces.preserveBaseFinish(mats.water,mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory,mats.tatamiTrim,mats.outdoorTimber);
+  if(hotel)surfaces.preserveBaseFinish(mats.hotelBulb,mats.hotelLampShade);
   const linenTargets=hotel?[mats.hotelLinen,mats.hotelShade,mats.hotelLampShade]:circus?[mats.circusRed,mats.circusIvory]:gothic?[]:[mats.tatamiTrim];
   if(linenTargets.length)surfaces.add('/materials/textile/rough_linen_diff_1k.jpg',linenTargets,{normal:'/materials/textile/rough_linen_nor_gl_1k.jpg',roughness:'/materials/textile/rough_linen_rough_1k.jpg',repeat:[1/.2707081393,1/.2712999880],normalStrength:.4,preserveFinish:true,lowSize:256,ultra:{full:'/materials/textile/rough_linen_diff_2k.jpg',normal:'/materials/textile/rough_linen_nor_gl_2k.jpg',roughness:'/materials/textile/rough_linen_rough_2k.jpg'}});
   surfaces.add('/cedar.png',[mats.red],{bump:.003,tint:gothic?'#462129':undefined});
@@ -905,7 +908,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       effects?.configure(quality);glowMat.opacity=quality==='low'?.26:.12;
     },
     render(time:number){waterClock.value=environmentTime/1000;dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);
-      syncBankPath();anomalies?.update(environmentTime);
+      syncBankPath();anomalies?.update(environmentTime);hotelAtmosphere?.update(environmentTime/1000,playMode!=='gallery');
       if(circusRuntime){const status=circusRuntime.snapshot();circusMeshes?.update(status,environmentTime/1000,camera.position);if(mountain&&circusMeshes){const cart=circusMeshes.cart,grade=mountainGrade(status.cart.z);cart.rotation.order='YXZ';cart.rotation.x=-Math.atan(grade*Math.cos(status.yaw));cart.rotation.z=-Math.atan(grade*Math.sin(status.yaw));}}
       const area=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind;
       moodTarget.copy(area==='shop'||area==='factory'||area==='bath'||area==='cistern'||area==='cave'||area==='field'?moods[area]:moods.shrine);
@@ -927,9 +930,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const movingShadow=!!circusRuntime&&(circusRuntime.snapshot().moving||circusRuntime.snapshot().devices.some(d=>d.progress!==d.target))||(playMode!=='gallery'&&enemies.actors.some(e=>Math.abs(e.floor-shadowOrigin.y)<5&&Math.hypot(e.position.x-shadowOrigin.x,e.position.z-shadowOrigin.z)<11))||doors.states.some(d=>d.progress>0&&d.progress<1&&Math.hypot(d.spec.x-shadowOrigin.x,d.spec.z-shadowOrigin.z)<11)||beads.some(b=>!b.collected&&Math.abs(b.floor-shadowOrigin.y)<5&&Math.hypot(b.position.x-shadowOrigin.x,b.position.z-shadowOrigin.z)<11)||(goal.progress>0&&goal.progress<1&&Math.hypot(goal.offset.x-shadowOrigin.x,GOAL.z+goal.offset.z-shadowOrigin.z)<11);
       fixtureShadow.update(fixtureLighting.slots,camera.position,lightDt,time,movingShadow);
       if(gothic)fixtureShadow.light.intensity*=.55;
-      lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=(gothic?3.8:7)*((slot.current?.power??7)/7)*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
+      if(hotelAtmosphere)fixtureShadow.light.intensity*=hotelAtmosphere.gain(fixtureShadow.light.position);
+      lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=(gothic?3.8:7)*((slot.current?.power??7)/7)*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(hotelAtmosphere?hotelAtmosphere.gain(l.position):1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
       doorMeshes.update(camera.position,configuredQuality==='low'?72:110);
-      scannedProps.update(camera.position);shrubs.update(camera.position);hotelBeds.update(camera.position,configuredQuality==='low');elevatorMeshes?.update(camera.position);
+      scannedProps.update(camera.position);shrubs.update(camera.position);hotelBeds.update(camera.position,configuredQuality==='low');elevatorMeshes?.update(camera.position,playMode!=='gallery');
       enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);
       beadMeshes.update(environmentTime);
       goalMeshes.update();

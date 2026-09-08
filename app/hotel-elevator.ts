@@ -1,9 +1,16 @@
 import {HOTEL_LIFT} from './hotel-layout.ts';
 type Point={x:number;y:number;z:number};
-type Phase='idle'|'boarding'|'closing'|'moving'|'opening'|'leaving';
+type Phase='idle'|'boarding'|'closing'|'departing'|'moving'|'settling'|'opening'|'leaving';
+const smooth=(t:number)=>{t=Math.max(0,Math.min(1,t));return t*t*(3-2*t);};
 export class HotelElevator {
  floor=0;target=0;y=0;doors=1;phase:Phase='idle';riding=false;
  private clock=0;private origin=0;private duration=0;private start:Point={x:HOTEL_LIFT.x,y:1.68,z:HOTEL_LIFT.z+2.6};
+ /** Both door sets stay closed throughout travel and the arrival brake hold. */
+ presentation(horror=true){
+  const t=this.phase==='moving'?this.clock/this.duration:0;
+  const dip=this.phase==='departing'?smooth(this.clock/1.25):this.phase==='moving'?1-.34*smooth(t/.24):this.phase==='settling'?.66*(1-smooth(this.clock/.95)):0;
+  return {cabinDoors:this.doors,landingDoors:HOTEL_LIFT.floors.map((_,i)=>i===this.floor?this.doors:0),light:horror?1-dip*.68:1,travel:this.phase==='moving'?t:0};
+ }
  near(p:{x:number;z:number},floor:number){return Math.abs(floor-Math.round(floor/4.8)*4.8)<.12&&Math.abs(p.x-HOTEL_LIFT.x)<.9&&p.z>HOTEL_LIFT.z+1.8&&p.z<HOTEL_LIFT.z+4.4;}
  prompt(p:{x:number;z:number},floor:number){if(this.phase!=='idle')return '';if(!this.near(p,floor))return '';return Math.abs(floor-this.y)<.2?'〇 エレベーター · '+((this.floor+1)%3+1)+'Fへ':'〇 エレベーターを呼ぶ';}
  interact(p:Point,floor:number){
@@ -17,7 +24,7 @@ export class HotelElevator {
   // Integrate exact phase boundaries, independent of frame rate and pauses.
   let remaining=Math.max(0,Math.min(.1,dt)),result:null|{position:Point;floor:number}=null;
   while(remaining>1e-8&&this.phase!=='idle'){
-   const duration=this.phase==='moving'?this.duration:this.phase==='boarding'||this.phase==='leaving'?.9:1.15;
+   const duration=this.phase==='moving'?this.duration:this.phase==='departing'?1.25:this.phase==='settling'?.95:this.phase==='boarding'||this.phase==='leaving'?1.15:1.5;
    const delta=Math.min(remaining,duration-this.clock);this.clock+=delta;remaining-=delta;const t=Math.min(1,this.clock/duration),ease=t*t*(3-2*t);
    if(this.phase==='closing')this.doors=1-ease;
    if(this.phase==='opening')this.doors=ease;
@@ -28,14 +35,16 @@ export class HotelElevator {
    }
    if(t>=1){this.clock=0;
     if(this.phase==='boarding')this.phase='closing';
-    else if(this.phase==='closing'){this.phase='moving';this.origin=this.y;this.duration=Math.max(3.4,Math.abs(HOTEL_LIFT.floors[this.target]-this.y)/1.4);}
-    else if(this.phase==='moving'){this.y=HOTEL_LIFT.floors[this.target];this.floor=this.target;this.phase='opening';}
+    else if(this.phase==='closing')this.phase='departing';
+    else if(this.phase==='departing'){this.phase='moving';this.origin=this.y;this.duration=Math.max(4.4,Math.abs(HOTEL_LIFT.floors[this.target]-this.y)/1.4);}
+    else if(this.phase==='moving'){this.y=HOTEL_LIFT.floors[this.target];this.floor=this.target;this.phase='settling';}
+    else if(this.phase==='settling')this.phase='opening';
     else if(this.phase==='opening')this.phase=this.riding?'leaving':'idle';
     else {this.phase='idle';this.riding=false;}
    }
   }
   return result;
  }
- hint(){return this.phase==='idle'?'':this.phase==='moving'?'エレベーター · '+(this.target+1)+'Fへ移動中':this.phase==='closing'?'ドアが閉まります':this.phase==='opening'||this.phase==='leaving'?'ドアが開きます':'エレベーターに乗り込む';}
+ hint(){return this.phase==='idle'?'':this.phase==='moving'?'エレベーター · '+(this.target+1)+'Fへ移動中':this.phase==='closing'||this.phase==='departing'?'ドアが閉まります':this.phase==='settling'?'エレベーター · '+(this.floor+1)+'Fに到着':this.phase==='opening'||this.phase==='leaving'?'ドアが開きます':'エレベーターに乗り込む';}
  reset(){this.floor=this.target=0;this.y=0;this.doors=1;this.clock=0;this.phase='idle';this.riding=false;}
 }

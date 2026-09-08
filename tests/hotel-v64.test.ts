@@ -16,7 +16,7 @@ test('hotel elevator rides through all floors without teleporting or moving whil
   const lift=new HotelElevator();let pos={x:-28,y:1.68,z:75},floor=0;
   for(const expected of [4.8,9.6,0,4.8]){
    assert.ok(lift.interact(pos,floor));assert.ok(lift.riding);assert.equal(lift.interact(pos,floor),false);
-   let done=false;for(let i=0;i<2000;i++){
+   let done=false;for(let i=0;i<Math.ceil(25/dt);i++){
     const old={...pos},phase=lift.phase,y=lift.y;lift.step(0);assert.equal(lift.phase,phase);assert.equal(lift.y,y);
     const ride=lift.step(dt);if(ride){pos=ride.position;floor=ride.floor;assert.ok(Math.hypot(pos.x-old.x,pos.y-old.y,pos.z-old.z)<dt*5+.001);assert.ok(pos.y>=1.68-.001&&pos.y<=11.28+.001);}
     if(!lift.riding){done=true;break;}
@@ -28,7 +28,7 @@ test('hotel elevator rides through all floors without teleporting or moving whil
 });
 test('empty elevator responds to another-floor call; shaft-side calls are rejected',()=>{
  const lift=new HotelElevator(),p={x:-28,y:11.28,z:75};assert.ok(lift.interact(p,9.6));assert.equal(lift.riding,false);
- for(let i=0;i<200;i++)lift.step(.05);assert.equal(lift.floor,2);assert.equal(lift.phase,'idle');assert.equal(lift.doors,1);
+ for(let i=0;i<400;i++)lift.step(.05);assert.equal(lift.floor,2);assert.equal(lift.phase,'idle');assert.equal(lift.doors,1);
  assert.equal(lift.near({x:-30,z:72},9.6),false);assert.equal(lift.near({x:-28,z:74},2.4),false);
 });
 test('hinged guest-room doors block when closed and allow actual passage when open',()=>{

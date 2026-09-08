@@ -3,7 +3,7 @@ import type {Enemy} from './shrine-gameplay.ts';
 
 /** Human proportions, shoes and a jointed everyday suit, without masks or a glow. */
 export function hotelHuman(root:THREE.Group,kind:string,m:{cloth:THREE.Material;paleCloth:THREE.Material;skin:THREE.Material;black:THREE.Material;cord:THREE.Material},merge:(group:THREE.Group)=>void){
- const staff=kind==='hotelStaff',body=new THREE.Group(),head=new THREE.Group(),arms:THREE.Group[]=[],legs:{hip:THREE.Group;knee:THREE.Group}[]=[];root.add(body);body.add(head);
+ const staff=kind==='hotelStaff',body=new THREE.Group(),head=new THREE.Group(),arms:THREE.Group[]=[],legs:{hip:THREE.Group;knee:THREE.Group}[]=[];root.add(body);body.add(head);head.name='hotel-human-head';body.name='hotel-human-body';
  const put=(g:THREE.BufferGeometry,mat:THREE.Material,p:THREE.Object3D,x=0,y=0,z=0)=>{const o=new THREE.Mesh(g,mat);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;p.add(o);return o;};
  const oval=(p:THREE.Object3D,mat:THREE.Material,x:number,y:number,z:number,rx:number,ry:number,rz:number)=>put(new THREE.SphereGeometry(1,18,14).scale(rx,ry,rz),mat,p,x,y,z);
  const segment=(p:THREE.Object3D,mat:THREE.Material,length:number,r1:number,r2:number)=>put(new THREE.CylinderGeometry(r1,r2,length,16,5).translate(0,-length/2,0),mat,p);
@@ -25,7 +25,13 @@ export function hotelHuman(root:THREE.Group,kind:string,m:{cloth:THREE.Material;
  }
  merge(body);merge(head);
  let last:{x:number;z:number}|null=null,phase=0,lastTime=0,drive=0;
- return {animate(e:Enemy,time:number){const stunned=e.brain.mode==='stunned',dt=lastTime?Math.min(.1,(time-lastTime)/1000):.016;lastTime=time;const d=last?Math.hypot(e.position.x-last.x,e.position.z-last.z):0;last={...e.position};const walking=!stunned&&d>.0003;drive+=((walking?1:0)-drive)*(1-Math.exp(-dt*10));phase+=Math.min(.3,d)/.67*Math.PI;body.position.y=Math.cos(phase*2)*.008*drive;body.rotation.x=stunned?.14:.018;head.rotation.y=stunned?-.08:Math.sin(time*.00045+e.id)*.08;head.rotation.z=staff?.02:-.025;
-  for(let i=0;i<2;i++){const a=phase+i*Math.PI;legs[i].hip.rotation.x=Math.sin(a)*.33*drive;legs[i].knee.rotation.x=Math.max(0,-Math.cos(a))*.38*drive;legs[i].hip.position.y=.87+Math.max(0,Math.cos(a))*.022*drive;arms[i].rotation.x=-Math.sin(a)*.22*drive;arms[i].rotation.z=(i?1:-1)*.035;}
+ return {animate(e:Enemy,time:number){const stunned=e.brain.mode==='stunned',dt=lastTime?Math.max(0,Math.min(.1,(time-lastTime)/1000)):.016;lastTime=time;const d=last?Math.hypot(e.position.x-last.x,e.position.z-last.z):0;last={...e.position};const walking=!stunned&&d>.0003;drive+=((walking?1:0)-drive)*(1-Math.exp(-dt*10));phase+=Math.min(.3,d)/.67*Math.PI;body.position.y=Math.cos(phase*2)*.008*drive;
+  const intent=e.brain.lastSeen??e.investigate,angle=intent?Math.atan2(intent.x-e.position.x,intent.z-e.position.z)-e.facing:0;
+  const gaze=stunned?-.08:intent?Math.max(-.9,Math.min(.9,Math.atan2(Math.sin(angle),Math.cos(angle)))):Math.sin(time*.00024+e.id)*.13;
+  // The face turns towards a remembered sighting first; the body follows its
+  // navigation heading. No knowledge of a hidden player's live position.
+  head.rotation.y+=(gaze-head.rotation.y)*(1-Math.exp(-dt*3));head.rotation.x=stunned?.22:intent?-.025:staff?.05:.13;
+  head.rotation.z=staff?.015:-.075;body.rotation.x=stunned?.14:staff?.024:.065;
+  for(let i=0;i<2;i++){const a=phase+i*Math.PI;legs[i].hip.rotation.x=Math.sin(a)*.33*drive;legs[i].knee.rotation.x=Math.max(0,-Math.cos(a))*.38*drive;legs[i].hip.position.y=.87+Math.max(0,Math.cos(a))*.022*drive;arms[i].rotation.x=-Math.sin(a)*(staff?.12:.18)*drive;arms[i].rotation.z=(i?1:-1)*.035;}
  }};
 }

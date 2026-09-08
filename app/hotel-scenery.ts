@@ -4,8 +4,9 @@ import {chamferedBox} from './chamfered-box.ts';
 import {hotelArea,hotelRoomHeight,hotelShaftCell,HOTEL_LIFT,type HotelRoom} from './hotel-layout.ts';
 import type {HotelElevator} from './hotel-elevator.ts';
 import {surfaceUV} from './surface-uv.ts';
+import {agedFinish} from './surface-finish.ts';
 
-export const HOTEL_MATERIALS={hotelLampShade:{color:'#d2b99a',emissive:'#bf8851',emissiveIntensity:.32,roughness:1,side:THREE.DoubleSide},hotelLinen:{color:'#d1cfc3',roughness:.96,side:THREE.DoubleSide},hotelOak:{color:'#51463b',roughness:.55},hotelLeather:{color:'#282a28',roughness:.54},hotelBrass:{color:'#95876b',roughness:.48,metalness:.8},hotelShade:{color:'#b7ada0',roughness:1},hotelPorcelain:{color:'#c5c4bc',roughness:.22},hotelGlass:{color:'#121920',roughness:.30,metalness:.12}} as const;
+export const HOTEL_MATERIALS={hotelBulb:{color:'#c4b89d',emissive:'#e2b889',emissiveIntensity:1.5,roughness:1},hotelLampShade:{color:'#d2b99a',emissive:'#bf8851',emissiveIntensity:.32,roughness:1,side:THREE.DoubleSide},hotelLinen:{color:'#d1cfc3',roughness:.96,side:THREE.DoubleSide},hotelOak:{color:'#51463b',roughness:.55},hotelLeather:{color:'#282a28',roughness:.54},hotelBrass:{color:'#95876b',roughness:.48,metalness:.8},hotelShade:{color:'#b7ada0',roughness:1},hotelPorcelain:{color:'#c5c4bc',roughness:.22},hotelGlass:{color:'#121920',roughness:.30,metalness:.12}} as const;
 type Mat=keyof typeof HOTEL_MATERIALS|'parallelPaint'|'parallelCarpet'|'parallelVelvet'|'parallelTiles'|'parallelCeiling'|'parallelGreen'|'steel'|'black'|'light'|'coolLight'|'concrete'|'earth'|'planks'|'water';
 export type HotelAdd=(g:THREE.BufferGeometry,m:Mat)=>void;
 export type HotelFixture=(x:number,y:number,z:number,color:string)=>void;
@@ -15,7 +16,7 @@ export function hotelTextureUV(g:THREE.BufferGeometry,m:string){if(!m.startsWith
 export function hotelLamp(add:HotelAdd,x:number,y:number,z:number,fixture:HotelFixture,floor=0){
  box(add,x,y+.015,z,.23,.03,.23,'hotelBrass',.01);box(add,x,y+.24,z,.028,.45,.028,'hotelBrass');
  const shade=new THREE.CylinderGeometry(.18,.24,.33,24,1,true).translate(x,y+.50,z);add(shade,'hotelLampShade');
- add(new THREE.SphereGeometry(.047,10,8).translate(x,y+.46,z),'light');
+ add(new THREE.SphereGeometry(.047,10,8).translate(x,y+.46,z),'hotelBulb');
  fixture(x,y+.35,z-.12,'#e5b786');
 }
 export function buildHotelCell(c:Cell,grid:Map<string,Cell>,add:HotelAdd,fixture:HotelFixture,floor=0,skipFloor=false,skipCeiling=false){
@@ -32,7 +33,7 @@ export function buildHotelCell(c:Cell,grid:Map<string,Cell>,add:HotelAdd,fixture
  }
  const service=a==='service'||a==='kitchen'||a==='archive';
  if((c.x*3+c.z*5)%5===0&&!skipCeiling){
-  p(0,h-.035,0,service?1.2:.14,.06,service?.19:.14,'hotelBrass');p(0,h-.07,0,service?1.1:.07,.018,service?.10:.07,service?'coolLight':'light');
+  p(0,h-.035,0,service?1.2:.14,.06,service?.19:.14,'hotelBrass');p(0,h-.07,0,service?1.1:.07,.018,service?.10:.07,'hotelBulb');
   fixture(x,floor+h-.17,z,service?'#b3c2bc':'#d8bfa3');
  }
 }
@@ -64,7 +65,7 @@ export function buildHotelWall(w:Wall,kind:string,add:HotelAdd,fixture:HotelFixt
   for(let i=0;i<9;i++){const t=Math.sin(i*7+n)*1.03;p(t,1.7+(i%4)*.23,.182,.005,.10+(i%3)*.06,.003,'hotelShade');}
   fixture(w.x+w.insideX*.55,floor+2.12,w.z+w.insideZ*.55,'#91a8bf');
  }else if(n%4===0){
-  p(0,1.76,.19,.22,.44,.06,'hotelBrass');p(0,1.79,.30,.34,.43,.18,'hotelLampShade');p(0,1.56,.3,.22,.018,.11,'light');
+  p(0,1.76,.19,.22,.44,.06,'hotelBrass');p(0,1.79,.30,.34,.43,.18,'hotelLampShade');p(0,1.56,.3,.22,.018,.11,'hotelBulb');
   fixture(w.x+w.insideX*.48,floor+1.62,w.z+w.insideZ*.48,'#d9b184');
  }else if(n%3===0){
   p(0,1.86,.15,1.32,.94,.032,'hotelOak');p(0,1.86,.174,1.20,.82,.014,'hotelShade');p(0,1.86,.185,1.02,.64,.012,'hotelGlass');
@@ -82,8 +83,13 @@ export function buildHotelRoom(r:Room,add:HotelAdd,fixture:HotelFixture,block:(x
   const width=type==='single'||type==='twin'?1.05:1.65,sites=type==='twin'?[x,x+2.7]:[x];
   for(const bx of sites){beds.push({x:bx,z,yaw:0,width});block(bx,z,width+.25,2.45,1.13);p(bx,1.0,z-1.09,width+.22,1.2,.12,'hotelOak',.035);
    const tx=bx+width/2+.52;p(tx,.28,z-.65,.7,.56,.65,'hotelOak',.025);hotelLamp(add,tx,.56,z-.65,fixture);block(tx,z-.65,.75,.72,.57);
+   p(tx,.34,z-.315,.58,.008,.015,'black');p(tx,.29,z-.299,.12,.025,.027,'hotelBrass');
+   // Personal belongings left behind stay within the existing furniture bounds.
+   p(tx+.20,.578,z-.55,.15,.012,.20,'hotelShade');p(tx+.20,.585,z-.54,.11,.004,.12,'hotelLinen');
   }
   const deskX=cx+hx-2,deskZ=cz+hz-1.25;p(deskX,.73,deskZ,2.5,.065,.74,'hotelOak',.018);for(const sign of [-1,1])p(deskX+sign*1.07,.35,deskZ,.07,.7,.60,'hotelBrass');p(deskX,.98,deskZ+.17,.85,.50,.055,'black');block(deskX,deskZ,2.6,.82,1.4);
+  p(deskX+.83,.79,deskZ-.08,.26,.055,.22,'hotelLeather',.015);p(deskX+.83,.837,deskZ-.035,.31,.055,.07,'black',.025);
+  for(const dx of [-.04,0,.04])for(const dz of [-.035,0,.035])p(deskX+.83+dx,.821,deskZ-.12+dz,.025,.007,.02,'hotelShade');
   if(type==='suite'||type==='executive'||type==='penthouse'){hotelSofa(add,cx+hx-2,0,cz-hz+2.5,2.3);block(cx+hx-2,cz-hz+2.5,2.4,1,1);}
  }else if(['restaurant','bar','breakfast','lounge','lobby','cloak'].includes(type)){
   for(const side of [-1,1]){const bx=cx+side*(hx-2.2),bz=cz+side*(hz-2);hotelSofa(add,bx,0,bz,2.4);block(bx,bz,2.5,1,1);p(bx,.40,bz-1.3,1.45,.065,.65,'hotelOak',.03);p(bx,.19,bz-1.3,.08,.38,.40,'hotelBrass');block(bx,bz-1.3,1.5,.70,.5);hotelLamp(add,bx-.42,.44,bz-1.3,fixture);}
@@ -99,14 +105,43 @@ export function buildHotelRoom(r:Room,add:HotelAdd,fixture:HotelFixture,block:(x
 }
 
 export function createHotelElevatorMeshes(scene:THREE.Scene,mats:Record<Mat,THREE.MeshStandardMaterial>,runtime:HotelElevator){
- const root=new THREE.Group(),cab=new THREE.Group(),panels:THREE.Mesh[][]=[];root.name='hotel-elevator';root.position.set(HOTEL_LIFT.x,0,HOTEL_LIFT.z);root.add(cab);scene.add(root);
- const put=(parent:THREE.Object3D,x:number,y:number,z:number,w:number,h:number,d:number,m:Mat)=>{const g=new THREE.BoxGeometry(w,h,d);surfaceUV(g,.5);const o=new THREE.Mesh(g,mats[m]);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;parent.add(o);return o;};
+ const root=new THREE.Group(),cab=new THREE.Group(),panels:THREE.Mesh[][]=[],cabinDoors:THREE.Mesh[]=[];
+ root.name='hotel-elevator';cab.name='hotel-elevator-cabin';root.position.set(HOTEL_LIFT.x,0,HOTEL_LIFT.z);root.add(cab);scene.add(root);
+ const diffuser=new THREE.MeshStandardMaterial({color:'#b6b7a7',emissive:'#d3c4a5',emissiveIntensity:.65,roughness:1}),indicator=new THREE.MeshStandardMaterial({color:'#51382b',emissive:'#ac613a',emissiveIntensity:.75,roughness:1}),doorMetal=new THREE.MeshStandardMaterial({color:'#69685f',metalness:.72,roughness:.60});agedFinish(doorMetal,'lacquer');
+ const put=(parent:THREE.Object3D,x:number,y:number,z:number,w:number,h:number,d:number,m:Mat|THREE.MeshStandardMaterial)=>{const g=chamferedBox(w,h,d,.006);surfaceUV(g,.5);const o=new THREE.Mesh(g,typeof m==='string'?mats[m]:m);o.position.set(x,y,z);o.castShadow=o.receiveShadow=true;parent.add(o);return o;};
+ // A continuous opaque shaft surrounds the moving car. The only openings are
+ // the three sealed landing portals, never a view into stacked room geometry.
+ for(const side of [-1,1])put(root,side*1.56,6.45,0,.12,13.1,3.2,'black');
+ put(root,0,6.45,-1.56,3.2,13.1,.12,'black');put(root,0,13,0,3.2,.14,3.2,'black');
  put(cab,0,-.065,0,2.7,.13,2.7,'parallelTiles');put(cab,0,2.65,0,2.7,.12,2.7,'hotelOak');
- put(cab,0,1.3,-1.35,2.8,2.6,.12,'hotelGlass');for(const side of [-1,1]){put(cab,side*1.35,1.3,0,.12,2.6,2.8,'hotelOak');put(cab,side*1.23,1.06,0,.055,.055,2.5,'hotelBrass');}
- put(cab,0,2.57,0,.82,.025,.64,'coolLight');const light=new THREE.PointLight('#d5b995',3.4,5,2);light.position.set(0,2.38,0);cab.add(light);
- for(const floor of HOTEL_LIFT.floors){const level:THREE.Mesh[]=[];
-  for(const side of [-1,1]){put(root,side*1.48,floor+1.5,0,.14,3.0,3.15,'hotelOak');const leaf=put(root,side*.675,floor+1.28,1.38,1.34,2.56,.09,'hotelBrass');level.push(leaf);}
-  put(root,0,floor+2.7,1.38,3.12,.24,.12,'hotelOak');put(root,1.65,floor+1.22,1.40,.12,.23,.065,'hotelBrass');put(root,1.65,floor+1.25,1.44,.037,.037,.01,'light');panels.push(level);
+ put(cab,0,1.3,-1.35,2.8,2.6,.12,'hotelOak');
+ put(cab,0,1.62,-1.277,1.98,1.48,.025,'hotelGlass');put(cab,0,1.06,-1.23,2.45,.048,.05,'hotelBrass');
+ for(const side of [-1,1]){
+  put(cab,side*1.35,1.3,0,.12,2.6,2.8,'hotelOak');put(cab,side*1.23,1.06,0,.055,.055,2.5,'hotelBrass');
+  put(cab,side*1.277,.14,0,.035,.23,2.6,'hotelBrass');
+  for(const z of [-.85,0,.85])put(cab,side*1.279,1.58,z,.022,1.86,.022,'hotelBrass');
+  const leaf=put(cab,side*.65,1.28,1.30,1.30,2.56,.07,doorMetal);leaf.name='hotel-cabin-door';if(side<0)put(leaf,.65,0,.045,.025,2.55,.025,'black').name='hotel-cabin-door';cabinDoors.push(leaf);
  }
- return {update(viewer:{x:number;z:number}){root.visible=Math.hypot(viewer.x-HOTEL_LIFT.x,viewer.z-HOTEL_LIFT.z)<100;cab.position.y=runtime.y;panels.forEach((pair,i)=>pair.forEach((p,j)=>p.position.x=(j?1:-1)*(.675+(i===runtime.floor?runtime.doors:0)*1.32)));},dispose(){root.removeFromParent();root.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});}};
+ put(cab,0,.003,1.42,2.7,.05,.31,'hotelBrass');put(cab,0,2.53,1.28,2.65,.08,.13,'hotelOak');
+ put(cab,1.267,1.42,.74,.035,.72,.23,'hotelBrass');
+ for(const y of [1.19,1.38,1.57])put(cab,1.241,y,.74,.018,.052,.052,indicator);
+ put(cab,0,2.52,1.266,.50,.10,.024,'black');
+ const floorIndicators=[0,1,2].map(i=>put(cab,(i-1)*.13,2.52,1.245,.055,.05,.012,'hotelShade'));
+ put(cab,0,2.57,0,.88,.025,.64,diffuser);
+ const light=new THREE.PointLight('#d5b995',3.1,4.2,2);light.name='hotel-cabin-light';light.position.set(0,2.36,0);cab.add(light);
+ // Low emergency strips remain readable through a slow voltage sag.
+ put(cab,0,.15,-1.27,.38,.025,.02,indicator);
+ for(const floor of HOTEL_LIFT.floors){const level:THREE.Mesh[]=[];
+  for(const side of [-1,1]){put(root,side*1.46,floor+1.4,1.53,.20,2.8,.15,'hotelOak');const leaf=put(root,side*.675,floor+1.28,1.49,1.35,2.56,.09,doorMetal);leaf.name='hotel-landing-door';if(side<0)put(leaf,.675,0,.055,.025,2.55,.025,'black').name='hotel-landing-door';level.push(leaf);}
+  put(root,0,floor+3.65,1.53,3.12,2.2,.14,'black');put(root,0,floor+2.70,1.58,3.12,.26,.17,'hotelOak');
+  put(root,0,floor+.01,1.59,3.1,.05,.30,'hotelBrass');
+  put(root,1.65,floor+1.22,1.61,.12,.23,.065,'hotelBrass');put(root,1.65,floor+1.25,1.65,.037,.037,.01,indicator);panels.push(level);
+ }
+ return {update(viewer:{x:number;z:number},horror=true){
+  const state=runtime.presentation(horror);root.visible=Math.hypot(viewer.x-HOTEL_LIFT.x,viewer.z-HOTEL_LIFT.z)<100;cab.position.y=runtime.y;
+  panels.forEach((pair,i)=>pair.forEach((p,j)=>p.position.x=(j?1:-1)*(.675+state.landingDoors[i]*1.32)));
+  cabinDoors.forEach((p,j)=>p.position.x=(j?1:-1)*(.65+state.cabinDoors*1.31));
+  light.intensity=3.1*state.light;diffuser.emissiveIntensity=.65*state.light;
+  floorIndicators.forEach((p,i)=>p.material=i===runtime.floor?indicator:mats.hotelShade);
+ },dispose(){root.removeFromParent();root.traverse(o=>{if(o instanceof THREE.Mesh)o.geometry.dispose();});diffuser.dispose();indicator.dispose();doorMetal.dispose();}};
 }
