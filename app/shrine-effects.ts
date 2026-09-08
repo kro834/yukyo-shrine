@@ -26,14 +26,17 @@ export function createEffects(renderer:THREE.WebGLRenderer,scene:THREE.Scene,cam
     composer.setPixelRatio(renderer.getPixelRatio());composer.setSize(innerWidth,innerHeight);
   };
   const base=new RenderPass(scene,camera),ao=new ContactOcclusion(scene,camera,innerWidth,innerHeight,ultra);
-  const bloom=new HalfBloom(new THREE.Vector2(innerWidth,innerHeight),.16,.55,1.15);
+  // Restrict lens scatter to strong highlights. Reflected white cloth should
+  // retain its dark folds rather than bathing the whole frame in a pale veil.
+  const bloom=new HalfBloom(new THREE.Vector2(innerWidth,innerHeight),.035,.35,2.8);
+  bloom.materialHighPassFilter.uniforms.smoothWidth.value=.75;
   const output=new OutputPass();
   for(const pass of [base,ao,bloom,output])composer.addPass(pass);
   let enabled=true;
   return {
     configure(quality:GraphicsQuality){
       enabled=quality!=='low';ao.enabled=quality==='high'||quality==='ultra';
-      bloom.strength=ao.enabled?.12:.1;
+      bloom.strength=ao.enabled?.035:.028;
       syncTargets();
     },
     resize(){syncTargets();},
