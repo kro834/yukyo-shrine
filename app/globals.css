@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-@font-face{font-family:'Yukyo UI';src:url('/fonts/yukyo-ui-v63.woff2') format('woff2');font-style:normal;font-weight:400 700;font-display:swap}
-@font-face{font-family:'Yukyo Mincho';src:url('/fonts/yukyo-mincho-v63.woff2') format('woff2');font-style:normal;font-weight:600;font-display:swap}
+@font-face{font-family:'Yukyo UI';src:url('/fonts/yukyo-ui-v64.woff2') format('woff2');font-style:normal;font-weight:400 700;font-display:swap}
+@font-face{font-family:'Yukyo Mincho';src:url('/fonts/yukyo-mincho-v64.woff2') format('woff2');font-style:normal;font-weight:600;font-display:swap}
 @custom-variant dark (&:is(.dark *));
 @theme inline {
   --color-background:var(--background);--color-foreground:var(--foreground);--color-card:var(--card);--color-card-foreground:var(--foreground);--color-popover:var(--card);--color-popover-foreground:var(--foreground);--color-primary:var(--primary);--color-primary-foreground:#1a1410;--color-secondary:var(--muted);--color-secondary-foreground:var(--foreground);--color-muted:var(--muted);--color-muted-foreground:#a79d8b;--color-accent:#3f3427;--color-accent-foreground:var(--foreground);--color-border:var(--border);--color-input:var(--border);--color-ring:var(--primary);--color-destructive:#b3473b;--radius-sm:4px;--radius-md:6px;--radius-lg:10px;--radius-xl:14px;--font-sans:var(--font-game-ui);
@@ -97,3 +97,5 @@ body{font-family:var(--font-game-ui);font-weight:500;font-synthesis:none;text-re
 
 .initial-stages button[data-initial-stage=mountain][aria-pressed=true]{background:#364850c9;border-color:#9db9c2}.initial-stages button[data-initial-stage=parallel][aria-pressed=true]{background:#39384ec9;border-color:#b6a8d1}
 @media(min-width:1000px){.initial-stages{grid-template-columns:repeat(4,minmax(0,1fr));width:min(1050px,100%)}}
+
+.initial-stages button[data-initial-stage=ultrareal][aria-pressed=true]{background:#393b36d9;border-color:#b8b39d}.stage-choices button[data-stage=ultrareal]{background:#242824ee}

@@ -1,4 +1,6 @@
 export const EXTRA_ENEMY_PROFILES={
+ hotelStaff:{sight:24,nearSight:2,cone:.48,chase:2.3,patrol:1.05,hearing:46},
+ hotelGuest:{sight:19,nearSight:2,cone:.42,chase:2.05,patrol:.85,hearing:34},
  parallax:{sight:72,nearSight:4,cone:-.15,chase:8.7,patrol:3.3,hearing:170},
  crusher:{sight:60,nearSight:4,cone:.05,chase:8.9,patrol:3.4,hearing:155},
  mire:{sight:60,nearSight:3,cone:-.35,chase:7.4,patrol:2.7,hearing:35},
@@ -12,7 +14,7 @@ export const EXTRA_ENEMY_PROFILES={
 } as const;
 export type FinaleKind='hatred'|'wrath';
 export const isFinale=(kind:string):kind is FinaleKind=>kind==='hatred'||kind==='wrath';
-export const ENEMY_NAMES={parallax:'継ぎ目を渡る者',crusher:'圧壊',mire:'泥這い',warden:'鐘守',fox:'狐面の影',pilgrim:'枯枝の巡礼',errorWatch:'逆面',errorWeep:'哭面',hatred:'憎悪',wrath:'憤怒'} as const;
+export const ENEMY_NAMES={hotelStaff:'夜勤の係員',hotelGuest:'帰らない宿泊者',parallax:'継ぎ目を渡る者',crusher:'圧壊',mire:'泥這い',warden:'鐘守',fox:'狐面の影',pilgrim:'枯枝の巡礼',errorWatch:'逆面',errorWeep:'哭面',hatred:'憎悪',wrath:'憤怒'} as const;
 export const FINALE_BALANCE={
  hatred:{startSpeed:8.7,maximumSpeed:11.4,pressureSeconds:18,predictionSeconds:.8,predictionMetres:5,replan:.18,doorDelay:.18},
  wrath:{windupSeconds:.75,rushSeconds:1.25,recoverySeconds:1.65,windupSpeed:1.1,rushSpeed:16.2,recoverySpeed:3.2,replan:.16,doorDelay:.12},

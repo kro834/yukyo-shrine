@@ -1,9 +1,10 @@
 import type {Cell} from './shrine-layout.ts';
 import {modeRules,type PlayMode} from './play-mode.ts';
-export type StageId='shrine'|'abyss'|'outer'|'orchestra'|'circus'|'error'|'parallel'|'mountain';
+export type StageId='shrine'|'abyss'|'outer'|'orchestra'|'circus'|'error'|'parallel'|'mountain'|'ultrareal';
 export const canTransitionStage=(_mode:PlayMode,completed:boolean,_current:StageId,_next:StageId)=>completed;
 type Profile={name:string;subtitle:string;description:string;challenge:string;links:number;salt:number;fog:string;density:number;moon:number;counts:Partial<Record<Cell['kind'],number>>;sense:number;speed:number;search:number};
 export const STAGES:Record<StageId,Profile>={
+ ultrareal:{name:'ウルトラリアル',subtitle:'チェックアウトのないホテル',description:'雨に閉ざされた大型ホテル。カーペットの客室棟、静かなダイニング、エグゼクティブルームと三階を結ぶエレベーター。人間のように歩く宿泊者が、長い廊下の向こうにいる。',challenge:'現実に近い歩行 · 〇で扉・エレベーター操作／1F→2F→3F',links:36,salt:0x407e19,fog:'#141716',density:.013,moon:.035,counts:{hall:3,stone:4,yokocho:3,shop:3,bath:2,factory:2,cistern:2,cave:2,field:2},sense:.8,speed:1,search:.8},
  mountain:{name:'霧嶺',subtitle:'霧の高山と、途絶えた鉱山鉄道',description:'霧が流れ込む山腹、稜線に沿うガイドウェイ、逃走用の高速トロッコが巡る廃坑。山頂の観測所へ登り、消えた登山者の痕跡を辿る。',challenge:'山岳探索 · 〇でトロッコ乗車／最高速度はダッシュの約1.7倍',links:36,salt:0x6a17e4,fog:'#344148',density:.033,moon:.27,counts:{hall:3,stone:3,cave:4,field:4,factory:2,cistern:2,bath:1,shop:2,yokocho:2},sense:1.17,speed:1.05,search:1.22},
  parallel:{name:'パラレルワールド',subtitle:'現実の継ぎ目から落ちた街',description:'宙に浮く渡り場、誰も帰らない家、空中庭園。事務棟・ホテル・プール・地下駅が不可能な順番でつながり、空間を渡る異形が追ってくる。',challenge:'最危険 · 空間転移と高速突進／フラッシュと遮蔽物で切り返す',links:34,salt:0x91a7e3,fog:'#20202d',density:.009,moon:.14,counts:{hall:3,stone:3,bath:3,factory:2,cistern:2,shop:3,yokocho:2,cave:2,field:3},sense:1.35,speed:1.1,search:1.45},
  shrine:{name:'祭殿回廊',subtitle:'封じられた社',description:'灯りの残る回廊と、忘れられた街。',challenge:'青6個・赤2個・金1個のいずれかを奉納',links:40,salt:0,fog:'#100c09',density:.0205,moon:.10,counts:{hall:5,yokocho:5,shop:4,cave:3,field:2,factory:1,bath:2,cistern:1},sense:1,speed:1,search:1},

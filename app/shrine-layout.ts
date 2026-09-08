@@ -3,7 +3,7 @@ import {expandAreas} from './expansion-areas.ts';
 export type Cell = {x:number;z:number;h:number;kind:'hall'|'passage'|'stone'|'factory'|'bath'|'cistern'|'shop'|'cave'|'field'|'yokocho'};
 export type Wall = {x:number;z:number;alongX:boolean;h:number;insideX:number;insideZ:number;twoSided?:boolean;kind?:Cell['kind']};
 export type Room = {id:string;themeId?:string;bead?:boolean;x1:number;x2:number;z1:number;z2:number;style:'tatami'|'store'|'ritual'|'stone';h:number};
-export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string;rooms?:string[];floor?:number};
+export type DoorSpec = {id:string;x:number;z:number;alongX:boolean;room:string;rooms?:string[];floor?:number;opening?:number};
 export const CELL=4;
 export const SPAWN={x:0,z:14};
 export function createLayout(seed=1) {

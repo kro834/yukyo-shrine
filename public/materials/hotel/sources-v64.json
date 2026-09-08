@@ -1,0 +1,32 @@
+{
+  "dark_wood_diff_1k": {
+    "size": 754754,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wood/dark_wood_diff_1k.jpg",
+    "md5": "47fa883f1bb33acc5711245f64b75975"
+  },
+  "dark_wood_diff_2k": {
+    "size": 2894186,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/dark_wood/dark_wood_diff_2k.jpg",
+    "md5": "f6e205a05ff7f1b45c675795b18ea0f5"
+  },
+  "dark_wood_nor_gl_1k": {
+    "size": 344338,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wood/dark_wood_nor_gl_1k.jpg",
+    "md5": "ca74ffa4c1b7ff5afe7316bbfa87f9a0"
+  },
+  "dark_wood_nor_gl_2k": {
+    "size": 1603278,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/dark_wood/dark_wood_nor_gl_2k.jpg",
+    "md5": "0b47748d5559eb91c1fe19b9394ef95f"
+  },
+  "dark_wood_rough_1k": {
+    "size": 574415,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/1k/dark_wood/dark_wood_rough_1k.jpg",
+    "md5": "b1acb7bf90785d3945a85eca408dbc6c"
+  },
+  "dark_wood_rough_2k": {
+    "size": 2325418,
+    "url": "https://dl.polyhaven.org/file/ph-assets/Textures/jpg/2k/dark_wood/dark_wood_rough_2k.jpg",
+    "md5": "e270e270d5feb0281bce7a49e801a64b"
+  }
+}

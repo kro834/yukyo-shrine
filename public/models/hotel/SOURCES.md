@@ -1,0 +1,1 @@
+Original model created with Blender 4.5.9 LTS. Real-scale mattress, rounded pillows and a 55-frame gravity-settled Cloth duvet; no third-party model. Linen PBR maps: the existing Poly Haven rough_linen (see public/materials/textile/SOURCES.md). Generator: scripts/build-hotel-bed.py.

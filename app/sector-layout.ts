@@ -1,3 +1,4 @@
+import {prepareHotelLayout} from './hotel-layout.ts';
 import {prepareMountainLayout} from './mountain-plan.ts';
 import {circusWallHeight} from './circus-enclosure.ts';
 import {seededRandom} from './seeded-random.ts';
@@ -78,7 +79,9 @@ export function createSectorLayout(seed=1,stage:StageId='shrine'){
     assignParallelRooms(rooms,grid);
   }
   if(stage==='mountain')prepareMountainLayout(grid,rooms);
+  if(stage==='ultrareal')prepareHotelLayout(grid,rooms);
   const envelope=encloseLayout(grid,rooms,paddies,stage==='outer');
+  if(stage==='ultrareal')for(const d of envelope.doors)d.opening=1.35;
   if(stage==='circus'){const byCenter=new Map(envelope.obstacles.map(o=>[((o.minX+o.maxX)/2)+','+((o.minZ+o.maxZ)/2),o]));for(const w of envelope.walls){w.h=circusWallHeight(w,rooms);const o=byCenter.get(w.x+','+w.z);if(o)o.maxY=w.h;}}
  assignOuterAreas(rooms,seed,stage);
  assignOrchestraRooms(rooms,seed,stage);

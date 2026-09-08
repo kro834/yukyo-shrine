@@ -1,3 +1,4 @@
+import {hotelHuman} from './hotel-human.ts';
 import {specialEnemyRig} from './enemy-rigs.ts';
 import {mergeEnemyParts} from './enemy-batches.ts';
 import {EnemyLocomotion,footCycle} from './enemy-locomotion.ts';
@@ -52,7 +53,7 @@ export function createDoorMeshes(scene:THREE.Scene,doors:Doors,gothic=false,mode
     doors.states.forEach((d,i)=>{const p=panels[i];p.root.visible=!viewer||Math.hypot(d.spec.x-viewer.x,d.spec.z-viewer.z)<range;if(d.progress!==p.progress){p.progress=d.progress;p.leaf.position.x=d.progress*3.02;}});
   },dispose(disposeGeometry=true){surfaces.dispose();for(const frame of frames){frame.removeFromParent();frame.dispose();}for(const p of panels)p.root.removeFromParent();for(const m of [wood,paper,metal])m.dispose();if(disposeGeometry)for(const g of [frameGeometry,paperGeometry,leafWoodGeometry,pullGeometry])g.dispose();}};
 }
-export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
+export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies,human=false){
   const mergeFixed=mergeEnemyParts;
   const cloth=new THREE.MeshStandardMaterial({color:'#302822',metalness:0,roughness:.97});
   const skin=new THREE.MeshStandardMaterial({color:'#928477',roughness:.94});
@@ -79,6 +80,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   };
   const createActor=(e:Enemy)=>{const i=e.id;
     const root=new THREE.Group();root.name='horror-'+e.kind;scene.add(root);
+    if(human){const rig=hotelHuman(root,e.kind,{cloth:tailoredCloth,paleCloth:tailoredPale,skin,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
     if(e.kind in EXTRA_ENEMY_PROFILES){const rig=specialEnemyRig(root,e.kind,{cloth:tailoredCloth,paleCloth:tailoredPale,sculpt,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
     if(e.kind==='stalker'){const rig=specialEnemyRig(root,'mire',{cloth:tailoredCloth,paleCloth:cloth,sculpt,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
     const tall=e.kind==='watcher',large=e.kind==='danger';

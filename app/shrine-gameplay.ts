@@ -19,21 +19,25 @@ export function segmentBlocked(a:Position,b:Position,obstacles:Obstacle[]){
     return hi>=0&&lo<=1;
   });
 }
-const doorBox=(d:DoorSpec,half=1.48):Obstacle=>({minX:d.x-(d.alongX?half:.13),maxX:d.x+(d.alongX?half:.13),minZ:d.z-(d.alongX?.13:half),maxZ:d.z+(d.alongX?.13:half)});
+const doorBox=(d:DoorSpec,half=d.opening?d.opening/2:1.48):Obstacle=>({minX:d.x-(d.alongX?half:.13),maxX:d.x+(d.alongX?half:.13),minZ:d.z-(d.alongX?.13:half),maxZ:d.z+(d.alongX?.13:half)});
+export function hotelLeafBounds(d:DoorSpec,progress:number):Obstacle{
+ const width=d.opening??1.35,a=progress*Math.PI/2,c=Math.cos(a),s=Math.sin(a),t=-width/2+c*width/2,u=s*width/2,ht=c*width/2+s*.035,hu=s*width/2+c*.035;
+ return d.alongX?{minX:d.x+t-ht,maxX:d.x+t+ht,minZ:d.z+u-hu,maxZ:d.z+u+hu}:{minX:d.x+u-hu,maxX:d.x+u+hu,minZ:d.z-t-ht,maxZ:d.z-t+ht};
+}
 export class Doors {
   states:({spec:DoorSpec;open:boolean;progress:number})[];
   frames:Obstacle[];
   private blockerRevision=0;
   private blockerCache=new Map<number,{revision:number;items:Obstacle[]}>();
   constructor(specs:DoorSpec[]){
-    this.states=specs.map(spec=>{let progress=0;const invalidate=()=>this.blockerRevision++;return {spec,open:false,get progress(){return progress;},set progress(value:number){if((progress<.92)!==(value<.92))invalidate();progress=value;}};});
+    this.states=specs.map(spec=>{let progress=0;const invalidate=()=>this.blockerRevision++;return {spec,open:false,get progress(){return progress;},set progress(value:number){if(spec.opening?value!==progress:(progress<.92)!==(value<.92))invalidate();progress=value;}};});
     this.frames=this.framesFor(0);
   }
-  framesFor(floor=0){return this.states.filter(d=>Math.abs((d.spec.floor??0)-floor)<.5).flatMap(({spec:d})=>[-1,1].map(s=>({minX:d.x+(d.alongX?s*1.76:0)-(d.alongX?.24:.19),maxX:d.x+(d.alongX?s*1.76:0)+(d.alongX?.24:.19),minZ:d.z+(d.alongX?0:s*1.76)-(d.alongX?.19:.24),maxZ:d.z+(d.alongX?0:s*1.76)+(d.alongX?.19:.24)})));}
-  blockers(floor=0){const old=this.blockerCache.get(floor);if(old?.revision===this.blockerRevision)return old.items;const items=this.states.filter(d=>d.progress<.92&&Math.abs((d.spec.floor??0)-floor)<.5).map(d=>doorBox(d.spec));this.blockerCache.set(floor,{revision:this.blockerRevision,items});return items;}
+  framesFor(floor=0){return this.states.filter(d=>Math.abs((d.spec.floor??0)-floor)<.5).flatMap(({spec:d})=>[-1,1].map(s=>{const half=d.opening?d.opening/2:1.52,center=(2+half)/2,span=(2-half)/2;return {minX:d.x+(d.alongX?s*center:0)-(d.alongX?span:.19),maxX:d.x+(d.alongX?s*center:0)+(d.alongX?span:.19),minZ:d.z+(d.alongX?0:s*center)-(d.alongX?.19:span),maxZ:d.z+(d.alongX?0:s*center)+(d.alongX?.19:span)};}));}
+  blockers(floor=0){const old=this.blockerCache.get(floor);if(old?.revision===this.blockerRevision)return old.items;const items=this.states.filter(d=>(d.spec.opening||d.progress<.92)&&Math.abs((d.spec.floor??0)-floor)<.5).map(d=>d.spec.opening?hotelLeafBounds(d.spec,d.progress):doorBox(d.spec));this.blockerCache.set(floor,{revision:this.blockerRevision,items});return items;}
   nearest(player:Position,yaw:number,walls:Obstacle[],floor=0){
     return this.states.filter(d=>Math.abs((d.spec.floor??0)-floor)<.5).map(d=>{
-      const p={x:d.spec.alongX?Math.max(d.spec.x-1.25,Math.min(d.spec.x+1.25,player.x)):d.spec.x,z:d.spec.alongX?d.spec.z:Math.max(d.spec.z-1.25,Math.min(d.spec.z+1.25,player.z))};
+      const edge=d.spec.opening?d.spec.opening/2-.08:1.25,p={x:d.spec.alongX?Math.max(d.spec.x-edge,Math.min(d.spec.x+edge,player.x)):d.spec.x,z:d.spec.alongX?d.spec.z:Math.max(d.spec.z-edge,Math.min(d.spec.z+edge,player.z))};
       return {d,p,dx:p.x-player.x,dz:p.z-player.z,dist:Math.hypot(p.x-player.x,p.z-player.z)};
     }).filter(v=>v.dist<5.5&&(v.dist<1.5||(-Math.sin(yaw)*v.dx-Math.cos(yaw)*v.dz)/v.dist>.15)&&!segmentBlocked(player,v.p,walls))
       .sort((a,b)=>a.dist-b.dist)[0]?.d??null;
@@ -108,6 +112,7 @@ export class Enemies {
   private squadCooldown=0;
   private finaleObservation:{point:Position;floor:number;velocity:Position}|null=null;
   patrolTargets:PatrolTarget[]=[];
+  humanMotion=false;
   private walls:Obstacle[];
   private mechanismSource:Obstacle[]|null=null;
   private mechanismWalls:Obstacle[]=[];
@@ -254,7 +259,7 @@ export class Enemies {
       const currentStair=omniscient?rampAt(e.position,e.floor):transits.find(s=>e.floor>s.low+1e-6&&e.floor<s.high-1e-6&&e.position.x>=s.minX&&e.position.x<=s.maxX&&e.position.z>=s.minZ&&e.position.z<=s.maxZ),onStair=!!currentStair;
       // A ramp footprint blocks ground navigation, but not sight along its surface.
       const sightBlockers=targetStair&&currentStair===targetStair?blockers.filter(o=>o!==targetStair.footprint):blockers;
-      const sees=(omniscient||detectable&&(!['mire','errorWatch'].includes(e.kind)||lightOn))&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+(e.kind==='mire'?.52:2.05)},{...player,y:playerFloor+1.5},sightBlockers);
+      const sees=(omniscient||detectable&&(!['mire','errorWatch'].includes(e.kind)||lightOn))&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+(this.humanMotion?1.62:e.kind==='mire'?.52:2.05)},{...player,y:playerFloor+1.5},sightBlockers);
       const previousMode=e.brain.mode,lastSeen=e.brain.lastSeen?{...e.brain.lastSeen}:null,stunAtStart=e.brain.stunRemaining;
       if(omniscient&&stunAtStart>0){if(e.kind==='wrath')e.traitTime=0;e.flankPoint=null;}
       e.brain.update(dt,sees,player);
@@ -346,15 +351,15 @@ export class Enemies {
       if(goal){
         const gx=goal.x-e.position.x,gz=goal.z-e.position.z,len=Math.hypot(gx,gz);
         const baseSpeed=e.brain.mode==='chase'?profile.chase:e.investigate?(e.kind==='warden'?5.1:Math.max(3.6,3.3*movementScale)):profile.patrol;
-        const speed=isFinale(e.kind)?finaleDistance(e.kind,oldTraitTime,activeDt,this.difficulty.speed)/activeDt:traitSpeed(e.kind,e.brain.mode==='chase',e.traitTime,baseSpeed);
+        const speed=this.humanMotion?(isFinale(e.kind)?2.75:e.brain.mode==='chase'?(e.kind==='hotelStaff'?2.3:2.05):e.investigate?1.45:e.kind==='hotelStaff'?1.05:.85):isFinale(e.kind)?finaleDistance(e.kind,oldTraitTime,activeDt,this.difficulty.speed)/activeDt:traitSpeed(e.kind,e.brain.mode==='chase',e.traitTime,baseSpeed);
         if(len>.03){
-          e.facing=Math.atan2(gx,gz);const movementWalls=stairTravel?blockers.filter(o=>!STAIRS.includes(o)&&!HIGH_STAIRS.includes(o)):blockers;
+          const desiredFacing=Math.atan2(gx,gz),turn=Math.atan2(Math.sin(desiredFacing-e.facing),Math.cos(desiredFacing-e.facing));e.facing=this.humanMotion?e.facing+Math.max(-activeDt*2.4,Math.min(activeDt*2.4,turn)):desiredFacing;const movementWalls=stairTravel?blockers.filter(o=>!STAIRS.includes(o)&&!HIGH_STAIRS.includes(o)):blockers;
           if(omniscient)e.position=moveFinaleToward(e.position,goal,speed,activeDt,movementWalls,point=>{
             e.position=point;e.floor=floorHeightAt(point,e.floor);
             if(Math.hypot(player.x-point.x,player.z-point.z)>=.8||Math.abs(playerFloor-e.floor)>=.6)return false;
             const level=floorBand(e.floor),ramp=rampAt(point,e.floor),walls=level>9?thirdBlockers:level?upperBlockers:groundBlockers;
             const sight=targetStair&&ramp===targetStair?walls.filter(o=>o!==targetStair.footprint):walls;
-            if(!lightBlocked({...point,y:e.floor+2.05},{...player,y:playerFloor+1.5},sight))caught=true;
+            if(!lightBlocked({...point,y:e.floor+(this.humanMotion?1.62:2.05)},{...player,y:playerFloor+1.5},sight))caught=true;
             return caught;
           });
           else {e.position=movePlayer(e.position,gx/len,gz/len,0,true,Math.min(dt,len/speed)*speed/SPRINT_SPEED,movementWalls);e.floor=floorHeightAt(e.position,e.floor);}

@@ -1,3 +1,8 @@
+import {hotelDoors} from './hotel-doors.ts';
+import {HOTEL_AREAS,HOTEL_ROOMS,hotelArea,hotelRoomHeight,hotelLiftBlockers} from './hotel-layout.ts';
+import {HotelElevator} from './hotel-elevator.ts';
+import {HotelBeds} from './hotel-beds.ts';
+import {HOTEL_MATERIALS,buildHotelCell,buildHotelWall,buildHotelRoom,hotelTextureUV,hotelLamp,hotelSofa,createHotelElevatorMeshes,type HotelBed} from './hotel-scenery.ts';
 import {mountainAtmosphere} from './mountain-atmosphere.ts';
 import {createParallelAnomalies} from './parallel-anomalies.ts';
 import {mountainHeight,mountainGrade,mountainGeometry,mountainRender} from './mountain-terrain.ts';
@@ -89,7 +94,8 @@ import type {PlayMode} from './play-mode.ts';
 import {STAGES,stageRules,type StageId} from './stage-profile.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff),stage:StageId='shrine') {
-  const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus',parallel=stage==='parallel',mountain=stage==='mountain';
+  const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus',parallel=stage==='parallel',mountain=stage==='mountain',hotel=stage==='ultrareal';
+  const elevator=hotel?new HotelElevator():undefined;let hotelMotion={x:0,z:0};
   let playMode:PlayMode='normal',phaseRevision=0;let nightSky:THREE.Texture|undefined,nightSkyTarget:THREE.WebGLRenderTarget|undefined,skyRequested=false;
   const device=typeof navigator!=='undefined'?navigator as Navigator&{deviceMemory?:number}:undefined;
   const budget=new PerformanceBudget({touch:(device?.maxTouchPoints??0)>1||/Android|iPhone|iPad/i.test(device?.userAgent??''),cores:device?.hardwareConcurrency,memory:device?.deviceMemory});
@@ -101,10 +107,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const scene=new THREE.Scene();const backgroundColor=new THREE.Color('#050809');scene.background=backgroundColor;scene.fog=new THREE.FogExp2('#080c0d',.027);
   const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.08,mountain?350:180);camera.position.set(SPAWN.x,1.68,SPAWN.z);camera.rotation.order='YXZ';
   let environment:THREE.WebGLRenderTarget|undefined;
-  if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=gothic?.025:.065;room.dispose();pmrem.dispose();}
+  if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=hotel?.045:gothic?.025:.065;room.dispose();pmrem.dispose();}
   scene.add(new THREE.HemisphereLight(gothic?'#757d98':'#91a2af',gothic?'#171219':'#30271d',gothic?.048:stage==='abyss'||stage==='error'?.045:.12));
   const moon=new THREE.DirectionalLight('#8c9aa6',stageProfile.moon);moon.position.set(-10,18,5);scene.add(moon);
-  const layout=createLayout(seed,stage),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
+  const layout=createLayout(seed,stage),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors].map(d=>hotel?{...d,opening:1.35}:d)),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
   const circusPlan=mountain?createMountainPlan(layout):circus?createCircusPlan(seed,layout):undefined,circusRuntime=circusPlan?new CircusRuntime(circusPlan,mountain?{maxSpeed:MINE_SPEED,acceleration:8,braking:10}:undefined):undefined;
   const visualKind=(kind:string,x:number,z:number)=>{if(stage==='outer')return kind;const patch=((Math.floor((x+200)/20)+Math.floor((z+300)/20)*3+(seed%5))%5+5)%5;if(['factory','bath','cistern','shop'].includes(kind))return patch===0?'stone':patch===2?'hall':kind;return kind;};
   const cave=createCaveSurfaces(layout.cells,layout.walls,seed,{detail:budget.mobile?'low':'high',ceilingLimit:caveDeckLimit(SECOND_DECK.cells)});
@@ -113,9 +119,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2);
   const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5},.7);
   const originalAreaName=()=>{if(stage==='error'){if(elevation>4.5)return elevation>9.3?'三層 · 面裏の桟敷':'二層 · 終わらない橋掛かり';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?(horrorArea(r.themeId)?.name??'無終の能舞台'):'歪んだ舞台裏の回廊';}if(circus){if(elevation>4.5)return elevation>9.3?'三層 · 吊り道具の回廊':'二層 · 空中桟橋';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?circusRoomName(r):CIRCUS_AREA_NAMES[layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind??'hall'];}if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(stage==='abyss'&&kind==='field')return '埋没した排水路';if(stage==='abyss'&&kind==='yokocho')return '地底の封鎖横丁 · 最危険';if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
-  const areaName=()=>mountain?(MOUNTAIN_AREAS[mountainArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))??{x:0,z:0,kind:'hall'})]+' · 標高 '+mountainAltitude(camera.position.z)+'m'):parallel?((elevation>9.3?'三層 · ':elevation>4.5?'二層 · ':'')+PARALLEL_AREAS[parallelArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind??'hall')]):originalAreaName();
+  const areaName=()=>hotel?((Math.round(elevation/4.8)+1)+'F · '+(layout.rooms.find(r=>elevation<1&&camera.position.x>=r.x1*4-2&&camera.position.x<=r.x2*4+2&&camera.position.z>=r.z1*4-2&&camera.position.z<=r.z2*4+2)?.themeId?.startsWith('hotel-')?HOTEL_ROOMS[layout.rooms.find(r=>camera.position.x>=r.x1*4-2&&camera.position.x<=r.x2*4+2&&camera.position.z>=r.z1*4-2&&camera.position.z<=r.z2*4+2)!.themeId!.slice(6) as keyof typeof HOTEL_ROOMS]:elevation>9?'エグゼクティブ・ラウンジ':elevation>4?'客室棟・静寂の回廊':HOTEL_AREAS[hotelArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind??'hall')])):mountain?(MOUNTAIN_AREAS[mountainArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))??{x:0,z:0,kind:'hall'})]+' · 標高 '+mountainAltitude(camera.position.z)+'m'):parallel?((elevation>9.3?'三層 · ':elevation>4.5?'二層 · ':'')+PARALLEL_AREAS[parallelArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind??'hall')]):originalAreaName();
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
+    ...Object.fromEntries(Object.entries(HOTEL_MATERIALS).map(([key,p])=>[key,new THREE.MeshStandardMaterial(p)])) as Record<keyof typeof HOTEL_MATERIALS,THREE.MeshStandardMaterial>,
     parallelPaint:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelPaint),
     parallelCarpet:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelCarpet),
     parallelVelvet:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelVelvet),
@@ -194,6 +201,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const batches=new Map<string,{material:MaterialKey;geometries:THREE.BufferGeometry[]}>();
   let groundGeometry=true,gothicRoomProps=false;
   const add=(g:THREE.BufferGeometry,m:MaterialKey)=>{
+    if(hotel){if(['paper','plaster','red'].includes(m))m='parallelPaint';else if(['wood','dark','rope'].includes(m))m='hotelOak';else if(m==='tatami')m='parallelCarpet';else if(m==='gold')m='hotelBrass';hotelTextureUV(g,m);parallelTextureUV(g,m);}
     if(mountain){if(['paper','plaster','red'].includes(m))m='concreteWall';else if(m==='tatami')m='concrete';else if(m==='dark')m='steel';}
     if(parallel){
       if(m==='paper'||m==='plaster'||m==='red')m='parallelPaint';
@@ -230,7 +238,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       add(plankFloor(x,z,w,d,finishedY),'planks');
       add(new THREE.BoxGeometry(w,Math.max(.001,h-.004),d).translate(x,y-.002,z),'dark');return;
     }
-    if(m==='tatami'&&!gothic&&!circus&&!parallel&&!mountain&&h<=.065&&w>=1.5&&d>=1.5){
+    if(m==='tatami'&&!gothic&&!circus&&!parallel&&!mountain&&!hotel&&h<=.065&&w>=1.5&&d>=1.5){
       const placements=tatamiPlacementsForRectangle({x,z,width:w,depth:d,floorY:y+h/2-TATAMI.maxRise,inset:.08,variation:seed+x*.7+z});
       if(placements.length){
         const floor=createTatamiGeometry(placements);add(floor.reed,'tatami');add(floor.border,'tatamiTrim');
@@ -276,6 +284,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const fieldCells=new Set(layout.cells.filter(c=>c.kind==='field'&&!belowUpperDeck(c.x*4-2,c.x*4+2,c.z*4-2,c.z*4+2)).map(c=>c.x+','+c.z));
   const isFieldCell=(x:number,z:number)=>fieldCells.has(x+','+z);
   for(const c of layout.cells){
+    if(hotel){buildHotelCell(c,layout.grid,add,(x,y,z,color)=>fixture(x,y,z,color,0,.08,4),0,false,c.h>=8);continue;}
     if(mountain){buildMountainCell(c,layout.grid,add,(x,y,z,color)=>fixture(x,y,z,color,0,.12,6));continue;}
     if(parallel){buildParallelCell(c,layout.grid,add,(x,y,z,color)=>fixture(x,y,z,color,0,.05,6));continue;}
     if(circus){buildCircusCell(c,add,circusFixture);continue;}
@@ -355,6 +364,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   const wallPosts=createWallPostCollector();
   for(const w of layout.walls){
+    if(hotel){const kind=w.kind??'hall';buildHotelWall(w,kind,add,(x,y,z,color)=>fixture(x,y,z,color,0,0,6.5));if(w.twoSided)buildHotelWall({...w,insideX:-w.insideX,insideZ:-w.insideZ},kind,add,(x,y,z,color)=>fixture(x,y,z,color,0,0,6.5));continue;}
     if(parallel){const cell=layout.grid.get(Math.round((w.x+w.insideX*2)/4)+','+Math.round((w.z+w.insideZ*2)/4));const kind=cell?.kind??'hall';buildParallelWall(w,kind,add);if(w.twoSided)buildParallelWall({...w,insideX:-w.insideX,insideZ:-w.insideZ},kind,add);continue;}
     if(mountain){buildMountainWall(w,w.kind??'hall',add);continue;}
     if(circus){buildCircusWall(w,add,budget.mobile);continue;}
@@ -461,9 +471,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   // ceiling; a taller room must not expose the sky above its closed doorway.
   if(!circus)for(const d of layout.doors){
     const top=Math.max(...layout.rooms.filter(r=>(d.rooms??[d.room]).includes(r.id)).map(r=>r.h));
-    const frameTop=parallel||mountain?2.93:3.40;if(top>frameTop+.01)box(d.x,(top+frameTop)/2,d.z,d.alongX?4:.30,top-frameTop,d.alongX?.30:4,parallel?'parallelPaint':gothic?'concrete':'dark');
+    const frameTop=hotel?3.1:parallel||mountain?2.93:3.40;if(top>frameTop+.01)box(d.x,(top+frameTop)/2,d.z,d.alongX?4:.30,top-frameTop,d.alongX?.30:4,parallel?'parallelPaint':gothic?'concrete':'dark');
   }
   for(const n of layout.narrows){
+    if(hotel){for(const sign of [-1,1])buildHotelWall({x:n.x+(n.alongX?0:sign*1.51),z:n.z+(n.alongX?sign*1.51:0),alongX:n.alongX,h:3.1,insideX:n.alongX?0:-sign,insideZ:n.alongX?-sign:0,twoSided:true},'passage',add,(x,y,z,color)=>fixture(x,y,z,color,0,0,6.5));continue;}
     if(parallel){const kind=layout.grid.get(Math.round(n.x/4)+','+Math.round(n.z/4))?.kind??'hall';for(const sign of [-1,1]){const x=n.x+(n.alongX?0:sign*1.51),z=n.z+(n.alongX?sign*1.51:0);buildParallelWall({x,z,h:parallelHeight(kind),alongX:n.alongX,insideX:n.alongX?0:-sign,insideZ:n.alongX?-sign:0,twoSided:true},kind,add);}continue;}
     if(mountain){for(const sign of [-1,1])buildMountainWall({x:n.x+(n.alongX?0:sign*1.51),z:n.z+(n.alongX?sign*1.51:0),alongX:n.alongX,h:3.8,insideX:n.alongX?0:-sign,insideZ:n.alongX?-sign:0},'hall',add);continue;}
     if(circus){for(const sign of [-1,1]){const x=n.x+(n.alongX?0:sign*1.68),z=n.z+(n.alongX?sign*1.68:0);box(x,1.8,z,n.alongX?4:.64,3.6,n.alongX?.64:4,'circusDark');buildCircusWall({x:n.x+(n.alongX?0:sign*1.40),z:n.z+(n.alongX?sign*1.40:0),h:3.6,alongX:n.alongX,insideX:n.alongX?0:-sign,insideZ:n.alongX?-sign:0},add);}continue;}
@@ -526,7 +537,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const cisternSector=layout.sectors.find(s=>s.kind==='cistern')!,poolPosition={x:(cisternSector.x1+cisternSector.x2)*2,z:(cisternSector.z1+cisternSector.z2)*2};
   const water=new THREE.Mesh(new THREE.PlaneGeometry(4.85,6.85),new THREE.MeshPhysicalMaterial({color:'#17332f',metalness:0,roughness:.13,ior:1.333,clearcoat:0}));water.rotation.x=-Math.PI/2;water.position.set(poolPosition.x,.024,poolPosition.z);scene.add(water);
   waterFinish(water.material,waterClock);
-  const scannedPlacements:ScannedPlacement[]=[];
+  const scannedPlacements:ScannedPlacement[]=[],hotelBedSites:HotelBed[]=[];
   if(stage==='outer')for(const r of exteriorRoofSites(layout.rooms,layout.cells)){
     const x=(r.x1+r.x2)*2,z=(r.z1+r.z2)*2,y=r.h+.24;
     const roof=exteriorRoof((r.x2-r.x1+1)*4+.5,(r.z2-r.z1+1)*4+.5);
@@ -534,6 +545,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   // Furnishings are kept off the two-door circulation axis through each room.
   for(const room of layout.rooms){
+    if(hotel){buildHotelRoom(room,add,(x,y,z,color)=>fixture(x,y,z,color,0,0,6.5),block,hotelBedSites,room.id===altarRoom.id);continue;}
     if(parallel){buildParallelRoom(room,add,block,room.id===altarRoom.id);continue;}
     if(mountain){buildMountainRoom(room,add,block,room.id===altarRoom.id);continue;}
     if(circus){buildCircusRoom(room,add,block,circusFixture,room.id===altarRoom.id);continue;}
@@ -599,7 +611,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   }
   for(const p of circus?[]:layout.paddies){const x=(p.x1+p.x2)*2,z=(p.z1+p.z2)*2,w=(p.x2-p.x1+1)*4,d=(p.z2-p.z1+1)*4;box(x,-.04,z,w,.035,d,'water');}
   // Fixtures follow generated walls instead of old absolute stage coordinates.
-  for(const w of circus||parallel||mountain?[]:layout.walls){if(w.twoSided||Math.abs(Math.round((w.x+w.z)/2))%7!==0)continue;const x=w.x+w.insideX*.35,z=w.z+w.insideZ*.35,kind=w.kind;
+  for(const w of circus||parallel||mountain||hotel?[]:layout.walls){if(w.twoSided||Math.abs(Math.round((w.x+w.z)/2))%7!==0)continue;const x=w.x+w.insideX*.35,z=w.z+w.insideZ*.35,kind=w.kind;
     if(kind==='shop'){
       box(x,.52,z,w.alongX?2.8:.55,1.04,w.alongX?.55:2.8,'wood');block(x,z,w.alongX?2.8:.55,w.alongX?.55:2.8,1.04);
       for(let j=-2;j<=2;j++){const px=x+(w.alongX?j*.47:0),pz=z+(w.alongX?0:j*.47);cylinder(px,1.28,pz,.14,.42,'glass');cylinder(px,1.5,pz,.15,.035,'gold');box(px,1.1,pz,.2,.07,.2,(['candyRed','candyYellow','candyBlue','candyPink'] as const)[(j+2)%4]);}
@@ -616,14 +628,15 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     }
   }
   if(circusPlan&&!mountain)buildCircusScenery(circusPlan,layout,add,circusFixture);
-  if(!circus&&!parallel&&!mountain)buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height,!budget.mobile);
+  if(!circus&&!parallel&&!mountain&&!hotel)buildFieldFoliage(layout,seed,(x,z)=>fieldSurfaceHeight(x,z,seed,isFieldCell),obstacles,g=>add(g,'grass'),landforms?.height,!budget.mobile);
   if(mountain){groundGeometry=false;buildMountainRail(circusPlan!,add,(x,y,z,color)=>fixture(x,y,z,color,0,.14,7));buildMountainLandscape(new Map([...layout.grid,...SECOND_DECK.cells.map(c=>[c.x+','+c.z,c] as const)]),add,seed);}
   if(parallel){groundGeometry=false;buildParallelSkyline(add,seed);}
   groundGeometry=false;fixtureFloor=4.8;
   for(let x=12;x<=23;x++)for(let z=0;z<=8;z++){
+    if(hotel){buildHotelCell({x,z,kind:'passage',h:3.1},SECOND_DECK.grid,add,(px,py,pz,color)=>fixture(px,py,pz,color,4.8,.08,4),4.8,(x===13||x===22)&&z>=2&&z<=6);continue;}
     if((x===13||x===22)&&z>=2&&z<=6)continue;
     box(x*4,UPPER_HEIGHT-.12,z*4,4,.24,4,'planks');
-    if((x+z)%4===0)lantern(x*4,7.8,z*4);
+    if((x+z)%4===0){if(hotel){box(x*4,7.8,z*4,.18,.06,.18,'light');fixture(x*4,7.6,z*4,'#c9b696',4.8,0,3.6);}else lantern(x*4,7.8,z*4);}
   }
   for(const s of STAIRS){
     for(let i=0;i<24;i++){
@@ -643,8 +656,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     box(x,UPPER_HEIGHT+1.8,z,w,3.6,d,'paper');box(x,UPPER_HEIGHT+.4,z,w+.03,.8,d+.03,'dark');
     box(x,UPPER_HEIGHT+3.45,z,w+.04,.18,d+.04,'red');
   }
-  for(const barrier of upperBarriers){const x=(barrier.minX+barrier.maxX)/2,z=(barrier.minZ+barrier.maxZ)/2;box(x,UPPER_HEIGHT+.55,z,barrier.maxX-barrier.minX,1.1,barrier.maxZ-barrier.minZ,'dark');}
-  for(const x of [64,76]){for(let dx=-4;dx<=4;dx+=2)for(const z of [4,8,12])box(x+dx,UPPER_HEIGHT+.018,z,1.95,.036,3.95,'tatami');lantern(x,7.5,8,true);}
+  for(const barrier of upperBarriers){const x=(barrier.minX+barrier.maxX)/2,z=(barrier.minZ+barrier.maxZ)/2;box(x,UPPER_HEIGHT+(hotel?1.55:.55),z,barrier.maxX-barrier.minX,hotel?3.1:1.1,barrier.maxZ-barrier.minZ,'dark');}
+  for(const x of [64,76]){for(let dx=-4;dx<=4;dx+=2)for(const z of [4,8,12])box(x+dx,UPPER_HEIGHT+.018,z,1.95,.036,3.95,'tatami');if(hotel){hotelSofa(add,x,4.8,10,2.5);hotelLamp(add,x+2,5.6,11,(px,py,pz,color)=>fixture(px,py,pz,color,4.8,0,3.6));}else lantern(x,7.5,8,true);}
   // Material thresholds and overhead lintels mark changes of wing without signs
   // or new obstructions in the walkable route.
   groundGeometry=true;fixtureFloor=0;
@@ -662,18 +675,20 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     fixtureFloor=y;for(const c of deck.cells){
       const x=c.x*4,z=c.z*4,hole=level===2&&HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ);
       const theme=deckTheme({x,z},level),floor:MaterialKey=theme==='濡れ縁'?'stone':theme==='石蔵'?'concrete':'planks';
+      if(hotel){const stairOpen=HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ);buildHotelCell({...c,kind:level===2?'yokocho':'passage'},deck.grid,add,(px,py,pz,color)=>fixture(px,py,pz,color,y,.08,3.5),y,hole,stairOpen&&level===1);continue;}
       if(!hole)box(x,y-.12,z,4,.24,4,floor);
       const stairOpening=HIGH_STAIRS.some(s=>x>=s.minX&&x<=s.maxX&&z>=s.minZ&&z<=s.maxZ);
       if(!mountain&&!parallel&&(!stairOpening||level===2))box(x,y+4.3,z,4,.2,4,'dark');
       if(!hole)box(x,y+.005,z,.02,.012,4,'dark');
       if(!stairOpening){if(!mountain&&!parallel&&(c.x+c.z)%2===0){box(x,y+4.02,z,4,.18,.13,'wood');box(x,y+4.05,z,.12,.12,4,'wood');}if((c.x+c.z)%5===0)lantern(x,y+3.2,z);}
     }
-    for(const w of deck.walls){const x=(w.minX+w.maxX)/2,z=(w.minZ+w.maxZ)/2,theme=deckTheme({x,z},level),m:MaterialKey=theme==='石蔵'?'concrete':theme==='鏡廊'?'steel':theme==='朱塗りの間'?'red':'plaster';box(x,y+(mountain||parallel?.6:2.1),z,w.maxX-w.minX,mountain||parallel?1.2:4.2,w.maxZ-w.minZ,mountain||parallel?'steel':m);box(x,y+.25,z,w.maxX-w.minX+.02,.5,w.maxZ-w.minZ+.02,'dark');}
+    for(const w of deck.walls){if(hotel){const x=(w.minX+w.maxX)/2,z=(w.minZ+w.maxZ)/2,alongX=w.maxX-w.minX>1,dx=alongX?0:deck.grid.has(Math.round((x+2)/4)+','+Math.round(z/4))?1:-1,dz=alongX?(deck.grid.has(Math.round(x/4)+','+Math.round((z+2)/4))?1:-1):0;buildHotelWall({x,z,alongX,h:3.1,insideX:dx,insideZ:dz},level===2?'yokocho':'passage',add,(px,py,pz,color)=>fixture(px,py,pz,color,y,0,3.4),y);continue;}const x=(w.minX+w.maxX)/2,z=(w.minZ+w.maxZ)/2,theme=deckTheme({x,z},level),m:MaterialKey=theme==='石蔵'?'concrete':theme==='鏡廊'?'steel':theme==='朱塗りの間'?'red':'plaster';box(x,y+(mountain||parallel?.6:2.1),z,w.maxX-w.minX,mountain||parallel?1.2:4.2,w.maxZ-w.minZ,mountain||parallel?'steel':m);box(x,y+.25,z,w.maxX-w.minX+.02,.5,w.maxZ-w.minZ+.02,'dark');}
   }
   for(const [deck,y,level] of [[SECOND_DECK,4.8,1],[THIRD_DECK,9.6,2]] as const){
     for(let row=0;row<3;row++)for(let col=0;col<4;col++){
       const x=(-19+col*12)*4,z=(19+row*12)*4,theme=deckTheme({x,z},level);
       for(const side of [-1,1]){const px=x+side*7,pz=z+7;
+        if(hotel){hotelSofa(add,px,y,pz,1.8);continue;}
         if(theme==='鏡廊'){box(px,y+1.6,pz,1.5,2.7,.2,'steel');box(px,y+.2,pz,1.8,.4,.6,'dark');}
         else if(theme==='濡れ縁'||theme==='石蔵'){box(px,y+.35,pz,2,.7,1.8,'stone');box(px,y+.71,pz,1.7,.02,1.5,'water');}
         else {box(px,y+1,pz,1.8,2,.7,'wood');for(const h of [.4,1,1.6]){box(px,y+h,pz-.4,1.8,.08,.9,'dark');for(let i=-1;i<=1;i++)cylinder(px+i*.5,y+h+.25,pz-.35,.14,.4,theme==='祭具庫'?'gold':'rope');}}
@@ -698,11 +713,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   for(const body of lanternTemplates){body.shade.dispose();body.caps.dispose();body.ribs.dispose();}
   const circusMeshes=circusPlan?createCircusDynamics(circusPlan,mountain?{...mats,circusPaint:mats.rust,circusBrass:mats.steel,circusDark:mats.steel}:mats):undefined;if(circusMeshes){scene.add(circusMeshes.group);if(mountain){const cart=circusMeshes.group.getObjectByName('circus-rideable-cart');if(cart){circusMeshes.group.remove(cart);scene.add(cart);}circusMeshes.group.userData.mountainTerrain=true;}}
   const anomalies=parallel?createParallelAnomalies(scene,layout.cells,mats.parallelWindow):undefined;
+  const hotelBeds=new HotelBeds(scene,hotelBedSites,mats.hotelLinen,mats.hotelOak,!rendererOverride);
+  const elevatorMeshes=elevator?createHotelElevatorMeshes(scene,mats,elevator):undefined;
   const scannedProps=new ScannedProps(scene,scannedPlacements,!rendererOverride);
   const shrubs=new ShrubMeshes(scene,landforms?shrubPlacements(layout,seed,landforms.height,obstacles):[],budget.mobile,!rendererOverride);
-  obstacles.push(...goal.walls);
-  const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls,stage==='error'?['errorWatch','errorWeep']:parallel?['parallax','crusher','parallax','warden']:undefined),doorMeshes=createDoorMeshes(scene,doors,gothic,parallel||mountain),enemyMeshes=createEnemyMeshes(scene,enemies);
-  const upperFixed=[...SECOND_DECK.walls,...deckFurnitureWalls(4.8),...highRails,...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
+  obstacles.push(...goal.walls,...(hotel?hotelLiftBlockers():[]));
+  const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls,hotel?['hotelStaff','hotelGuest']:stage==='error'?['errorWatch','errorWeep']:parallel?['parallax','crusher','parallax','warden']:undefined),doorMeshes=hotel?hotelDoors(scene,doors,mats.parallelPaint,mats.hotelOak,mats.hotelBrass):createDoorMeshes(scene,doors,gothic,parallel||mountain),enemyMeshes=createEnemyMeshes(scene,enemies,hotel);enemies.humanMotion=hotel;
+  const upperFixed=[...(hotel?hotelLiftBlockers():[]),...SECOND_DECK.walls,...deckFurnitureWalls(4.8),...highRails,...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
   const beads=[...placeMagatama(layout.rooms,obstacles,upperFixed),...placeRedMagatama(layout.cells,enemies.nodes.values(),obstacles,seededRandom(seed^0x5231))];
   const goldPoints=[...enemies.nodes.values()].filter(p=>layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind==='yokocho'&&!obstacles.some(o=>p.x>o.minX-1&&p.x<o.maxX+1&&p.z>o.minZ-1&&p.z<o.maxZ+1));
   const pursuer=enemies.actors.find(e=>e.kind==='danger')??enemies.actors.find(e=>e.kind==='errorWeep'&&e.homeFloor===0)??enemies.actors[0];if(goldPoints.length){const home=goldPoints.reduce((a,b)=>Math.hypot(a.x-SPAWN.x,a.z-SPAWN.z)>Math.hypot(b.x-SPAWN.x,b.z-SPAWN.z)?a:b);pursuer.home={...home};pursuer.position={...home};}
@@ -713,7 +730,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const goalMeshes=createGoalMeshes(scene,goal);
   const burstRecharge=new BurstRecharge(),timeStop=new TimeStop(),stamina=new Stamina(),run=new RunProgress();let environmentTime=0;
   let goalBlockers=goal.blockers();
-  const thirdFixed=[...THIRD_DECK.walls,...deckFurnitureWalls(9.6),...highRails,...highCaps];
+  const thirdFixed=[...(hotel?hotelLiftBlockers():[]),...THIRD_DECK.walls,...deckFurnitureWalls(9.6),...highRails,...highCaps];
   let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
   const emptyMechanisms:import('./movement.ts').Obstacle[]=[];
   let mechanisms=circusRuntime?.blockers()??emptyMechanisms,playerMechanisms=circusRuntime?.blockers(!circusRuntime.riding)??emptyMechanisms;
@@ -750,15 +767,19 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
   const surfaces=new SurfaceLibrary(Object.values(mats),renderer.capabilities.getMaxAnisotropy());
-  if(parallel){
+  if(parallel||hotel){
     const textile='/materials/parallel/dirty_carpet',tile='/materials/parallel/interior_tiles';
     for(const [root,targets,normalStrength] of [[textile,[mats.parallelCarpet,mats.parallelVelvet],.75],[tile,[mats.parallelTiles],.6]] as const)surfaces.add(root+'_diff_1k.jpg',[...targets],{normal:root+'_nor_gl_1k.jpg',roughness:root+'_rough_1k.jpg',normalStrength,lowSize:256,ultra:{full:root+'_diff_2k.jpg',normal:root+'_nor_gl_2k.jpg',roughness:root+'_rough_2k.jpg'}});
-    surfaces.add('/materials/urban/concrete_wall_007_diff_1k.jpg',[mats.parallelPaint,mats.parallelCeiling],{normal:'/materials/urban/concrete_wall_007_nor_gl_1k.jpg',roughness:'/materials/urban/concrete_wall_007_rough_1k.jpg',normalStrength:.25,lowSize:256});
+    if(hotel){
+      // Fine continuous plaster avoids repeating concrete panel seams in a guest room.
+      surfaces.add('/materials/clay_plaster_diff.jpg',[mats.parallelPaint,mats.parallelCeiling],{normal:'/materials/clay_plaster_nor_gl.jpg',roughness:'/materials/clay_plaster_rough.jpg',normalStrength:.08,lowSize:256,ultra:{full:'/materials/ultra/clay_plaster_diff_2k.jpg',normal:'/materials/ultra/clay_plaster_nor_gl_2k.jpg',roughness:'/materials/ultra/clay_plaster_rough_2k.jpg'}});
+      mats.parallelCeiling.color.set('#c4cbd1');
+    }else surfaces.add('/materials/urban/concrete_wall_007_diff_1k.jpg',[mats.parallelPaint,mats.parallelCeiling],{normal:'/materials/urban/concrete_wall_007_nor_gl_1k.jpg',roughness:'/materials/urban/concrete_wall_007_rough_1k.jpg',normalStrength:.25,lowSize:256});
   }
   const terrainFinishes=new WeakMap<THREE.Material,THREE.Material['onBeforeCompile']>();
   surfaces.setLightingFinish(material=>{if(terrainFinishes.get(material)===material.onBeforeCompile)return;finiteFixture(material);if(mountain&&material===mats.rock)mountainAtmosphere(material);terrainFinishes.set(material,material.onBeforeCompile);});
   surfaces.preserveBaseFinish(mats.water,mats.light,mats.washiLit,mats.coolLight,mats.circusGlow,mats.circusRed,mats.circusIvory,mats.tatamiTrim,mats.outdoorTimber);
-  const linenTargets=circus?[mats.circusRed,mats.circusIvory]:gothic?[]:[mats.tatamiTrim];
+  const linenTargets=hotel?[mats.hotelLinen,mats.hotelShade,mats.hotelLampShade]:circus?[mats.circusRed,mats.circusIvory]:gothic?[]:[mats.tatamiTrim];
   if(linenTargets.length)surfaces.add('/materials/textile/rough_linen_diff_1k.jpg',linenTargets,{normal:'/materials/textile/rough_linen_nor_gl_1k.jpg',roughness:'/materials/textile/rough_linen_rough_1k.jpg',repeat:[1/.2707081393,1/.2712999880],normalStrength:.4,preserveFinish:true,lowSize:256,ultra:{full:'/materials/textile/rough_linen_diff_2k.jpg',normal:'/materials/textile/rough_linen_nor_gl_2k.jpg',roughness:'/materials/textile/rough_linen_rough_2k.jpg'}});
   surfaces.add('/cedar.png',[mats.red],{bump:.003,tint:gothic?'#462129':undefined});
   surfaces.add('/weathered-concrete.png',[mats.stone],{bump:.014,tint:'#aaa9a2'});
@@ -779,6 +800,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   if(!gothic)surfaces.add(wallRoot+'_diff_1k.jpg',[mats.concreteWall],{tint:'#b4b6ad',normal:wallRoot+'_nor_gl_1k.jpg',roughness:wallRoot+'_rough_1k.jpg',normalStrength:.65,preserveFinish:true,ultra:{full:wallRoot+'_diff_2k.jpg',normal:wallRoot+'_nor_gl_2k.jpg',roughness:wallRoot+'_rough_2k.jpg'}});
   surfaces.add('/materials/outer/grass_path_2_diff_1k.jpg',[mats.earth],{tint:'#a4a38c',normal:'/materials/outer/grass_path_2_nor_gl_1k.jpg',roughness:'/materials/outer/grass_path_2_rough_1k.jpg',normalStrength:.7,preserveFinish:true});
   if(landforms)surfaces.add('/materials/bank/aerial_grass_rock_diff_1k.jpg',[mats.bank],{normal:'/materials/bank/aerial_grass_rock_nor_gl_1k.jpg',roughness:'/materials/bank/aerial_grass_rock_rough_1k.jpg',normalStrength:.8,preserveFinish:true,lowSize:256,repeat:[.2,.2],ultra:{full:'/materials/bank/aerial_grass_rock_diff_2k.jpg',normal:'/materials/bank/aerial_grass_rock_nor_gl_2k.jpg',roughness:'/materials/bank/aerial_grass_rock_rough_2k.jpg'}});
+  if(hotel){const timber='/materials/hotel/dark_wood';surfaces.add(timber+'_diff_1k.webp',[mats.hotelOak],{tint:'#b5a695',normal:timber+'_nor_gl_1k.webp',roughness:timber+'_rough_1k.webp',normalStrength:.28,lowSize:256,ultra:{full:timber+'_diff_2k.webp',normal:timber+'_nor_gl_2k.webp',roughness:timber+'_rough_2k.webp'}});mats.parallelPaint.color.set('#8e8c82');mats.parallelVelvet.color.set('#62615a');mats.parallelCarpet.color.set('#837f73');mats.parallelTiles.color.set('#b8b8ac');mats.hotelOak.roughness=.52;}
   mats.concrete.roughness=1;mats.stone.roughness=.78;mats.stone.metalness=0;
   mats.rock.roughness=1;mats.plaster.roughness=1;mats.rust.roughness=1;mats.rust.metalness=0;mats.steel.roughness=.7;
   const floorLevel=()=>floorBand(elevation);
@@ -786,13 +808,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const collisionFor=()=>elevation>9.3?thirdFixed:elevation>4.5?upperCollision:groundCollision;
   finiteSceneFixtures(scene);
   const scanLighting=pendingFixtureFinish(scannedProps.ready,scene);
-  return {renderer,scene,camera,layout,stage,terrainHeight:mountain?mountainHeight:(_z:number)=>0,scannedReady:Promise.all([scanLighting.ready,shrubs.ready]),
+  return {renderer,scene,camera,layout,stage,terrainHeight:mountain?mountainHeight:(_z:number)=>0,scannedReady:Promise.all([scanLighting.ready,shrubs.ready,hotelBeds.ready]),
     setMode(mode:PlayMode){circusRuntime?.reset();refreshCollision();playMode=mode;if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=stageRules(stage,mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
     get playMode(){return playMode;},
-    get riding(){return circusRuntime?.riding??false;},
+    get riding(){return !!elevator?.riding||(circusRuntime?.riding??false);},
     circusStatus(){return circusRuntime?.snapshot()??null;},
-    circusHint(){if(!circusRuntime||!circusPlan||elevation>2.2)return '';const status=circusRuntime.snapshot();if(status.riding)return (status.speed<.05?'トロッコ待機中':'トロッコ乗車中')+' · 次は'+circusPlan.stations[status.destination].name+' · 自動降車';const station=circusPlan.stations.map(s=>({...s,d:Math.hypot(s.exit.x-camera.position.x,s.exit.z-camera.position.z)})).sort((a,b)=>a.d-b.d)[0];return station.d<36?station.name+' '+Math.round(station.d)+'m · 〇で呼ぶ・乗る':'';},
-    mechanismNear(){return circusRuntime?.near(camera.position,camera.rotation.y)?.label??'';},
+    circusHint(){if(elevator)return elevator.hint();if(!circusRuntime||!circusPlan||elevation>2.2)return '';const status=circusRuntime.snapshot();if(status.riding)return (status.speed<.05?'トロッコ待機中':'トロッコ乗車中')+' · 次は'+circusPlan.stations[status.destination].name+' · 自動降車';const station=circusPlan.stations.map(s=>({...s,d:Math.hypot(s.exit.x-camera.position.x,s.exit.z-camera.position.z)})).sort((a,b)=>a.d-b.d)[0];return station.d<36?station.name+' '+Math.round(station.d)+'m · 〇で呼ぶ・乗る':'';},
+    mechanismNear(){if(elevator)return elevator.prompt(camera.position,elevation);return circusRuntime?.near(camera.position,camera.rotation.y)?.label??'';},
     mirrorStatus(){return mirrorInventory.snapshot();},
     useMirror(){return playMode!=='gallery'&&mirrorInventory.use();},
     stairHint(){const options=[...STAIRS.map(s=>({...s,low:0,high:4.8})),...HIGH_STAIRS.map(s=>({...s,low:4.8,high:9.6}))].flatMap(s=>[{x:(s.minX+s.maxX)/2,z:s.minZ-2,floor:s.low,to:s.high,up:true},{x:(s.minX+s.maxX)/2,z:s.maxZ+2,floor:s.high,to:s.low,up:false}]).filter(s=>Math.abs(s.floor-elevation)<.6).map(s=>({...s,d:Math.hypot(s.x-camera.position.x,s.z-camera.position.z)})).sort((a,b)=>a.d-b.d);const s=options[0];return s&&s.d<22?(s.up?'↑ ':'↓ ')+(['一層','二層','三層'][Math.round(s.to/4.8)])+'への階段 · '+Math.round(s.d)+'m':'';},
@@ -814,19 +836,21 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     collection(){return {...beadInventory(beads),areaName:areaName(),blueOffered:goal.blueOffered,redOffered:goal.redOffered,finale:enemies.finalKind,unlocked:goal.unlocked,area:areaAt(camera.position,elevation)};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
       if(goal.completed)return {x:camera.position.x,z:camera.position.z,y:camera.position.y,running:false};
+      if(elevator?.riding){stamina.step(dt,false,false,false);lastMotion={running:false,moving:false};return {...camera.position,running:false};}
       if(circusRuntime?.riding){stamina.step(dt,false,false,false);lastMotion={running:false,moving:false};const p=circusRuntime.snapshot().cart;return {...p,running:false};}
       refreshCollision();collision=collisionFor();
-      const allowed=sprint&&stamina.canSprint,pos=movePlayer(camera.position,x,z,yaw,allowed,dt,collision),moving=Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001;stamina.step(dt,sprint,moving,allowed&&moving);lastMotion={running:allowed&&moving,moving};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68,running:allowed&&moving};
+      const allowed=sprint&&stamina.canSprint;if(hotel){const blend=1-Math.exp(-dt*12);hotelMotion.x+=(x-hotelMotion.x)*blend;hotelMotion.z+=(z-hotelMotion.z)*blend;x=hotelMotion.x;z=hotelMotion.z;}const pos=movePlayer(camera.position,x,z,yaw,allowed,dt*(hotel?(allowed?.48:.50):1),collision),moving=Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001;stamina.step(dt,sprint,moving,allowed&&moving);lastMotion={running:allowed&&moving,moving};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68,running:allowed&&moving};
     },
     enemyDirections(){return !mirrorInventory.active||playMode==='gallery'?[]:enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned',level:enemyFloorHint(elevation,e.floor),chasing:e.brain.mode==='chase'}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     nearAltar(){return playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
-    interact(){if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
+    interact(){if(elevator?.interact(camera.position,elevation)){hotelMotion={x:0,z:0};return {kind:'mechanism' as const,message:elevator.hint()};}if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     burst(){if(playMode==='gallery'||goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x,mountain?mountainHeight:undefined);run.stuns+=hits;return hits;},
     step(dt:number){
       if(goal.completed)return false;
       burstRecharge.step(dt);mirrorInventory.step(dt);
       const liveDt=timeStop.step(dt);environmentTime+=liveDt*1000;
+      if(elevator){const ride=elevator.step(liveDt);if(ride){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=ride.floor;lastMotion={running:false,moving:false};}}
       if(circusRuntime){const occupants=[...(circusRuntime.riding?[]:[{x:camera.position.x,z:camera.position.z,y:elevation+1.68}]),...(playMode==='gallery'||mountain?[]:enemies.actors.map(e=>({...e.position,y:e.floor+1.68})))];const ride=circusRuntime.step(liveDt,occupants);if(ride.position){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=0;lastMotion={running:false,moving:false};}if(ride.lure&&playMode!=='gallery'&&liveDt>0)enemies.hear(ride.lure,0);}
       const detectable=flashlight.visible||(lastMotion.running&&lastMotion.moving);
       if(runningSteps.update(dt,lastMotion.running,lastMotion.moving)){
@@ -848,7 +872,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       const stunned=!activeChase&&!activeSearch&&enemies.actors.some(e=>e.brain.mode==='stunned'&&(!!enemies.finalKind||Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28));
       const threatDistance=Math.min(...enemies.actors.filter(e=>activeChase?e.brain.mode==='chase':e.brain.mode!=='stunned'&&e.investigate&&e.searchTime>0&&Math.abs(e.floor-elevation)<1).map(e=>Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z,e.floor-elevation)));
       run.step(dt,{chasing:activeChase,searching:activeSearch,hidden:!detectable&&!enemies.finalKind,frozen:timeStop.active,stunned,burden,finale:!!enemies.finalKind,distance:threatDistance});
-      if(caught){circusRuntime?.reset();phaseRevision++;elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
+      if(caught){elevator?.reset();hotelMotion={x:0,z:0};circusRuntime?.reset();phaseRevision++;elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
         const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
         const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
     },
@@ -877,7 +901,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       // Keep the angular filter footprint stable as the shadow atlas grows.
       flashlight.shadow.radius=size/1024*1.5;
       lightPool.forEach((light,i)=>{light.visible=i<(quality==='low'?3:6);});fixtureShadow.configure(quality,budget.mobile);
-      reflectionEnabled=!circus&&!mountain&&quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!circus&&!mountain&&!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
+      reflectionEnabled=!circus&&!mountain&&!hotel&&quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!circus&&!mountain&&!hotel&&!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
       effects?.configure(quality);glowMat.opacity=quality==='low'?.26:.12;
     },
     render(time:number){waterClock.value=environmentTime/1000;dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);
@@ -892,7 +916,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         fixtureLighting.select(camera.position,floorBand(elevation),lightFixtures,collisionFor(),configuredQuality==='low'?3:6);
         // At this distance exponential fog is already opaque; keep nearby detail intact.
         for(const c of staticChunks){const foliage=(c.mesh.material as THREE.Material).name==='grass',range=mountain&&(c.mesh.material as THREE.Material).name==='rock'?300:foliage?(configuredQuality==='low'?36:configuredQuality==='ultra'?72:60):configuredQuality==='low'?area==='field'?85:72:110;c.mesh.visible=c.center.distanceToSquared(camera.position)<(range+c.radius)**2;}
-        mirror.visible=reflectionEnabled&&mirror.position.distanceToSquared(camera.position)<3600;water.visible=!circus&&!mountain&&!mirror.visible;
+        mirror.visible=reflectionEnabled&&mirror.position.distanceToSquared(camera.position)<3600;water.visible=!circus&&!mountain&&!hotel&&!mirror.visible;
         lastLight=time;
       }
       camera.getWorldDirection(direction);flashlightRight.set(1,0,0).applyQuaternion(camera.quaternion);
@@ -905,7 +929,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(gothic)fixtureShadow.light.intensity*=.55;
       lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=(gothic?3.8:7)*((slot.current?.power??7)/7)*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
       doorMeshes.update(camera.position,configuredQuality==='low'?72:110);
-      scannedProps.update(camera.position);shrubs.update(camera.position);
+      scannedProps.update(camera.position);shrubs.update(camera.position);hotelBeds.update(camera.position,configuredQuality==='low');elevatorMeshes?.update(camera.position);
       enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);
       beadMeshes.update(environmentTime);
       goalMeshes.update();
@@ -917,7 +941,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       try {if(mountain)dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}}finally{restoreTerrain?.();}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;anomalies?.dispose();scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();circusMeshes?.cart.removeFromParent();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;hotelBeds.dispose();elevatorMeshes?.dispose();anomalies?.dispose();scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();circusMeshes?.cart.removeFromParent();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
 
