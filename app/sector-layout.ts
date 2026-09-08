@@ -4,6 +4,7 @@ import type {Cell,Room} from './shrine-layout.ts';
 import {NEW_HORROR_AREAS} from './horror-areas.ts';
 import {assignOuterAreas} from './outer-areas.ts';
 import {assignOrchestraRooms} from './orchestra-layout.ts';
+import {assignErrorRooms} from './error-stage.ts';
 import {encloseLayout} from './layout-envelope.ts';
 import {STAGES,sectorConnections,type StageId} from './stage-profile.ts';
 import {planOuterLandforms} from './outer-landform-plan.ts';
@@ -74,5 +75,6 @@ export function createSectorLayout(seed=1,stage:StageId='shrine'){
   if(stage==='circus'){const byCenter=new Map(envelope.obstacles.map(o=>[((o.minX+o.maxX)/2)+','+((o.minZ+o.maxZ)/2),o]));for(const w of envelope.walls){w.h=circusWallHeight(w,rooms);const o=byCenter.get(w.x+','+w.z);if(o)o.maxY=w.h;}}
  assignOuterAreas(rooms,seed,stage);
  assignOrchestraRooms(rooms,seed,stage);
+ if(stage==='error')assignErrorRooms(rooms,seed);
  return {cells:[...grid.values()],grid,...envelope,rooms,doors:envelope.doors,courts:[] as {x:number;z:number;rx:number;rz:number;h:number}[],stages:sectors,paddies,expansionAreas:rooms,sectors,stage,connections,landforms:landformPlan?.regions??[]};
 }

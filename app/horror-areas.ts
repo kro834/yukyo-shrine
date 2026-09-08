@@ -3,6 +3,7 @@ import {outerArea,buildOuterShell,type OuterMaterial,type OuterBuilder} from './
 import {buildOuterMemoriesA} from './outer-memories-a.ts';
 import {buildOuterMemoriesB} from './outer-memories-b.ts';
 import {ORCHESTRA_ROOMS,buildOrchestraRoom} from './orchestra-rooms.ts';
+import {ERROR_ROOMS,buildErrorRoom} from './error-stage.ts';
 type Mat=OuterMaterial;
 type Theme={id:string;name:string;floor:Mat;wall:Mat;accent:Mat;light:string};
 const rows=[
@@ -14,10 +15,11 @@ const rows=[
  ['withered-flowers','供花の枯庭','stone','plaster','tile','moon'],['shadow-crossing','影踏みの渡り廊','wood','plaster','wood','paper'],['white-curtain','白幕の送り座','tatami','plaster','paper','paper'],['paper-cranes','折鶴の納め所','wood','paper','paper','amber'],['empty-kimono','抜け殻の着物廊','tatami','paper','paper','ember'],
 ] as const;
 export const NEW_HORROR_AREAS:readonly Theme[]=rows.map(([id,name,floor,wall,accent,light])=>({id,name,floor,wall,accent,light}));
-export const horrorArea=(id?:string)=>NEW_HORROR_AREAS.find(t=>t.id===id)??outerArea(id)??ORCHESTRA_ROOMS.find(t=>t.id===id);
+export const horrorArea=(id?:string)=>NEW_HORROR_AREAS.find(t=>t.id===id)??outerArea(id)??ORCHESTRA_ROOMS.find(t=>t.id===id)??ERROR_ROOMS.find(t=>t.id===id);
 type Builder=OuterBuilder&{jar?:(x:number,y:number,z:number)=>void};
 /** Shared material batches, recessed corners and overhead motifs keep all doors clear. */
 export function buildHorrorArea(r:Room,b:Builder,reserved=false){
+ if(buildErrorRoom(r,b,reserved))return;
  const orchestra=ORCHESTRA_ROOMS.find(t=>t.id===r.themeId);
  if(orchestra){
   const x=(r.x1+r.x2)*2,z=(r.z1+r.z2)*2;

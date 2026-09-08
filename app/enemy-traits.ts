@@ -3,12 +3,14 @@ export const EXTRA_ENEMY_PROFILES={
  warden:{sight:12,nearSight:2,cone:.55,chase:7.2,patrol:2.8,hearing:185},
  fox:{sight:38,nearSight:3.5,cone:.1,chase:8.2,patrol:3.4,hearing:84},
  pilgrim:{sight:32,nearSight:4,cone:.15,chase:8.8,patrol:3.1,hearing:102},
+ errorWatch:{sight:76,nearSight:2.5,cone:.20,chase:8.4,patrol:2.9,hearing:32},
+ errorWeep:{sight:18,nearSight:2,cone:.35,chase:8.9,patrol:3.1,hearing:205},
  hatred:{sight:1e6,nearSight:1e6,cone:-1,chase:8.7,patrol:8.7,hearing:1e6},
  wrath:{sight:1e6,nearSight:1e6,cone:-1,chase:16.2,patrol:3.2,hearing:1e6},
 } as const;
 export type FinaleKind='hatred'|'wrath';
 export const isFinale=(kind:string):kind is FinaleKind=>kind==='hatred'||kind==='wrath';
-export const ENEMY_NAMES={mire:'泥這い',warden:'鐘守',fox:'狐面の影',pilgrim:'枯枝の巡礼',hatred:'憎悪',wrath:'憤怒'} as const;
+export const ENEMY_NAMES={mire:'泥這い',warden:'鐘守',fox:'狐面の影',pilgrim:'枯枝の巡礼',errorWatch:'逆面',errorWeep:'哭面',hatred:'憎悪',wrath:'憤怒'} as const;
 export const FINALE_BALANCE={
  hatred:{startSpeed:8.7,maximumSpeed:11.4,pressureSeconds:18,predictionSeconds:.8,predictionMetres:5,replan:.18,doorDelay:.18},
  wrath:{windupSeconds:.75,rushSeconds:1.25,recoverySeconds:1.65,windupSpeed:1.1,rushSpeed:16.2,recoverySpeed:3.2,replan:.16,doorDelay:.12},
@@ -52,6 +54,6 @@ export function hatredIntercept(player:{x:number;z:number},velocity:{x:number;z:
 export function rushPhase(time:number){const phase=Math.max(0,time)%3.6;return phase<.65?'windup':phase<1.75?'rush':'recover';}
 export function traitSpeed(kind:string,chasing:boolean,time:number,base:number){
  if(isFinale(kind))return finaleSpeed(kind,time);
- if(kind!=='pilgrim'||!chasing)return base;
+ if((kind!=='pilgrim'&&kind!=='errorWeep')||!chasing)return base;
  return rushPhase(time)==='windup'?.6:rushPhase(time)==='rush'?Math.min(8.9,base):3.2;
 }

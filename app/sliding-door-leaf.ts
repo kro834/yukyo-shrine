@@ -55,15 +55,15 @@ function moulding(rect:Rect,side:number,gothic:boolean){
 }
 
 function paperPane(rect:Rect,side:number,phase:number){
- const b=builder(),nx=4,ny=6;
+ const b=builder(),nx=8,ny=12;
  const at=(i:number,j:number):P=>{const u=i/nx,v=j/ny;
-  // Submillimetre stretched paper, pinned along the frame. No loose torn edges
+  // Gently bowed paper is pinned along the frame. No loose torn edges
   // or holes that would disagree with the leaf's opaque collision volume.
-  const warp=Math.sin(Math.PI*u)*Math.sin(Math.PI*v)*Math.sin(u*8+v*5+phase)*.00065;
+  const warp=Math.sin(Math.PI*u)*Math.sin(Math.PI*v)*Math.sin(u*8+v*5+phase)*.0022;
   return [rect.x1+(rect.x2-rect.x1)*u,rect.y1+(rect.y2-rect.y1)*v,side*(.030+warp)];
  };
  const tone=(p:P)=>{const u=(p[0]-rect.x1)/(rect.x2-rect.x1),v=(p[1]-rect.y1)/(rect.y2-rect.y1),edge=Math.min(u,1-u,v,1-v);return .96-.07*Math.exp(-edge*22)-.045*Math.exp(-v*10)+.018*Math.sin(u*5+phase)*Math.sin(v*7);};
- for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)b.polygon([at(i,j),at(i+1,j),at(i+1,j+1),at(i,j+1)],[0,0,side],p=>[p[0]/.3,p[1]/.3],tone);
+ for(let j=0;j<ny;j++)for(let i=0;i<nx;i++)b.polygon([at(i,j),at(i+1,j),at(i+1,j+1),at(i,j+1)],[0,0,side],p=>[p[0]/1.7,p[1]/2.5],tone);
  return b.finish();
 }
 

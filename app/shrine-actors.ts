@@ -1,4 +1,7 @@
 import {specialEnemyRig} from './enemy-rigs.ts';
+import {EnemyLocomotion,footCycle} from './enemy-locomotion.ts';
+import {upgradeBlenderGeometry} from './blender-geometry.ts';
+import {fusumaPaperFinish} from './fusuma-paper.ts';
 import {EXTRA_ENEMY_PROFILES} from './enemy-traits.ts';
 import * as THREE from 'three';
 import {mergeGeometries} from 'three/addons/utils/BufferGeometryUtils.js';
@@ -16,9 +19,9 @@ import type {Doors,Enemies,Enemy} from './shrine-gameplay';
 export function createDoorMeshes(scene:THREE.Scene,doors:Doors,gothic=false){
   const wood=new THREE.MeshStandardMaterial({color:'#251914',roughness:.88,vertexColors:true});
   const paper=new THREE.MeshStandardMaterial({color:gothic?'#716658':'#b7af9b',roughness:.97,vertexColors:true});
-  agedFinish(paper,gothic?'wood':'paper');
-  const metal=new THREE.MeshStandardMaterial({color:gothic?'#55524b':'#5e5141',metalness:.55,roughness:.65,vertexColors:true});
-  const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.setLightingFinish(finiteFixture);surfaces.add('/materials/wood_planks_diff.jpg',[wood],{tint:gothic?'#837563':'#d9d0c2',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.65,ultra:{full:'/materials/ultra/wood_planks_diff_2k.jpg',normal:'/materials/ultra/wood_planks_nor_gl_2k.jpg',roughness:'/materials/ultra/wood_planks_rough_2k.jpg'}});
+  agedFinish(paper,gothic?'wood':'paper');if(!gothic)fusumaPaperFinish(paper);
+  const metal=new THREE.MeshStandardMaterial({color:gothic?'#55524b':'#5e5141',metalness:.72,roughness:.48,vertexColors:true});
+  const surfaces=new SurfaceLibrary([wood,paper],4);surfaces.setLightingFinish(finiteFixture);if(!gothic)surfaces.preserveBaseFinish(paper);surfaces.add('/materials/wood_planks_diff.jpg',[wood],{tint:gothic?'#837563':'#d9d0c2',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.65,ultra:{full:'/materials/ultra/wood_planks_diff_2k.jpg',normal:'/materials/ultra/wood_planks_nor_gl_2k.jpg',roughness:'/materials/ultra/wood_planks_rough_2k.jpg'}});
   const box=(x:number,y:number,z:number,w:number,h:number,d:number)=>{const g=chamferedBox(w,h,d).translate(x,y,z);surfaceUV(g,.38,'timber-photo');return g;};
   if(gothic)surfaces.add('/materials/wood_planks_diff.jpg',[paper],{tint:'#716658',normal:'/materials/wood_planks_nor_gl.jpg',roughness:'/materials/wood_planks_rough.jpg',normalStrength:.5,preserveFinish:true});
   else surfaces.add('/materials/interior/decrepit_wallpaper/decrepit_wallpaper_diff_1k.jpg',[paper],{tint:'#d7cdb9',normal:'/materials/interior/decrepit_wallpaper/decrepit_wallpaper_nor_gl_1k.jpg',roughness:'/materials/interior/decrepit_wallpaper/decrepit_wallpaper_rough_1k.jpg',normalStrength:.35,lowSize:256});
@@ -26,6 +29,7 @@ export function createDoorMeshes(scene:THREE.Scene,doors:Doors,gothic=false){
   const frameGeometry=merged([box(-1.76,1.7,0,.48,3.4,.36),box(1.76,1.7,0,.48,3.4,.36),box(0,3.17,0,4,.48,.34),box(0,.035,0,4,.07,.35)]);
   frameGeometry.setAttribute('color',new THREE.Float32BufferAttribute(new Float32Array(frameGeometry.getAttribute('position').count*3).fill(1),3));
   const {paperGeometry,leafWoodGeometry,pullGeometry}=slidingDoorLeaf(gothic);
+  if(!gothic)upgradeBlenderGeometry(pullGeometry,'/models/error/pull.glb');
   const chunks=new Map<string,number[]>();
   doors.states.forEach(({spec:d},i)=>{const key=Math.floor(d.x/24)+':'+Math.floor(d.z/24)+':'+(d.floor??0);if(!chunks.has(key))chunks.set(key,[]);chunks.get(key)!.push(i);});
   const frames:THREE.InstancedMesh[]=[],matrix=new THREE.Matrix4();
@@ -85,14 +89,21 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   const createActor=(e:Enemy)=>{const i=e.id;
     const root=new THREE.Group();root.name='horror-'+e.kind;scene.add(root);
     if(e.kind in EXTRA_ENEMY_PROFILES){const rig=specialEnemyRig(root,e.kind,{cloth:tailoredCloth,paleCloth:tailoredPale,sculpt,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
-    const crawler=e.kind==='stalker',tall=e.kind==='watcher',large=e.kind==='danger';
+    if(e.kind==='stalker'){const rig=specialEnemyRig(root,'mire',{cloth:tailoredCloth,paleCloth:cloth,sculpt,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
+    const tall=e.kind==='watcher',large=e.kind==='danger';
     root.scale.set(large?1.13:1,tall?1.17:large?1.1:1,1);
-    const body=new THREE.Group();root.add(body);body.rotation.x=crawler?.72:e.kind==='normal'?.13:large?.2:0;body.position.y=crawler?-.55:0;
+    const body=new THREE.Group();root.add(body);body.rotation.x=e.kind==='normal'?.13:large?.2:0;
     part(body,robe(.24,.43,1.35),cloth,0,.94,0);
-    for(const side of [-1,1]){const collar=part(body,new THREE.BoxGeometry(.095,.57,.055),cloth,side*.11,1.44,.19);collar.rotation.z=side*.43;part(body,new THREE.BoxGeometry(.11,.22,.18),black,side*.14,.11,.05);}
+    const feet:THREE.Group[]=[];
+    for(const side of [-1,1]){
+      const collar=part(body,new THREE.BoxGeometry(.095,.57,.055),cloth,side*.11,1.44,.19);collar.rotation.z=side*.43;
+      const foot=new THREE.Group();foot.name='tailored-foot';foot.position.set(side*.14,0,.05);root.add(foot);feet.push(foot);
+      part(foot,chamferedBox(.11,.12,.23),black,0,.064,.020);
+      part(foot,new THREE.CylinderGeometry(.054,.036,.43,10),black,0,.305,-.035);mergeFixed(foot);
+    }
     part(body,new THREE.CylinderGeometry(.10,.11,.22,10),skin,0,1.68,0);
     const sash=part(body,robe(.28,.29,.11),cord,0,1.03,.002);
-    const head=new THREE.Group();head.position.set(0,1.96,.04);head.rotation.z=e.kind==='listener'?.48:large?-.12:0;head.rotation.x=crawler?-.7:.08;body.add(head);
+    const head=new THREE.Group();head.position.set(0,1.96,.04);head.rotation.z=e.kind==='listener'?.48:large?-.12:0;head.rotation.x=.08;body.add(head);
     const skull=part(head,new THREE.SphereGeometry(.235,18,14),black,0,0,0);skull.scale.set(.78,1.23,.83);
     const face=part(head,new THREE.SphereGeometry(.224,20,14),e.kind==='normal'||tall?mask:skin,0,-.02,.072);face.scale.set(.76,1.18,.55);
     // Deep eye sockets and an unlit open mouth replace luminous eyes and armor.
@@ -108,10 +119,12 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
     if(e.kind==='listener'){for(const side of [-1,1]){const wrap=part(head,new THREE.SphereGeometry(.086,12,8),cloth,side*.19,.02,0);wrap.scale.set(.5,1.3,.8);}}
     if(tall){const veil=part(body,robe(.24,.31,.75),cloth,0,1.66,-.04);veil.scale.z=.72;}
     if(large){part(body,new THREE.SphereGeometry(.30,16,10),cloth,0,1.46,-.15);}
-    mergeFixed(head);mergeFixed(body);const echo=echoRig(root),tilt=head.rotation.z;
-    return {root,...echo,animate(e:Enemy,time:number){const stunned=e.brain.mode==='stunned',pace=e.brain.mode==='chase'?.012:.005;
-      arms.forEach((arm,j)=>arm.rotation.x=stunned?.08:crawler?-1.05+Math.sin(time*pace+j*Math.PI)*.16:Math.sin(time*pace+j*Math.PI+i)*.12);
-      head.rotation.z=tilt+(stunned?.25:Math.sin(time*.0009+i)*.035);body.rotation.z=stunned?.08:Math.sin(time*pace+i)*.015;
+    mergeFixed(head);mergeFixed(body);const echo=echoRig(root),tilt=head.rotation.z,baseY=body.position.y,motion=new EnemyLocomotion();
+    return {root,...echo,animate(e:Enemy,time:number){const stunned=e.brain.mode==='stunned',gait=motion.sample(e,time),swing=Math.sin(gait.phase)*gait.weight;
+      feet.forEach((foot,j)=>{const step=footCycle(gait.phase,j),travel=step.travel*gait.weight*(.085+.03*gait.run);foot.position.y=step.lift*gait.weight*(.045+.025*gait.run);foot.position.z=.05+travel*gait.forward;});
+      arms.forEach((arm,j)=>arm.rotation.x=stunned?.08:Math.sin(gait.phase+j*Math.PI)*gait.weight*(.11+.06*gait.run));
+      head.rotation.z=tilt+(stunned?.25:Math.sin(time*.0009+i)*.035);body.rotation.z=stunned?.08:swing*.008;
+      body.rotation.y=-swing*.028;body.position.y=baseY+(1-Math.cos(gait.phase*2))*gait.weight*.010;
     }};
   };
   const actors=new Map<string,ReturnType<typeof createActor>>();
@@ -119,8 +132,9 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies){
   return {setQuality(quality:Preferences['quality']){surfaces.setQuality(quality);},setEnabled(value:boolean){enabled=value;for(const a of actors.values())a.root.visible=value;},update(time:number,viewer?:{x:number;z:number},range=125,reveal=false){
     for(const a of actors.values())a.root.visible=false;
     for(const e of enemies.actors){const key=e.id+':'+e.kind;let a=actors.get(key);if(!a){a=createActor(e);actors.set(key,a);}
-      a.root.visible=enabled&&(!viewer||Math.hypot(e.position.x-viewer.x,e.position.z-viewer.z)<range);a.echoGroup.visible=reveal;if(!a.root.visible)continue;
-      a.root.position.set(e.position.x,e.floor,e.position.z);a.root.rotation.y=e.facing;a.animate(e,time);a.sync();
+      // Sample culled actors too: re-entering view must not replay their entire hidden travel.
+      a.animate(e,time);a.root.visible=enabled&&(!viewer||Math.hypot(e.position.x-viewer.x,e.position.z-viewer.z)<range);a.echoGroup.visible=reveal;if(!a.root.visible)continue;
+      a.root.position.set(e.position.x,e.floor,e.position.z);a.root.rotation.y=e.facing;a.sync();
     }
   },dispose(){surfaces.dispose();for(const m of [cloth,paleCloth,tailoredCloth,tailoredPale,sculpt,skin,mask,black,cord,aura])m.dispose();}};
 }

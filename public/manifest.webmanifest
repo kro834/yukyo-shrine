@@ -1,0 +1,16 @@
+{
+  "id": "/",
+  "name": "幽境 — 祭殿回廊",
+  "short_name": "幽境",
+  "lang": "ja",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#100f10",
+  "theme_color": "#100f10",
+  "icons": [
+    {"src":"/icons/yukyo-192-v62.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"/icons/yukyo-512-v62.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"/icons/yukyo-maskable-v62.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ]
+}

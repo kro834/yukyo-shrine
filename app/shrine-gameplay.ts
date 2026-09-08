@@ -121,7 +121,7 @@ export class Enemies {
   private upperWalls=[...SECOND_DECK.walls,...deckFurnitureWalls(4.8),...highRails,...upperPartitions,...upperBarriers,...stairRails,...new Doors(upperDoors).framesFor(UPPER_HEIGHT)];
   private upperNodes=new Map<string,Position>();
   private upperGraph=new Map<string,string[]>();
-  constructor(cells:Cell[],walls:Obstacle[]){
+  constructor(cells:Cell[],walls:Obstacle[],roster?:readonly EnemyKind[]){
     this.walls=walls;
     this.areaAt=createAreaLookup(cells);
     const kinds=new Map(cells.map(c=>[c.x+','+c.z,c.kind]));
@@ -136,7 +136,7 @@ export class Enemies {
     for(const [deck,nodes,walls] of [[SECOND_DECK,this.upperNodes,this.upperWalls],[THIRD_DECK,this.thirdNodes,this.thirdWalls]] as const)for(const c of deck.cells){const p={x:c.x*4,z:c.z*4};if(HIGH_STAIRS.some(s=>p.x>=s.minX&&p.x<=s.maxX&&p.z>=s.minZ&&p.z<=s.maxZ)||walls.some(o=>p.x>o.minX-RADIUS&&p.x<o.maxX+RADIUS&&p.z>o.minZ-RADIUS&&p.z<o.maxZ+RADIUS))continue;nodes.set(c.x+','+c.z,p);}
     for(const [key,p] of this.thirdNodes){const [x,z]=key.split(',').map(Number);this.thirdGraph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.thirdNodes.has(k)&&!segmentBlocked(p,this.thirdNodes.get(k)!,this.thirdWalls)));}
     for(const [key,p] of this.upperNodes){const [x,z]=key.split(',').map(Number);this.upperGraph.set(key,[[1,0],[-1,0],[0,1],[0,-1]].map(([dx,dz])=>(x+dx)+','+(z+dz)).filter(k=>this.upperNodes.has(k)&&!segmentBlocked(p,this.upperNodes.get(k)!,this.upperWalls)));}
-    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:44,z:148},{x:132,z:172},{x:128,z:-116},{x:-144,z:-100},{x:-52,z:76},{x:-120,z:100},{x:100,z:-36},{x:-28,z:124},{x:92,z:148}].map((p,id)=>{const homeFloor=id===3||id===10?4.8:id===7||id===11?9.6:0,homeNodes=homeFloor>9?this.thirdNodes:homeFloor?this.upperNodes:this.nodes;const home=[...homeNodes.values()].reduce((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)<Math.hypot(b.x-p.x,b.z-p.z)?a:b);return {traitTime:0,flankPoint:null,id,kind:id>=8?(['mire','warden','fox','pilgrim'] as const)[id-8]:id===4?'danger':(['normal','listener','watcher','stalker'] as EnemyKind[])[id%4],home:{...home},homeFloor,searchBranches:0,position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map<string,number>(),doorWait:0,floor:homeFloor,destinationFloor:homeFloor,lastSeenFloor:homeFloor,patrol:null};});
+    this.actors=[{x:0,z:-64},{x:-44,z:-44},{x:44,z:-80},{x:44,z:148},{x:132,z:172},{x:128,z:-116},{x:-144,z:-100},{x:-52,z:76},{x:-120,z:100},{x:100,z:-36},{x:-28,z:124},{x:92,z:148}].map((p,id)=>{const homeFloor=id===3||id===10?4.8:id===7||id===11?9.6:0,homeNodes=homeFloor>9?this.thirdNodes:homeFloor?this.upperNodes:this.nodes;const home=[...homeNodes.values()].reduce((a,b)=>Math.hypot(a.x-p.x,a.z-p.z)<Math.hypot(b.x-p.x,b.z-p.z)?a:b);return {traitTime:0,flankPoint:null,id,kind:roster?.length?roster[id%roster.length]:id>=8?(['mire','warden','fox','pilgrim'] as const)[id-8]:id===4?'danger':(['normal','listener','watcher','stalker'] as EnemyKind[])[id%4],home:{...home},homeFloor,searchBranches:0,position:{...home},facing:0,brain:new EnemyBrain(),waypoint:null,planIn:0,step:0,route:[],investigate:null,searchTime:0,lastNode:null,visits:new Map<string,number>(),doorWait:0,floor:homeFloor,destinationFloor:homeFloor,lastSeenFloor:homeFloor,patrol:null};});
   }
   addPatrolTargets(points:{id:string;position:Position;floor:number}[]){
     if(!this.patrolTargets.length){
@@ -252,7 +252,7 @@ export class Enemies {
       const currentStair=omniscient?rampAt(e.position,e.floor):transits.find(s=>e.floor>s.low+1e-6&&e.floor<s.high-1e-6&&e.position.x>=s.minX&&e.position.x<=s.maxX&&e.position.z>=s.minZ&&e.position.z<=s.maxZ),onStair=!!currentStair;
       // A ramp footprint blocks ground navigation, but not sight along its surface.
       const sightBlockers=targetStair&&currentStair===targetStair?blockers.filter(o=>o!==targetStair.footprint):blockers;
-      const sees=(omniscient||detectable&&(e.kind!=='mire'||lightOn))&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+(e.kind==='mire'?.52:2.05)},{...player,y:playerFloor+1.5},sightBlockers);
+      const sees=(omniscient||detectable&&(!['mire','errorWatch'].includes(e.kind)||lightOn))&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+(e.kind==='mire'?.52:2.05)},{...player,y:playerFloor+1.5},sightBlockers);
       const previousMode=e.brain.mode,lastSeen=e.brain.lastSeen?{...e.brain.lastSeen}:null,stunAtStart=e.brain.stunRemaining;
       if(omniscient&&stunAtStart>0){if(e.kind==='wrath')e.traitTime=0;e.flankPoint=null;}
       e.brain.update(dt,sees,player);

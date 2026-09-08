@@ -1,3 +1,4 @@
+import {createAirborneDust} from './airborne-dust.ts';
 import {circusFabric} from './circus-fabric.ts';
 import {circusPaint} from './circus-paint.ts';
 import {createCircusPlan} from './circus-plan.ts';
@@ -95,7 +96,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const camera=new THREE.PerspectiveCamera(70,innerWidth/innerHeight,.08,180);camera.position.set(SPAWN.x,1.68,SPAWN.z);camera.rotation.order='YXZ';
   let environment:THREE.WebGLRenderTarget|undefined;
   if(!rendererOverride){const pmrem=new THREE.PMREMGenerator(renderer),room=new RoomEnvironment();environment=pmrem.fromScene(room,.04);scene.environment=environment.texture;scene.environmentIntensity=gothic?.025:.065;room.dispose();pmrem.dispose();}
-  scene.add(new THREE.HemisphereLight(gothic?'#757d98':'#91a2af',gothic?'#171219':'#30271d',gothic?.048:stage==='abyss'?.045:.12));
+  scene.add(new THREE.HemisphereLight(gothic?'#757d98':'#91a2af',gothic?'#171219':'#30271d',gothic?.048:stage==='abyss'||stage==='error'?.045:.12));
   const moon=new THREE.DirectionalLight('#8c9aa6',stageProfile.moon);moon.position.set(-10,18,5);scene.add(moon);
   const layout=createLayout(seed,stage),areaAt=createAreaLookup(layout.cells),doors=new Doors([...layout.doors,...upperDoors]),obstacles=[...layout.obstacles,...doors.frames,...stairRails];
   const circusPlan=circus?createCircusPlan(seed,layout):undefined,circusRuntime=circusPlan?new CircusRuntime(circusPlan):undefined;
@@ -105,7 +106,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const civicSites=createCivicSites(layout);
   const runRandom=seededRandom(seed^0x918237),altarRooms=layout.expansionAreas.filter(r=>!r.bead&&r.x2-r.x1===2&&r.z2-r.z1===2);
   const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5},.7);
-  const areaName=()=>{if(circus){if(elevation>4.5)return elevation>9.3?'三層 · 吊り道具の回廊':'二層 · 空中桟橋';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?circusRoomName(r):CIRCUS_AREA_NAMES[layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind??'hall'];}if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(stage==='abyss'&&kind==='field')return '埋没した排水路';if(stage==='abyss'&&kind==='yokocho')return '地底の封鎖横丁 · 最危険';if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
+  const areaName=()=>{if(stage==='error'){if(elevation>4.5)return elevation>9.3?'三層 · 面裏の桟敷':'二層 · 終わらない橋掛かり';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?(horrorArea(r.themeId)?.name??'無終の能舞台'):'歪んだ舞台裏の回廊';}if(circus){if(elevation>4.5)return elevation>9.3?'三層 · 吊り道具の回廊':'二層 · 空中桟橋';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?circusRoomName(r):CIRCUS_AREA_NAMES[layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind??'hall'];}if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(stage==='abyss'&&kind==='field')return '埋没した排水路';if(stage==='abyss'&&kind==='yokocho')return '地底の封鎖横丁 · 最危険';if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
   const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
   const mats={
     circusRed:new THREE.MeshPhysicalMaterial({...CIRCUS_MATERIALS.circusRed,sheen:.35,sheenColor:0xb37277,sheenRoughness:1}),
@@ -666,11 +667,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const scannedProps=new ScannedProps(scene,scannedPlacements,!rendererOverride);
   const shrubs=new ShrubMeshes(scene,landforms?shrubPlacements(layout,seed,landforms.height,obstacles):[],budget.mobile,!rendererOverride);
   obstacles.push(...goal.walls);
-  const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls),doorMeshes=createDoorMeshes(scene,doors,gothic),enemyMeshes=createEnemyMeshes(scene,enemies);
+  const enemyWalls=[...obstacles,...STAIRS],enemies=new Enemies(layout.cells,enemyWalls,stage==='error'?['errorWatch','errorWeep']:undefined),doorMeshes=createDoorMeshes(scene,doors,gothic),enemyMeshes=createEnemyMeshes(scene,enemies);
   const upperFixed=[...SECOND_DECK.walls,...deckFurnitureWalls(4.8),...highRails,...upperPartitions,...upperBarriers,...stairRails,...doors.framesFor(UPPER_HEIGHT)];
   const beads=[...placeMagatama(layout.rooms,obstacles,upperFixed),...placeRedMagatama(layout.cells,enemies.nodes.values(),obstacles,seededRandom(seed^0x5231))];
   const goldPoints=[...enemies.nodes.values()].filter(p=>layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind==='yokocho'&&!obstacles.some(o=>p.x>o.minX-1&&p.x<o.maxX+1&&p.z>o.minZ-1&&p.z<o.maxZ+1));
-  const pursuer=enemies.actors.find(e=>e.kind==='danger')!;if(goldPoints.length){const home=goldPoints.reduce((a,b)=>Math.hypot(a.x-SPAWN.x,a.z-SPAWN.z)>Math.hypot(b.x-SPAWN.x,b.z-SPAWN.z)?a:b);pursuer.home={...home};pursuer.position={...home};}
+  const pursuer=enemies.actors.find(e=>e.kind==='danger')??enemies.actors.find(e=>e.kind==='errorWeep'&&e.homeFloor===0)??enemies.actors[0];if(goldPoints.length){const home=goldPoints.reduce((a,b)=>Math.hypot(a.x-SPAWN.x,a.z-SPAWN.z)>Math.hypot(b.x-SPAWN.x,b.z-SPAWN.z)?a:b);pursuer.home={...home};pursuer.position={...home};}
   if(!goldPoints.length)throw new Error('No accessible gold location');
   beads.push({id:'gold-yokocho',position:chooseReadableMagatama(goldPoints,enemies.nodes.values(),obstacles,runRandom),floor:0,color:'gold',collected:false,offered:false});
   const beadMeshes=createMagatamaMeshes(scene,beads);
@@ -694,9 +695,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const mirror=new Reflector(new THREE.PlaneGeometry(4.7,6.7),{textureWidth:budget.mobile?1:512,textureHeight:budget.mobile?1:512,color:0x293d38});mirror.rotation.x=-Math.PI/2;mirror.position.set(poolPosition.x,.03,poolPosition.z);scene.add(mirror);water.visible=false;
   const outdoorReflection=landforms&&!budget.mobile&&!rendererOverride?new OutdoorReflection(waterReflection,landforms.tilemetadata):undefined;
   const reflectionExcluded=[...staticChunks.filter(c=>c.mesh.material===mats.water).map(c=>c.mesh),mirror,water];
-  const dustGeometry=new THREE.BufferGeometry(),dust=new Float32Array(900*3);
-  for(let i=0;i<900;i++){const c=layout.cells[(i*137)%layout.cells.length];dust[i*3]=c.x*4+Math.sin(i*2.13)*1.7;dust[i*3+1]=.4+(i%37)/37*2.7;dust[i*3+2]=c.z*4+Math.cos(i*3.17)*1.7;}
-  dustGeometry.setAttribute('position',new THREE.BufferAttribute(dust,3));const dustMaterial=new THREE.PointsMaterial({color:'#a6a090',size:.024,transparent:true,opacity:.12,depthWrite:false});scene.add(new THREE.Points(dustGeometry,dustMaterial));
+  const dustParticles=createAirborneDust(scene);
   const fixtureLighting=new FixtureLighting(),fixtureShadow=new FixtureShadow(scene),lightFixtures=lanterns.map((position,id)=>({id,position,floor:fixtureFloors.get(position)??0,color:fixtureColors.get(position)??'#ffc184',shadowPosition:fixtureShadowPositions.get(position),power:fixturePowers.get(position)??7}));
   const lightPool=Array.from({length:6},()=>{const p=new THREE.PointLight('#ffc184',0,11,2);scene.add(p);return p;});
   const flashlight=new THREE.SpotLight('#edf1ee',42,36,.72,.4,2),flashlightRight=new THREE.Vector3();flashlight.position.copy(camera.position);scene.add(flashlight,flashlight.target);
@@ -825,7 +824,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(configuredQuality===quality)return;
       const wasUltra=configuredQuality==='ultra',ultra=quality==='ultra',high=quality==='high'||ultra;
       mats.circusRed.sheen=mats.circusIvory.sheen=high?.35:0;
-      configuredQuality=quality;lastLight=-Infinity;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);scannedProps.setQuality(quality);shrubs.setQuality(quality);
+      configuredQuality=quality;dustParticles.setQuality(quality);lastLight=-Infinity;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);scannedProps.setQuality(quality);shrubs.setQuality(quality);
       if(quality==='low'||wasUltra!==ultra){effects?.dispose();effects=undefined;}
       if(quality!=='low'&&!effects&&!rendererOverride)effects=createEffects(renderer,scene,camera,budget.mobile,ultra);
       resizeTargets();
@@ -841,7 +840,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       reflectionEnabled=!circus&&quality!=='low'&&!budget.mobile;mirror.visible=reflectionEnabled;water.visible=!circus&&!reflectionEnabled;const reflectionSize=reflectionEnabled?(ultra?1024:high?768:384):1;mirror.getRenderTarget().setSize(reflectionSize,reflectionSize);
       effects?.configure(quality);glowMat.opacity=quality==='low'?.26:.12;
     },
-    render(time:number){waterClock.value=environmentTime/1000;
+    render(time:number){waterClock.value=environmentTime/1000;dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);
       syncBankPath();
       if(circusRuntime)circusMeshes?.update(circusRuntime.snapshot(),environmentTime/1000,camera.position);
       const area=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind;
@@ -877,7 +876,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustGeometry.dispose();dustMaterial.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
 
