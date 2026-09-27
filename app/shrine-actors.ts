@@ -122,7 +122,13 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies,human=false)
   };
   const actors=new Map<string,ReturnType<typeof createActor>>();
   for(const e of enemies.actors)actors.set(e.id+':'+e.kind,createActor(e));
-  return {setQuality(quality:Preferences['quality']){surfaces.setQuality(quality);},setEnabled(value:boolean){enabled=value;for(const a of actors.values())a.root.visible=value;},update(time:number,viewer?:{x:number;z:number},range=125,reveal=false){
+  // Build both final pursuers up front: constructing a rig on the frame the
+  // finale begins stalls the main thread. They stay hidden until needed.
+  const finale=(['hatred','wrath'] as const).map(kind=>{const e={...enemies.actors[0],id:12,kind},a=createActor(e);a.root.visible=false;actors.set(e.id+':'+kind,a);return a;});
+  return {setQuality(quality:Preferences['quality']){surfaces.setQuality(quality);},
+    /** Compile the pursuers' programs and upload their buffers before they are first seen. */
+    warm(renderer:THREE.WebGLRenderer,camera:THREE.Camera){if(typeof renderer.compile!=='function')return;const saved=finale.map(a=>a.root.position.clone());for(const a of finale){a.root.visible=true;a.root.position.copy(camera.position);}try{renderer.compile(scene,camera);}finally{finale.forEach((a,i)=>{a.root.visible=false;a.root.position.copy(saved[i]);});}},
+    setEnabled(value:boolean){enabled=value;for(const a of actors.values())a.root.visible=value;},update(time:number,viewer?:{x:number;z:number},range=125,reveal=false){
     for(const a of actors.values())a.root.visible=false;
     for(const e of enemies.actors){const key=e.id+':'+e.kind;let a=actors.get(key);if(!a){a=createActor(e);actors.set(key,a);}
       // Sample culled actors too: re-entering view must not replay their entire hidden travel.

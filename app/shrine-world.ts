@@ -765,7 +765,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const glowTex=new THREE.CanvasTexture(glowCanvas),glowMat=new THREE.PointsMaterial({map:glowTex,color:'#ffffff',size:1.1,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
   lampHaloFinish(glowMat);
   const glowGeometry=new THREE.BufferGeometry().setFromPoints(lanterns.filter(p=>!fixtureColors.has(p)));scene.add(new THREE.Points(glowGeometry,glowMat));
-  let lastLight=-Infinity,lastLightFrame=0,disposed=false,configuredQuality:Preferences['quality']|null=null;const direction=new THREE.Vector3(),moodTarget=new THREE.Color('#080c0d');
+  let warmPursuers=true,lastLight=-Infinity,lastLightFrame=0,disposed=false,configuredQuality:Preferences['quality']|null=null;const direction=new THREE.Vector3(),moodTarget=new THREE.Color('#080c0d');
   let effects:ReturnType<typeof createEffects>|undefined;
   const mirrorPoints=enemies.patrolTargets.filter(t=>t.floor>0||Math.hypot(t.point.x-goal.altar.x,t.point.z-goal.altar.z)>8).map(t=>({...t,random:runRandom()})).sort((a,b)=>a.random-b.random);
   const mirrorPickups:import('./mirror-inventory.ts').MirrorPickup[]=[];
@@ -908,7 +908,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(configuredQuality===quality)return;
       const wasUltra=configuredQuality==='ultra',ultra=quality==='ultra',high=quality==='high'||ultra;
       mats.circusRed.sheen=mats.circusIvory.sheen=high?.35:0;
-      configuredQuality=quality;dustParticles.setQuality(quality);lastLight=-Infinity;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);scannedProps.setQuality(quality);shrubs.setQuality(quality);
+      configuredQuality=quality;warmPursuers=true;dustParticles.setQuality(quality);lastLight=-Infinity;surfaces.setQuality(quality);doorMeshes.setQuality(quality);enemyMeshes.setQuality(quality);scannedProps.setQuality(quality);shrubs.setQuality(quality);
       if(quality==='low'||wasUltra!==ultra){effects?.dispose();effects=undefined;}
       if(quality!=='low'&&!effects&&!rendererOverride)effects=createEffects(renderer,scene,camera,budget.mobile,ultra);
       resizeTargets();
@@ -958,6 +958,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         const active=outdoorReflection.update(renderer,scene,camera,time,configuredQuality==='ultra'&&area==='field'&&elevation<3,reflectionExcluded);
         if(active){mirror.visible=false;water.visible=!circus&&!mountain;}
       }
+      // Compile the hidden final pursuers once per quality, not on the frame they appear.
+      if(warmPursuers&&!rendererOverride){warmPursuers=false;enemyMeshes.warm(renderer,camera);}
       const restoreTerrain=mountain?mountainRender(scene,camera,flashlight):undefined;
       try {if(mountain)dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}}finally{restoreTerrain?.();}
     },
