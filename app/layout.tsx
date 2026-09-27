@@ -1,12 +1,13 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import {assetPath} from './asset-path';
 export const metadata: Metadata = {
-  metadataBase: new URL('https://yukyo-shrine.akiopromax13.chatgpt.site'),
+  metadataBase: new URL('https://kro834.github.io/yukyo-shrine/'),
   title: '幽境 — 祭殿回廊',
-  manifest: '/manifest.webmanifest',
+  manifest: assetPath('/manifest.webmanifest'),
   icons: {
-    icon: '/favicon.svg',
-    apple: [{url:'/icons/yukyo-apple-v62.png',sizes:'180x180',type:'image/png'}],
+    icon: assetPath('/favicon.svg'),
+    apple: [{url:assetPath('/icons/yukyo-apple-v62.png'),sizes:'180x180',type:'image/png'}],
   },
   appleWebApp: {capable:true,title:'幽境',statusBarStyle:'black-translucent'},
   other: {'apple-mobile-web-app-capable':'yes'},

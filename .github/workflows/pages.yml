@@ -1,0 +1,55 @@
+name: Publish game
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_BASE_PATH: /yukyo-shrine
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Check types
+        run: pnpm exec tsc --noEmit
+      - name: Run regression tests
+        run: node --experimental-transform-types --test --test-concurrency=2 tests/*.test.ts
+      - name: Build game
+        run: pnpm build
+      - name: Prepare subdirectory assets and app icons
+        run: node scripts/prepare-pages.mjs
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: dist/client
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Publish GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

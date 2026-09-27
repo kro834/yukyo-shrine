@@ -1,4 +1,5 @@
 import {hotelDoors} from './hotel-doors.ts';
+import {assetPath} from './asset-path.ts';
 import {HOTEL_AREAS,HOTEL_ROOMS,hotelArea,hotelRoomHeight,hotelLiftBlockers} from './hotel-layout.ts';
 import {HotelElevator} from './hotel-elevator.ts';
 import {HotelAtmosphere} from './hotel-atmosphere.ts';
@@ -99,6 +100,7 @@ import {STAGES,stageRules,type StageId} from './stage-profile.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
 import {Posture,CROUCH_PACE} from './posture.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff),stage:StageId='shrine') {
+  THREE.DefaultLoadingManager.setURLModifier(url=>assetPath(url));
   const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus',parallel=stage==='parallel',mountain=stage==='mountain',hotel=stage==='ultrareal';
   const elevator=hotel?new HotelElevator():undefined,hotelAtmosphere=hotel?new HotelAtmosphere():undefined;let hotelMotion={x:0,z:0};
   let playMode:PlayMode='normal',phaseRevision=0;let nightSky:THREE.Texture|undefined,nightSkyTarget:THREE.WebGLRenderTarget|undefined,skyRequested=false;

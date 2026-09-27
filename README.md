@@ -2,7 +2,13 @@
 
 DualSense・タッチ・キーボードに対応した、一人称視点のブラウザホラーゲームです。ランダム生成の三層構造を探索し、勾玉を集めて祭壇からの脱出を目指します。敵のいないギャラリーモード、ノーマル、ハード、最高難度の悪夢を選択できます。各ステージには物語を綴る手記が隠され、クリアするとS〜Dの評価と記録が残ります。
 
-**[ブラウザでプレイ](https://yukyo-shrine.akiopromax13.chatgpt.site/)**
+**[ブラウザでプレイ](https://kro834.github.io/yukyo-shrine/)**
+
+## 自動公開
+
+`main` へのpush・PRのマージをきっかけに、GitHub Actionsが型検査・回帰テスト・ビルドを行い、成功した内容をGitHub Pagesへ自動公開します。PCやCodexの起動、公開依頼、個人のアクセストークン設定は不要です。失敗した場合は以前の公開版が残り、GitHubの「Actions」で原因を確認できます。
+
+公開処理は `.github/workflows/pages.yml` で管理しています。GitHub Pages用のビルドでは `NEXT_PUBLIC_BASE_PATH=/yukyo-shrine` を設定し、`pnpm build` の後に `node scripts/prepare-pages.mjs` を実行します。通常の `pnpm dev` は引き続きルートURLで動作します。
 
 ## はじめに
 
