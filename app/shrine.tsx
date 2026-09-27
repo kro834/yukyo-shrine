@@ -1,6 +1,6 @@
 'use client';
 import {useCallback,useEffect,useLayoutEffect,useRef,useState} from 'react';
-import {Maximize,Settings,Footprints,Move,Scan,Focus,Flashlight,FlashlightOff,X,RotateCcw,Gamepad2,DoorOpen,Sparkles,Clock3} from 'lucide-react';
+import {Maximize,Settings,Footprints,Move,Scan,Focus,Flashlight,FlashlightOff,X,RotateCcw,Gamepad2,DoorOpen,Sparkles,Clock3,ChevronsDown,ScrollText,BookOpen} from 'lucide-react';
 import {Dialog,DialogContent,DialogTitle,DialogDescription} from '@/components/ui/dialog';
 import {Tabs,TabsList,TabsTrigger,TabsContent} from '@/components/ui/tabs';
 import {Slider} from '@/components/ui/slider';
@@ -17,22 +17,45 @@ import {BurstInput} from './burst-input';
 import {RunProgress,formatRunTime} from './run-progress';
 import {simulationSteps} from './performance-budget';
 
-import {PLAY_MODES,type PlayMode} from './play-mode';
+import {PLAY_MODES,modeAids,type PlayMode} from './play-mode';
 import {TouchActionGate} from './touch-action';
 import {ENEMY_NAMES,type FinaleKind} from './enemy-traits';
 import {STAGES,canTransitionStage,type StageId} from './stage-profile';
 import {focusMenu,type MenuDirection} from './menu-focus';
+import {createSoundscape,heartbeat,type Soundscape} from './soundscape';
+import {LORE,ARCHIVE_KEY,sanitizeArchive,noteById} from './lore';
+import {RECORDS_KEY,sanitizeRecords,scoreRun,applyClear,stageSummary,recordKey,type Records,type ScoreResult} from './records';
+import {objective,routePips} from './objective';
+import {BEAD_REQUIREMENTS} from './goal-rules';
 const pollPads=()=>{try{return Array.from(navigator.getGamepads?.()??[]).filter((p):p is Gamepad=>!!p);}catch{return [];}};
 const clampPitch=(p:number)=>Math.max(-1.3,Math.min(1.3,p));
 type ModelTool={name:string;description:string;inputSchema:object;annotations:{readOnlyHint:boolean};execute:(input:unknown)=>unknown};
-export default function Shrine(){
-  const [session,setSession]=useState<{stage:StageId;run:number}>({stage:'shrine',run:0});
-  const retained=useRef<Preferences|null>(null);
-  const selectStage=useCallback((stage:StageId)=>setSession(old=>({stage,run:old.run+1})),[]);
-  return <ShrineSession key={session.stage+':'+session.run} stage={session.stage} retained={retained} onStage={selectStage}/>;
+const STAGE_IDS=Object.keys(STAGES) as StageId[],NOTE_TOTAL=STAGE_IDS.reduce((n,id)=>n+LORE[id].notes.length,0),BEAD_NAMES={blue:'青',red:'赤',gold:'金'} as const;
+const readStored=<T,>(key:string,sanitize:(raw:unknown)=>T)=>{try{return sanitize(JSON.parse(localStorage.getItem(key)??'null'));}catch{return sanitize(null);}};
+const bestTime=(records:Records,stage:StageId)=>{const times=PLAY_MODES.filter(m=>m.id!=='gallery').map(m=>records[recordKey(stage,m.id)]?.bestTime).filter((t):t is number=>t!=null);return times.length?Math.min(...times):null;};
+const mixOf=(p:Preferences)=>({master:p.masterVolume,ambience:p.ambienceVolume,effects:p.effectsVolume});
+function Magatama(){return <svg className="magatama-icon" viewBox="0 0 24 24" aria-hidden="true"><path fillRule="evenodd" d="M13.4 2.6a6.4 6.4 0 1 1 0 12.8c-2.9 0-4.9 2-5.2 6c-3.3-1.9-4.8-5.1-4-8.9c.9-5.2 4.6-9.9 9.2-9.9Zm-.2 4.3a1.8 1.8 0 1 0 0 3.6a1.8 1.8 0 0 0 0-3.6Z"/></svg>;}
+function NoteReader({id,onClose}:{id:string;onClose:()=>void}){const n=noteById(id);if(!n)return null;return <article className="note-reader"><header><small>{n.author}</small><h3>{n.title}</h3></header><p>{n.body}</p><button className="text-button" autoFocus onClick={onClose}>← 一覧に戻る</button></article>;}
+function Archive({records,found,reading,onRead,onClose}:{records:Records;found:string[];reading:string|null;onRead:(id:string|null)=>void;onClose:()=>void}){
+ return <div className="archive" role="dialog" aria-modal="true" aria-labelledby="archive-title">
+  <header className="archive-heading"><div><span>YŪKYŌ</span><h2 id="archive-title">記録帳</h2></div><small>手記 {found.length} / {NOTE_TOTAL}</small><button className="close-button" aria-label="記録帳を閉じる" onClick={onClose}><X size={18}/></button></header>
+  {reading?<NoteReader id={reading} onClose={()=>onRead(null)}/>:<div className="archive-stages">{STAGE_IDS.map(id=>{const s=stageSummary(records,id),time=bestTime(records,id);return <section key={id} className="archive-stage"><h3>{STAGES[id].name}{s.rank&&<b className="rank-badge" data-rank={s.rank}>{s.rank}</b>}</h3><small>{s.clears?'踏破 '+s.clears+'回'+(time!=null?' · 最速 '+formatRunTime(time):''):'未踏破'}</small><ul>{LORE[id].notes.map(n=>{const open=found.includes(n.id);return <li key={n.id}><button disabled={!open} onClick={()=>onRead(n.id)}><ScrollText size={14} aria-hidden="true"/>{open?n.title:'？？？'}</button></li>;})}</ul></section>;})}</div>}
+  <p className="start-help">探索中に拾った手記は、ここにいつまでも残ります · ○ / Esc で戻る</p>
+ </div>;
 }
-function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current:Preferences|null};onStage:(stage:StageId)=>void}){
-  const canvas=useRef<HTMLCanvasElement>(null),dialog=useRef<HTMLDivElement>(null),startPanel=useRef<HTMLDivElement>(null),clearPanel=useRef<HTMLElement>(null);
+export default function Shrine(){
+  const [session,setSession]=useState<{stage:StageId;run:number;autostart:PlayMode|null}>({stage:'shrine',run:0,autostart:null});
+  const [titled,setTitled]=useState(false);
+  const retained=useRef<Preferences|null>(null),sound=useRef<Soundscape|null>(null);
+  // One sound engine outlives stage sessions, so ambience crossfades instead of restarting.
+  useEffect(()=>{const s=createSoundscape();sound.current=s;return()=>{s.dispose();sound.current=null;};},[]);
+  const selectStage=useCallback((stage:StageId,autostart:PlayMode|null=null)=>setSession(old=>({stage,run:old.run+1,autostart})),[]);
+  const toTitle=useCallback((stage:StageId)=>{setTitled(false);selectStage(stage);},[selectStage]);
+  const enter=useCallback(()=>setTitled(true),[]);
+  return <ShrineSession key={session.stage+':'+session.run} stage={session.stage} autostart={session.autostart} retained={retained} sound={sound} titled={titled} onTitled={enter} onStage={selectStage} onTitle={toTitle}/>;
+}
+function ShrineSession({stage,autostart,retained,sound,titled,onTitled,onStage,onTitle}:{stage:StageId;autostart:PlayMode|null;retained:{current:Preferences|null};sound:{current:Soundscape|null};titled:boolean;onTitled:()=>void;onStage:(stage:StageId,autostart?:PlayMode|null)=>void;onTitle:(stage:StageId)=>void}){
+  const canvas=useRef<HTMLCanvasElement>(null),dialog=useRef<HTMLDivElement>(null),startPanel=useRef<HTMLElement>(null),clearPanel=useRef<HTMLElement>(null);
   const [started,setStarted]=useState(false),[playMode,setPlayMode]=useState<PlayMode>('normal');
   const actionGate=useRef(new TouchActionGate());
   const [mirrorStatus,setMirrorStatus]=useState({count:0,remaining:0}),[stairHint,setStairHint]=useState('');
@@ -55,6 +78,12 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
   const [stopRemaining,setStopRemaining]=useState(0),[stopCooldown,setStopCooldown]=useState(0);
   const [enemyMarkers,setEnemyMarkers]=useState<{id:number;angle:number;distance:number;stunned:boolean;level:'above'|'below'|'same';chasing:boolean}[]>([]);
   const [lockRequired,setLockRequired]=useState(false);
+  const [crouch,setCrouch]=useState(false),[notes,setNotes]=useState<{found:string[];total:number}>({found:[],total:LORE[stage].notes.length});
+  const [archive,setArchive]=useState<string[]>([]),[records,setRecords]=useState<Records>({}),archiveRef=useRef<string[]>([]);
+  const [clear,setClear]=useState<{result:ScoreResult;newTime:boolean;newScore:boolean;first:boolean}|null>(null);
+  const [noteCard,setNoteCard]=useState<string|null>(null),[reading,setReading]=useState<string|null>(null),[intro,setIntro]=useState(false);
+  const [menuTab,setMenuTab]=useState('status'),[confirming,setConfirming]=useState<'restart'|'title'|null>(null),[archiveOpen,setArchiveOpen]=useState(false);
+  const startBack=useRef(()=>{}),menuBack=useRef(()=>{});
   const lockPolicy=useRef(new PointerLockPolicy()),lastPointerType=useRef('');
   const requestLock=useCallback(()=>{
     if(state.current.paused||lockPolicy.current.pending!==null||document.pointerLockElement===document.documentElement)return;
@@ -65,13 +94,13 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
   },[]);
   const [stickPosition,setStickPosition]=useState({x:0,z:0});
   const [touchSprint,setTouchSprint]=useState(false);
-  useEffect(()=>{if(ready&&!started)startPanel.current?.querySelector<HTMLButtonElement>('[data-initial-stage][aria-pressed=true]')?.focus({preventScroll:true});},[ready]);
+  useEffect(()=>{if(!ready||started)return;const panel=startPanel.current;(panel?.querySelector<HTMLButtonElement>('[data-initial-stage][aria-pressed=true]:not(:disabled)')??panel?.querySelector<HTMLButtonElement>('button:not(:disabled)'))?.focus({preventScroll:true});},[ready,titled,archiveOpen]);
   const [mechanismNear,setMechanismNear]=useState(''),[circusHint,setCircusHint]=useState('');
   const [doorNear,setDoorNear]=useState(false),[burstPulse,setBurstPulse]=useState(0),[caughtPulse,setCaughtPulse]=useState(0);
   const clearInput=useCallback(()=>{keys.current.clear();touch.current.clear();burstInput.current.clear();setTouchSprint(false);setStickPosition({x:0,z:0});},[]);
-  const applyPreferences=useCallback((next:Preferences)=>{const v=sanitizePreferences(next);prefRef.current=v;retained.current=v;setPrefs(v);try{localStorage.setItem('yukyo-preferences-v1',JSON.stringify(v));}catch{};worldRef.current?.configure(v);return v;},[retained]);
+  const applyPreferences=useCallback((next:Preferences)=>{const v=sanitizePreferences(next);prefRef.current=v;retained.current=v;setPrefs(v);try{localStorage.setItem('yukyo-preferences-v1',JSON.stringify(v));}catch{};worldRef.current?.configure(v);sound.current?.setMix(mixOf(v));return v;},[retained,sound]);
   const setMenuOpen=useCallback((open:boolean)=>{
-    if(!state.current.started)return;state.current.paused=open;setMenu(open);clearInput();
+    if(!state.current.started)return;if(state.current.paused!==open)sound.current?.ui(open?'open':'close');state.current.paused=open;setMenu(open);clearInput();setConfirming(null);setReading(null);if(open)setMenuTab('status');
     document.documentElement.dataset.shrinePlaying=String(!open);
     if(open){lockPolicy.current.openMenu(session.current.mode,document.pointerLockElement===document.documentElement);setLockRequired(false);document.exitPointerLock?.();document.documentElement.classList.remove('controller-cursor-hidden');document.documentElement.style.removeProperty('cursor');}
     else{
@@ -83,11 +112,13 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
       if(resumeLock)requestLock();
       requestAnimationFrame(()=>{if(!state.current.paused)canvas.current?.focus({preventScroll:true});});
     }
-  },[clearInput,requestLock]);
-  const beginGame=useCallback((mode:PlayMode)=>{if(!worldRef.current||state.current.started)return;worldRef.current.setMode(mode);setPlayMode(mode);state.current.started=true;setStarted(true);setMenuOpen(false);},[setMenuOpen]);
+  },[clearInput,requestLock,sound]);
+  const beginGame=useCallback((mode:PlayMode)=>{if(!worldRef.current||state.current.started)return;sound.current?.unlock();sound.current?.ui('confirm');worldRef.current.setMode(mode);setPlayMode(mode);state.current.started=true;state.current.paused=false;setStarted(true);setIntro(true);setMenuOpen(false);},[setMenuOpen,sound]);
   const useMirror=useCallback(()=>{if(state.current.paused)return;const w=worldRef.current;if(w?.playMode==='gallery')return;if(w?.useMirror())setNotice('鏡を使用 · 12秒間、敵の姿が映ります');else setNotice(w?.mirrorStatus().remaining?'鏡はすでに敵を映しています':'鏡をまだ持っていません');},[]);
   const setFlashlight=useCallback((on:boolean)=>{state.current.light=on;setLight(on);if(worldRef.current)worldRef.current.flashlight.visible=on;return {enabled:on};},[]);
   const toggleLight=useCallback(()=>setFlashlight(!state.current.light),[setFlashlight]);
+  const toggleCrouch=useCallback(()=>{const w=worldRef.current;if(state.current.paused||!w)return;const on=w.toggleCrouch();setCrouch(on);if(on&&touch.current.sprint){touch.current.sprint=false;setTouchSprint(false);}},[]);
+  const rememberNote=useCallback((id:string)=>{if(archiveRef.current.includes(id))return;const next=[...archiveRef.current,id];archiveRef.current=next;setArchive(next);try{localStorage.setItem(ARCHIVE_KEY,JSON.stringify(next));}catch{}},[]);
   const burst=useCallback(()=>{if(state.current.paused||!worldRef.current||worldRef.current.playMode==='gallery')return;burstInput.current.request(performance.now());},[]);
   const stopTime=useCallback(()=>{const world=worldRef.current;if(state.current.paused||!world||world.playMode==='gallery')return;if(world.stopTime()){setStopRemaining(10);setStopCooldown(30);setNotice('時間停止 · 10秒間、敵が動かなくなります');}else setNotice('時間停止の再使用まで '+Math.ceil(world.timeStopCooldown)+'秒');},[]);
   const interact=useCallback(()=>{if(state.current.paused)return;const opened=worldRef.current?.interact();if(opened&&typeof opened==='object')setNotice(opened.message);else if(opened==='offered')setNotice(worldRef.current?.collection().unlocked?'奉納が完了しました。祭壇の奥の扉へ進んでください。':'勾玉を祭壇に捧げました。');else if(opened==='empty')setNotice(worldRef.current?.collection().unlocked?'祭壇の奥の扉が開いています。':'青勾玉6個、赤勾玉2個、または金勾玉1個を捧げると扉が開きます。');else if(!opened)setNotice('祭壇・ふすま・仕掛けに近づいて、そちらを向いて〇を押してください。');},[]);
@@ -96,6 +127,8 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
     document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(!started||menu||won));
     if(!started||menu||won)document.documentElement.style.removeProperty('cursor');else document.documentElement.style.setProperty('cursor','none','important');
   },[started,menu,won]);
+  useEffect(()=>{archiveRef.current=readStored(ARCHIVE_KEY,sanitizeArchive);setArchive(archiveRef.current);setRecords(readStored(RECORDS_KEY,sanitizeRecords));},[]);
+  useEffect(()=>{startBack.current=()=>{if(reading)setReading(null);else if(archiveOpen){setArchiveOpen(false);sound.current?.ui('close');}};menuBack.current=()=>{if(reading)setReading(null);else setMenuOpen(false);};},[reading,archiveOpen,setMenuOpen,sound]);
   const touchMode=useCallback((e:React.PointerEvent)=>{
     session.current.poll(pollPads());
     if(!session.current.useTouch()){e.preventDefault();e.stopPropagation();return false;}
@@ -112,11 +145,18 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
     prefRef.current=restored;retained.current=restored;setPrefs(restored);
     let world:ReturnType<typeof createWorld>;
     try{world=createWorld(canvas.current!,undefined,undefined,stage);world.configure(restored);worldRef.current=world;}catch{setError('3D表示を開始できませんでした。WebGL対応のChromeまたはSafariで開いてください。');return;}
-    setReady(true);let frame=0,last=performance.now(),lastHud=0,lastPickupCount=0,lastEscapes=0,oldMode='touch',controllerBlocked=false,lastStartNav=0,lastPhase=0;
+    setReady(true);let frame=0,last=performance.now(),lastHud=0,lastPickupCount=0,lastEscapes=0,oldMode='touch',controllerBlocked=false,lastStartNav=0,lastPhase=0,syncedSound:Soundscape|null=null;
     const loaded=new Set<string>(),edges=new ButtonEdges();
     edges.update(session.current.poll(pollPads()).pad);
+    const startChoices=()=>Array.from(startPanel.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')??[]);
+    const finishRun=(status:ReturnType<typeof world.runStatus>)=>{
+      const summary={stage,mode:world.playMode,elapsed:status.elapsed,deaths:status.deaths,escapes:status.escapes,notes:world.noteStatus().found.length,notesTotal:LORE[stage].notes.length};
+      const result=scoreRun(summary),applied=applyClear(readStored(RECORDS_KEY,sanitizeRecords),summary,result);
+      try{localStorage.setItem(RECORDS_KEY,JSON.stringify(applied.records));}catch{}
+      setRecords(applied.records);setClear({result,newTime:applied.newTime,newScore:applied.newScore,first:applied.first});
+    };
     const down=(e:KeyboardEvent)=>{
-      if(!state.current.started){if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();const choices=Array.from(startPanel.current?.querySelectorAll<HTMLButtonElement>('button[data-initial-stage],button[data-mode]')??[]);focusMenu(choices,e.code.slice(5).toLowerCase() as MenuDirection);}return;}if(world.completed){if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();const choices=Array.from(clearPanel.current?.querySelectorAll<HTMLButtonElement>('button')??[]),index=choices.indexOf(document.activeElement as HTMLButtonElement),direction=e.code==='ArrowUp'||e.code==='ArrowLeft'?-1:1;choices[(Math.max(0,index)+direction+choices.length)%choices.length]?.focus();}return;}
+      if(!state.current.started){if(e.code==='Escape'){startBack.current();return;}if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();focusMenu(startChoices(),e.code.slice(5).toLowerCase() as MenuDirection);sound.current?.ui('move');}return;}if(world.completed){if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)){e.preventDefault();const choices=Array.from(clearPanel.current?.querySelectorAll<HTMLButtonElement>('button')??[]),index=choices.indexOf(document.activeElement as HTMLButtonElement),direction=e.code==='ArrowUp'||e.code==='ArrowLeft'?-1:1;choices[(Math.max(0,index)+direction+choices.length)%choices.length]?.focus();}return;}
       if(e.code==='Escape'){if(state.current.paused)setMenuOpen(false);return;}
       if(state.current.paused)return;
       if(session.current.mode==='gamepad'){e.preventDefault();e.stopPropagation();return;}
@@ -126,6 +166,7 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
       if(e.code==='KeyQ'&&!e.repeat)burst();
       if(e.code==='KeyT'&&!e.repeat)stopTime();
       if(e.code==='KeyV'&&!e.repeat)useMirror();
+      if(e.code==='KeyC'&&!e.repeat)toggleCrouch();
       if((e.code==='KeyP'||e.code==='KeyO')&&!e.repeat)setMenuOpen(true);
     };
     const up=(e:KeyboardEvent)=>keys.current.delete(e.code);
@@ -160,10 +201,10 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
     const wheel=(e:WheelEvent)=>{if(!state.current.paused||!dialog.current?.contains(e.target as Node)&&!startPanel.current?.contains(e.target as Node)&&!clearPanel.current?.contains(e.target as Node))e.preventDefault();};
     const touchMove=(e:TouchEvent)=>{if(!state.current.paused)e.preventDefault();};
     const menuNavigation=(buttons:ReturnType<ButtonEdges['update']>)=>{
-      if(buttons.back){setMenuOpen(false);return;}
+      if(buttons.back){menuBack.current();return;}
       const items=Array.from(dialog.current?.querySelectorAll<HTMLElement>('button:not(:disabled),[role="slider"],[role="switch"],[role="radio"],[role="tab"]')??[]).filter(e=>e.getClientRects().length&&!e.hasAttribute('disabled'));
       const unique=[...new Set(items)];let index=unique.indexOf(document.activeElement as HTMLElement);
-      if(buttons.up||buttons.down){index=(index+(buttons.up?-1:1)+unique.length)%unique.length;unique[index]?.focus({preventScroll:true});unique[index]?.scrollIntoView({block:'nearest'});}
+      if(buttons.up||buttons.down){index=(index+(buttons.up?-1:1)+unique.length)%unique.length;unique[index]?.focus({preventScroll:true});unique[index]?.scrollIntoView({block:'nearest'});sound.current?.ui('move');}
       const active=document.activeElement as HTMLElement|null;
       if(buttons.left||buttons.right){
         const setting=active?.closest<HTMLElement>('[data-setting]')?.dataset.setting as RangeKey|undefined;
@@ -188,11 +229,12 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
       }
       const wasPaused=state.current.paused;
       if(focused&&!state.current.started){
-        const choices=Array.from(startPanel.current?.querySelectorAll<HTMLButtonElement>('button[data-initial-stage],button[data-mode]')??[]);let selected=choices.indexOf(document.activeElement as HTMLButtonElement);
+        const choices=startChoices();let selected=choices.indexOf(document.activeElement as HTMLButtonElement);
         const x=poll.input.move.x,z=poll.input.move.z;
         const direction:MenuDirection|null=buttons.down?'down':buttons.up?'up':buttons.left?'left':buttons.right?'right':time-lastStartNav>230&&Math.max(Math.abs(x),Math.abs(z))>.5?(Math.abs(x)>Math.abs(z)?x>0?'right':'left':z>0?'down':'up'):null;
-        if(direction){selected=focusMenu(choices,direction);lastStartNav=time;}
-        if(buttons.confirm)choices[Math.max(0,selected)]?.click();
+        if(buttons.back)startBack.current();
+        else if(direction){selected=focusMenu(choices,direction);lastStartNav=time;sound.current?.ui('move');}
+        if(buttons.confirm&&!buttons.back)choices[Math.max(0,selected)]?.click();
       }
       if(focused&&state.current.started&&buttons.menu&&!calibration.current&&!world.completed)setMenuOpen(!state.current.paused);
       if(focused&&state.current.started&&state.current.paused&&!calibration.current&&!world.completed)menuNavigation(buttons);
@@ -204,6 +246,7 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
       if(canExplore&&!wasPaused&&buttons.burst)burst();
       if(canExplore&&!wasPaused&&buttons.timeStop)stopTime();
       if(canExplore&&buttons.mirror)useMirror();
+      if(canExplore&&buttons.crouch)toggleCrouch();
       if(calibration.current&&poll.pad){
         if(mappingKey(poll.pad)!==calibration.current.padKey){calibration.current=null;setCalStep(-1);setNotice('接続が変わりました。もう一度調整を開始してください。');}
         else {const mapping=calibration.current.update(poll.pad);setCalStep(calibration.current.step);
@@ -235,11 +278,16 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
           if(world.completed)break;
           firePending();
         }
-        if(world.completed){setRun(world.runStatus());s.paused=true;clearInput();setWon(true);setLockRequired(false);document.exitPointerLock?.();}
+        if(world.completed){const status=world.runStatus();setRun(status);finishRun(status);s.paused=true;clearInput();setWon(true);setLockRequired(false);document.exitPointerLock?.();}
         const fov=p.fov+(p.motion&&actualSprint&&moving?4:0);
         if(Math.abs(world.camera.fov-fov)>.02){world.camera.fov+=(fov-world.camera.fov)*Math.min(1,dt*8);world.camera.updateProjectionMatrix();}
       }
-      if(time-lastHud>150||world.phaseRevision!==lastPhase){const status=world.runStatus();setRun(status);setMirrorStatus(world.mirrorStatus());setStairHint(world.stairHint());setStamina(world.staminaStatus());if(world.phaseRevision!==lastPhase&&world.finale){setNotice(ENEMY_NAMES[world.finale]+'が出現。鏡を2つ入手。'+(world.collection().unlocked?'祭壇の奥の扉へ。':'祭壇に奉納し、奥の扉へ。'));lastPickupCount=status.pickups;}else if(status.pickups>lastPickupCount&&world.playMode!=='gallery'){setNotice(({blue:'青勾玉',red:'赤勾玉',gold:'金の大勾玉'} as const)[status.lastPickup??'blue']+'を取得 · 祭壇の赤い針へ');lastPickupCount=status.pickups;}else if(status.escapes>lastEscapes)setNotice('追跡を振り切りました');lastEscapes=status.escapes;setConnected(!!poll.pad);setMechanismNear(world.mechanismNear());setCircusHint(world.circusHint());setDoorNear(world.nearDoor());setAltarNear(world.nearAltar());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));setStopRemaining(Math.ceil(world.timeStopRemaining));setStopCooldown(Math.ceil(world.timeStopCooldown));const found=world.collection();setCollection(old=>old.gold===found.gold&&old.areaName===found.areaName&&old.blue===found.blue&&old.red===found.red&&old.blueOffered===found.blueOffered&&old.redOffered===found.redOffered&&old.unlocked===found.unlocked&&old.finale===found.finale&&old.area===found.area?old:found);setGoalBearing(world.goalDirection());lastHud=time;lastPhase=world.phaseRevision;}
+      if(time-lastHud>150||world.phaseRevision!==lastPhase){const status=world.runStatus();setRun(status);setMirrorStatus(world.mirrorStatus());setStairHint(world.stairHint());setStamina(world.staminaStatus());setCrouch(world.crouching);const found=world.noteStatus();setNotes(old=>old.found.length===found.found.length?old:found);if(world.phaseRevision!==lastPhase&&world.finale){setNotice(ENEMY_NAMES[world.finale]+'が出現。鏡を2つ入手。'+(world.collection().unlocked?'祭壇の奥の扉へ。':'祭壇に奉納し、奥の扉へ。'));lastPickupCount=status.pickups;}else if(status.pickups>lastPickupCount&&world.playMode!=='gallery'){setNotice(({blue:'青勾玉',red:'赤勾玉',gold:'金の大勾玉'} as const)[status.lastPickup??'blue']+'を取得 · 祭壇の赤い針へ');lastPickupCount=status.pickups;}else if(status.escapes>lastEscapes)setNotice('追跡を振り切りました');lastEscapes=status.escapes;setConnected(!!poll.pad);setMechanismNear(world.mechanismNear());setCircusHint(world.circusHint());setDoorNear(world.nearDoor());setAltarNear(world.nearAltar());setEnemyMarkers(world.enemyDirections());setBurstRemaining(Math.ceil(world.burstCooldown));setStopRemaining(Math.ceil(world.timeStopRemaining));setStopCooldown(Math.ceil(world.timeStopCooldown));const bag=world.collection();setCollection(old=>old.gold===bag.gold&&old.areaName===bag.areaName&&old.blue===bag.blue&&old.red===bag.red&&old.blueOffered===bag.blueOffered&&old.redOffered===bag.redOffered&&old.unlocked===bag.unlocked&&old.finale===bag.finale&&old.area===bag.area?old:bag);setGoalBearing(world.goalDirection());lastHud=time;lastPhase=world.phaseRevision;}
+      // Sound follows the same frame: world cues, then the body's continuous state.
+      const snd=sound.current;
+      if(snd&&snd!==syncedSound){syncedSound=snd;snd.setStage(stage);snd.setMix(mixOf(prefRef.current));}
+      for(const c of world.drainCues()){snd?.cue(c);if(c.kind==='note'){rememberNote(c.id);setNoteCard(c.id);}}
+      if(snd){const status=world.runStatus(),place=world.soundState();snd.frame({mood:!s.started?'title':world.completed?'clear':s.paused?'paused':'play',pressure:status.pressure,chase:status.state==='chase',frozen:place.frozen,exhausted:world.staminaStatus().exhausted,area:place.area,elevation:place.elevation});}
       // A held stick never restores cursor/touch UI, even if emulated pointer events arrive.
       document.documentElement.classList.toggle('controller-cursor-hidden',hidePlayCursor(s.paused));
       world.observeFrame(frameMs,canExplore);
@@ -255,14 +303,17 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
     const lost=(e:Event)=>{e.preventDefault();setError('3D描画が中断されました。ページを再読み込みしてください。');clearInput();};
     canvas.current?.addEventListener('webglcontextlost',lost);const element=canvas.current;
     return()=>{state.current.paused=true;lockPolicy.current.cancel();document.exitPointerLock?.();cancelAnimationFrame(frame);worldRef.current=null;world.dispose();window.removeEventListener('keydown',down,true);window.removeEventListener('keyup',up);window.removeEventListener('blur',clearInput);window.removeEventListener('focus',hidden);window.removeEventListener('gamepadconnected',gamepadConnected);document.removeEventListener('focusin',focusGuard);document.removeEventListener('pointerdown',realTouch,true);document.removeEventListener('mousemove',mouse);document.removeEventListener('pointerlockchange',lockChanged);document.removeEventListener('pointerlockerror',lockError);document.removeEventListener('visibilitychange',hidden);window.removeEventListener('resize',world.resize);document.removeEventListener('wheel',wheel);document.removeEventListener('touchmove',touchMove);element?.removeEventListener('webglcontextlost',lost);document.documentElement.classList.remove('controller-cursor-hidden');delete document.documentElement.dataset.shrinePlaying;document.documentElement.style.removeProperty('cursor');};
-  },[clearInput,setMenuOpen,toggleLight,applyPreferences,burst,stopTime,interact,requestLock,useMirror,stage,retained]);
+  },[clearInput,setMenuOpen,toggleLight,toggleCrouch,rememberNote,applyPreferences,burst,stopTime,interact,requestLock,useMirror,stage,retained,sound]);
   useEffect(()=>{if(!notice)return;const timer=setTimeout(()=>setNotice(''),6000);return()=>clearTimeout(timer);},[notice]);
+  useEffect(()=>{if(!noteCard)return;const timer=setTimeout(()=>setNoteCard(null),7000);return()=>clearTimeout(timer);},[noteCard]);
+  useEffect(()=>{if(!intro)return;const timer=setTimeout(()=>setIntro(false),9000);return()=>clearTimeout(timer);},[intro]);
+  useEffect(()=>{if(ready&&autostart)beginGame(autostart);},[ready,autostart,beginGame]);
   useEffect(()=>{
     const context=(document as Document&{modelContext?:{registerTool:(tool:ModelTool,options:{signal:AbortSignal})=>void|Promise<void>}}).modelContext;
     if(!context?.registerTool)return;
     const lifecycle=new AbortController();
     const tools:ModelTool[]=[
-      {name:'configure_shrine_view',description:'Change device-local view sensitivity, field of view, brightness and graphics settings. Does not move the visitor.',inputSchema:{type:'object',properties:{stickSensitivity:{type:'number',minimum:.25,maximum:3},touchSensitivity:{type:'number',minimum:.25,maximum:3},mouseSensitivity:{type:'number',minimum:.25,maximum:3},fov:{type:'number',minimum:55,maximum:95},brightness:{type:'number',minimum:.7,maximum:1.8},quality:{enum:['low','medium','high','ultra']},invertY:{type:'boolean'},motion:{type:'boolean'},stamina:{type:'boolean'}},additionalProperties:false},annotations:{readOnlyHint:false},execute:input=>{if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('Settings object required');const candidate={...prefRef.current,...input};const checked=sanitizePreferences(candidate);for(const [k,v] of Object.entries(input)){if(!(k in DEFAULTS)||checked[k as keyof Preferences]!==v)throw new Error('Invalid setting: '+k);}return applyPreferences(checked);}},
+      {name:'configure_shrine_view',description:'Change device-local view sensitivity, field of view, brightness, graphics, film grain and sound volume settings. Does not move the visitor.',inputSchema:{type:'object',properties:{stickSensitivity:{type:'number',minimum:.25,maximum:3},touchSensitivity:{type:'number',minimum:.25,maximum:3},mouseSensitivity:{type:'number',minimum:.25,maximum:3},fov:{type:'number',minimum:55,maximum:95},brightness:{type:'number',minimum:.7,maximum:1.8},quality:{enum:['low','medium','high','ultra']},invertY:{type:'boolean'},motion:{type:'boolean'},stamina:{type:'boolean'},masterVolume:{type:'number',minimum:0,maximum:1},ambienceVolume:{type:'number',minimum:0,maximum:1},effectsVolume:{type:'number',minimum:0,maximum:1},grain:{type:'boolean'}},additionalProperties:false},annotations:{readOnlyHint:false},execute:input=>{if(!input||typeof input!=='object'||Array.isArray(input))throw new Error('Settings object required');const candidate={...prefRef.current,...input};const checked=sanitizePreferences(candidate);for(const [k,v] of Object.entries(input)){if(!(k in DEFAULTS)||checked[k as keyof Preferences]!==v)throw new Error('Invalid setting: '+k);}return applyPreferences(checked);}},
       {name:'set_shrine_flashlight',description:'Turn the visitor flashlight on or off, the same action as the R1 button.',inputSchema:{type:'object',properties:{enabled:{type:'boolean'}},required:['enabled'],additionalProperties:false},annotations:{readOnlyHint:false},execute:input=>{if(!input||typeof input!=='object'||Object.keys(input).length!==1||typeof (input as {enabled?:unknown}).enabled!=='boolean')throw new Error('enabled must be boolean');return setFlashlight((input as {enabled:boolean}).enabled);}},
     ];
     for(const t of tools){try{void Promise.resolve(context.registerTool(t,{signal:lifecycle.signal})).catch(()=>{});}catch{}}
@@ -282,48 +333,89 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
     onClick:(e:React.MouseEvent<HTMLButtonElement>)=>{if(!state.current.paused&&actionGate.current.click(key,e.detail,e.timeStamp))perform();},
   });
   const change=(key:keyof Preferences,value:number|boolean|string)=>applyPreferences({...prefRef.current,[key]:value});
-  const range=(key:RangeKey,label:string,min:number,max:number,step:number,suffix:string)=><div className="setting" data-setting={key}><label id={'label-'+key}>{label}<output aria-live="polite">{prefs[key].toFixed(key==='fov'?0:2)}{suffix}</output></label><div className="range-controls"><button type="button" aria-label={label+'を下げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,-1))}>−</button><Slider aria-labelledby={'label-'+key} min={min} max={max} step={step} value={[prefs[key]]} onValueChange={v=>change(key,Array.isArray(v)?v[0]:v)}/><button type="button" aria-label={label+'を上げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,1))}>＋</button></div></div>;
+  const range=(key:RangeKey,label:string,min:number,max:number,step:number,suffix:string,percent=false)=><div className="setting" data-setting={key}><label id={'label-'+key}>{label}<output aria-live="polite">{percent?Math.round(prefs[key]*100):prefs[key].toFixed(key==='fov'?0:2)}{suffix}</output></label><div className="range-controls"><button type="button" aria-label={label+'を下げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,-1))}>−</button><Slider aria-labelledby={'label-'+key} min={min} max={max} step={step} value={[prefs[key]]} onValueChange={v=>change(key,Array.isArray(v)?v[0]:v)}/><button type="button" aria-label={label+'を上げる'} onClick={()=>applyPreferences(adjustRange(prefRef.current,key,1))}>＋</button></div></div>;
   const blockControllerClick=(e:React.SyntheticEvent)=>{if(session.current.mode==='gamepad'&&!state.current.paused&&document.pointerLockElement===document.documentElement){e.preventDefault();e.stopPropagation();}};
+  const restart=()=>{if(confirming!=='restart'){setConfirming('restart');return;}sound.current?.ui('confirm');onStage(stage,playMode);};
+  const leaveToTitle=()=>{if(confirming!=='title'){setConfirming('title');return;}sound.current?.ui('confirm');onTitle(stage);};
   const threatLabel={quiet:'探索中',hidden:'消灯・忍び足',search:'近くを捜索中',chase:'追跡されています',frozen:'時間停止中',stunned:'敵はスタン中'}[run.state];
+  const goalLine=objective(playMode,collection),compassShown=!modeAids(playMode).darkCompass||!light,beat=heartbeat(run.pressure,run.state==='chase',run.state==='frozen');
+  const modeName=PLAY_MODES.find(m=>m.id===playMode)?.name??'',playing=ready&&started&&!menu&&!won,stageNotes=LORE[stage].notes;
+  const note=noteCard?noteById(noteCard):undefined;
   return <main {...pointerEvents('look')} className="experience" data-playing={started&&!menu&&!won} onContextMenu={e=>e.preventDefault()} onClickCapture={blockControllerClick} onPointerDownCapture={blockControllerClick}>
     <canvas ref={canvas} tabIndex={-1} inputMode="none" aria-label={STAGES[stage].name+"の一人称回廊"} onPointerDown={e=>{lastPointerType.current=e.pointerType;if(e.pointerType==='mouse'&&session.current.mode==='gamepad'){void requestLock();return;}touchMode(e);}} onClick={e=>{if(e.detail===2&&lastPointerType.current==='mouse'&&session.current.mode!=='gamepad')void requestLock();}}/>
-    <div className="vignette"/><div className="threat-veil" data-active={started&&!menu&&!won&&run.state==='chase'} aria-hidden="true"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" data-chasing={e.chasing} style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%)',color:e.stunned?'#b8ffff':(e.id===4?'#ff201e':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id%4]),opacity:Math.max(.4,1-e.distance/160)}}><i style={{transform:'rotate('+e.angle+'rad)'}}>⌃</i>{e.level!=='same'&&<small>{e.level==='above'?'上階':'下階'}</small>}</span>)}</div>}<div className="reticle" aria-hidden="true"/>
+    <div className="vignette"/><div className="film-grain" aria-hidden="true" hidden={!prefs.grain||prefs.quality==='low'}/><div className="threat-veil" data-active={started&&!menu&&!won&&run.state==='chase'} style={{'--beat':(beat?60/beat.bpm:1.4).toFixed(2)+'s'} as React.CSSProperties} aria-hidden="true"/>{!menu&&<div className="enemy-compass" aria-hidden="true">{enemyMarkers.map(e=><span key={e.id} className="enemy-bearing" data-chasing={e.chasing} style={{left:(50+Math.sin(e.angle)*43)+'%',top:(50-Math.cos(e.angle)*39)+'%',transform:'translate(-50%,-50%)',color:e.stunned?'#b8ffff':(e.id===4?'#ff201e':['#ff386a','#5fffe0','#bb78ff','#ffbc40'][e.id%4]),opacity:Math.max(.4,1-e.distance/160)}}><i style={{transform:'rotate('+e.angle+'rad)'}}>⌃</i>{e.level!=='same'&&<small>{e.level==='above'?'上階':'下階'}</small>}</span>)}</div>}<div className="reticle" aria-hidden="true"/>
     {burstPulse>0&&<div key={'burst'+burstPulse} className="burst-pulse" aria-hidden="true"/>}
     {stopRemaining>0&&started&&!menu&&!won&&<div className="time-stop-veil" aria-hidden="true"/>}
-    {caughtPulse>0&&<div key={'caught'+caughtPulse} className="caught-pulse" aria-hidden="true"/>}
+    {caughtPulse>0&&<div key={'caught'+caughtPulse} className="caught-pulse" aria-hidden="true"><strong>囚われた</strong><span>魂の欠片は散り、あなたは別の場所で目を覚ます</span></div>}
 
     <nav className="toolbar" hidden={!started||won} aria-label="操作メニュー" onPointerDownCapture={e=>{if(session.current.mode==='gamepad'){session.current.poll(pollPads());if(!session.current.allowsMenuPointer()){e.preventDefault();e.stopPropagation();}}}}>
       <button aria-label="DualSenseで操作を開始してカーソルを固定" aria-pressed={pad} className={pad?'active':''} onClick={activateController}><Gamepad2 size={20}/></button>
       <button aria-label={light?'フラッシュライトを消す':'フラッシュライトを点ける'} aria-pressed={light} {...action('light',toggleLight)} className={light?'active':''}>{light?<Flashlight size={19}/>:<FlashlightOff size={19}/>}</button>
       <button aria-label="マウスカーソルを固定" aria-pressed={locked} onClick={()=>void requestLock()} className={locked?'active':''}><Focus size={18}/></button>
       <button aria-label="全画面を切替" onClick={async()=>{try{if(document.fullscreenElement)await document.exitFullscreen();else if(document.documentElement.requestFullscreen)await document.documentElement.requestFullscreen();else setNotice('このブラウザでは全画面切替を利用できません。');}catch{setNotice('全画面表示を開始できませんでした。');}}}><Maximize size={18}/></button>
-      <button aria-label="設定と操作ガイド" onClick={()=>setMenuOpen(true)}><Settings size={19}/></button>
+      <button aria-label="一時停止メニューと設定" onClick={()=>setMenuOpen(true)}><Settings size={19}/></button>
     </nav>
-    {ready&&started&&!menu&&!won&&<><div className="collection-status">{playMode!=='gallery'&&<><div role="status" aria-live="polite"><span className="blue-bead">◕ 青 {collection.blue}</span>　<span className="red-bead">◕ 赤 {collection.red}</span>　<span style={{color:"#edc765"}}>◕ 金 {collection.gold}</span></div><small>{collection.unlocked?'奉納完了 · 祭壇の奥の扉へ':`奉納：青 ${collection.blueOffered}/6 または 赤 ${collection.redOffered}/2・金1`}</small><small>鏡 {mirrorStatus.count} {mirrorStatus.remaining>0?`· 透視 ${Math.ceil(mirrorStatus.remaining)}秒`:pad?'· □ で使用':''}</small></>}<small className={collection.area==='red'?'red-bead':'blue-bead'}>{stage!=='shrine'?STAGES[stage].name+' · ':''}{collection.areaName}</small></div><div className="altar-compass" role="img" aria-label={`赤い針は祭壇の方向。距離${Math.round(goalBearing.distance)}メートル`}><div className="compass-dial"><i style={{transform:'rotate('+goalBearing.angle+'rad)'}}/><b/></div><span>祭壇 {Math.round(goalBearing.distance)}m</span></div></>}
-    {ready&&started&&!menu&&!won&&<aside className="play-state" data-threat={run.state} aria-label="探索状況">{(doorNear||altarNear||mechanismNear)&&started&&!menu&&!won&&<button className="door-action" aria-label={mechanismNear||(altarNear?'〇：勾玉を祭壇に捧げる':'〇：ふすまを開閉')} {...action('interact',interact)}>{altarNear?<Sparkles size={20}/>:<DoorOpen size={20}/>}<span>{mechanismNear||(altarNear?'〇 捧げる':'〇')}</span></button>}<span>{playMode==='gallery'?'ギャラリー · 安全な散策':(collection.finale?ENEMY_NAMES[collection.finale]+' · ':'')+threatLabel}</span>{circusHint&&<small className="circus-hint">{circusHint}</small>}{stairHint&&<strong className="stair-hint">{stairHint}</strong>}{playMode!=='gallery'&&<><div className="pressure-row"><small>警戒度</small><div className="pressure-meter" role="meter" aria-label="現在の追跡と警戒" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(run.pressure*100)} aria-valuetext={threatLabel+'・'+Math.round(run.pressure*100)+'%'}><i style={{width:run.pressure*100+'%'}}/></div><small className="pressure-value" aria-hidden="true">{Math.round(run.pressure*100)}%</small></div><time className="run-clock" dateTime={'PT'+Math.floor(run.elapsed)+'S'}>探索 {formatRunTime(run.elapsed)}</time></>}{stamina.enabled&&<div className="stamina-status" data-exhausted={stamina.exhausted}><small>{stamina.exhausted?'息切れ · ダッシュ解除か停止':'スタミナ'}</small><div role="meter" aria-label="スタミナ" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(stamina.value*100)}><i style={{width:stamina.value*100+'%'}}/></div></div>}{pad&&playMode!=='gallery'&&<div className="ability-readout"><span>R2 {burstRemaining>0?burstRemaining+'秒':'バースト'}</span><span>L2 {stopRemaining>0?'停止 '+stopRemaining+'秒':stopCooldown>0?stopCooldown+'秒':'時間停止'}</span></div>}</aside>}
-    {won&&<section ref={clearPanel} className="clear-screen" role="dialog" aria-modal="true" aria-labelledby="clear-title"><span aria-hidden="true">◕</span><h1 id="clear-title">封印解除</h1><p>{STAGES[stage].name}の封門を越えました。次の境界へ。</p><strong>CLEAR</strong><dl className="run-results"><div><dt>探索時間</dt><dd>{formatRunTime(run.elapsed)}</dd></div><div><dt>復活回数</dt><dd>{run.deaths}</dd></div><div><dt>追跡回避</dt><dd>{run.escapes}</dd></div><div><dt>スタン成功</dt><dd>{run.stuns}</dd></div><div><dt>時間停止</dt><dd>{run.freezes}</dd></div><div><dt>勾玉取得</dt><dd>{run.pickups}</dd></div></dl>{<div className="stage-choices">{(Object.keys(STAGES) as StageId[]).filter(id=>id!==stage).map((id,i)=><button key={id} autoFocus={i===0} data-stage={id} onClick={()=>advanceStage(id)}><em>{STAGES[id].subtitle}</em><b>{STAGES[id].name}</b><span>{STAGES[id].description}</span><small>{STAGES[id].challenge}</small></button>)}</div>}<button className="replay-stage" onClick={()=>advanceStage(stage)}>同じステージを再生成</button><small>タッチで選択 · 方向キーで選択 / × で決定</small></section>}
-    {!ready&&!error&&<div className="loading"><span/>灯りをともしています</div>}
+    {playing&&<><div className="collection-status">
+      <div className="objective-line" data-step={goalLine.step} key={goalLine.step}><small>目的</small><strong>{goalLine.title}</strong><span>{goalLine.detail}</span></div>
+      {playMode!=='gallery'&&(collection.unlocked?<div className="routes routes-complete" role="status">奉納完了 · 封門が開いた</div>:<div className="routes" role="status" aria-label={`所持 青${collection.blue}・赤${collection.red}・金${collection.gold}、奉納 青${collection.blueOffered}・赤${collection.redOffered}`}>{(['blue','red','gold'] as const).map(color=><div key={color} className="route" data-color={color}><Magatama/><span className="pips">{routePips(collection[color],color==='blue'?collection.blueOffered:color==='red'?collection.redOffered:0,BEAD_REQUIREMENTS[color]).map((pip,i)=><i key={i} data-state={pip}/>)}</span><small>{BEAD_NAMES[color]} {collection[color]}</small></div>)}</div>)}
+      <small className="inventory-line">{playMode!=='gallery'&&<>鏡 {mirrorStatus.count}{mirrorStatus.remaining>0?` · 透視 ${Math.ceil(mirrorStatus.remaining)}秒`:pad&&mirrorStatus.count?' · □ で使用':''}<span aria-hidden="true">　</span></>}手記 {notes.found.length}/{notes.total}</small>
+      <small className={'area-line '+(collection.area==='red'?'red-bead':'blue-bead')}>{stage!=='shrine'?STAGES[stage].name+' · ':''}{collection.areaName}</small>
+    </div><div className="altar-compass" data-hidden={!compassShown} role="img" aria-label={compassShown?`赤い針は祭壇の方向。距離${Math.round(goalBearing.distance)}メートル`:'悪夢では灯りを消している間だけ祭壇の針が現れます'}><div className="compass-dial">{compassShown?<i style={{transform:'rotate('+goalBearing.angle+'rad)'}}/>:<em aria-hidden="true">?</em>}<b/></div><span>{compassShown?`祭壇 ${Math.round(goalBearing.distance)}m`:'消灯で針'}</span></div></>}
+    {playing&&<aside className="play-state" data-threat={run.state} aria-label="探索状況">{(doorNear||altarNear||mechanismNear)&&<button className="door-action" aria-label={mechanismNear||(altarNear?'〇：勾玉を祭壇に捧げる':'〇：ふすまを開閉')} {...action('interact',interact)}>{altarNear?<Sparkles size={20}/>:<DoorOpen size={20}/>}<span>{mechanismNear||(altarNear?'〇 捧げる':'〇')}</span></button>}<span>{playMode==='gallery'?'ギャラリー · 安全な散策':(collection.finale?ENEMY_NAMES[collection.finale]+' · ':'')+threatLabel}</span>{crouch&&<small className="posture-tag">しゃがみ · 見つかりにくい</small>}{circusHint&&<small className="circus-hint">{circusHint}</small>}{stairHint&&<strong className="stair-hint">{stairHint}</strong>}{playMode!=='gallery'&&<><div className="pressure-row"><small>警戒度</small><div className="pressure-meter" role="meter" aria-label="現在の追跡と警戒" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(run.pressure*100)} aria-valuetext={threatLabel+'・'+Math.round(run.pressure*100)+'%'}><i style={{width:run.pressure*100+'%'}}/></div><small className="pressure-value" aria-hidden="true">{Math.round(run.pressure*100)}%</small></div><time className="run-clock" dateTime={'PT'+Math.floor(run.elapsed)+'S'}>探索 {formatRunTime(run.elapsed)}</time></>}{stamina.enabled&&<div className="stamina-status" data-exhausted={stamina.exhausted}><small>{stamina.exhausted?'息切れ · ダッシュ解除か停止':'スタミナ'}</small><div role="meter" aria-label="スタミナ" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(stamina.value*100)}><i style={{width:stamina.value*100+'%'}}/></div></div>}{pad&&playMode!=='gallery'&&<div className="ability-readout"><span>R2 {burstRemaining>0?burstRemaining+'秒':'バースト'}</span><span>L2 {stopRemaining>0?'停止 '+stopRemaining+'秒':stopCooldown>0?stopCooldown+'秒':'時間停止'}</span></div>}</aside>}
+    {intro&&playing&&<div className="stage-intro" aria-live="polite"><div className="intro-text"><small>{STAGES[stage].subtitle}</small><h2>{STAGES[stage].name}</h2>{LORE[stage].prologue.map((line,i)=><p key={i} style={{animationDelay:(1.1+i*1.3)+'s'}}>{line}</p>)}<em style={{animationDelay:'5.2s'}}>{modeName} · {goalLine.title}</em></div></div>}
+    {note&&playing&&<aside className="note-card" role="status"><ScrollText size={20} aria-hidden="true"/><div><small>手記を入手 · {notes.found.length}/{notes.total}</small><strong>{note.title}</strong><span>{note.author}</span><em>{pad?'Options':'P'} →「手記」で読む</em></div></aside>}
+    {won&&<section ref={clearPanel} className="clear-screen" role="dialog" aria-modal="true" aria-labelledby="clear-title"><span className="clear-mark" aria-hidden="true"><Magatama/></span><h1 id="clear-title">封印解除</h1><p>{STAGES[stage].name}の封門を越えました。次の境界へ。</p>
+      {clear?.result.rank?<div className="result-panel"><div className="rank-card" data-rank={clear.result.rank}><small>評価</small><b>{clear.result.rank}</b><span>{clear.result.score.toLocaleString('ja-JP')} 点</span>{(clear.first||clear.newScore)&&<em>{clear.first?'初踏破':'自己ベスト更新'}</em>}</div><dl className="score-lines">{clear.result.lines.map(l=><div key={l.label}><dt>{l.label}<small>{l.detail}</small></dt><dd data-sign={l.points<0?'minus':'plus'}>{l.points>0?'+':''}{l.points.toLocaleString('ja-JP')}</dd></div>)}{clear.result.multiplier!==1&&<div><dt>難度補正<small>{modeName}</small></dt><dd>×{clear.result.multiplier}</dd></div>}</dl></div>:<strong>CLEAR</strong>}
+      <dl className="run-results">{playMode==='gallery'?<div><dt>散策時間</dt><dd>{formatRunTime(run.elapsed)}</dd></div>:<><div><dt>スタン成功</dt><dd>{run.stuns}</dd></div><div><dt>時間停止</dt><dd>{run.freezes}</dd></div></>}<div><dt>勾玉取得</dt><dd>{run.pickups}</dd></div><div><dt>手記</dt><dd>{notes.found.length}/{notes.total}</dd></div></dl>
+      {clear?.newTime&&<small className="record-flag">最速記録を更新 · {formatRunTime(run.elapsed)}</small>}
+      <div className="stage-choices">{STAGE_IDS.filter(id=>id!==stage).map((id,i)=><button key={id} autoFocus={i===0} data-stage={id} onClick={()=>advanceStage(id)}><em>{STAGES[id].subtitle}</em><b>{STAGES[id].name}</b><span>{STAGES[id].description}</span><small>{STAGES[id].challenge}</small></button>)}</div><button className="replay-stage" onClick={()=>advanceStage(stage)}>同じステージを再生成</button><small>タッチで選択 · 方向キーで選択 / × で決定</small></section>}
+    {!ready&&!error&&(titled||!!autostart)&&<div className="loading"><span/>灯りをともしています</div>}
     {error&&<div className="notice" role="alert">{error}<button className="text-button" onClick={()=>location.reload()}>再読み込み</button></div>}
     {lockRequired&&pad&&started&&!menu&&!won&&<div className="lock-gate"><button className="lock-resume" onClick={requestLock}>クリックしてカーソルを固定・再開</button><p>固定が完了するまで探索を一時停止しています</p></div>}
     {notice&&<div className="toast" role="status">{notice}</div>}
     <div className="touch-controls" hidden={!started||pad||menu||won}>
       <div className="touch-pad" role="group" aria-label="移動タッチパッド" {...pointerEvents('move')}><span className="thumb" style={{transform:'translate(calc(var(--thumb-travel) * '+stickPosition.x+'),calc(var(--thumb-travel) * '+stickPosition.z+'))'}}><Move size={28}/></span></div>
-      <div className="touch-right"><div className="touch-actions">{playMode!=='gallery'&&<><button className="sprint" aria-label="鏡を使う" disabled={mirrorStatus.count===0||mirrorStatus.remaining>0} {...action('mirror',useMirror)}><span className="mirror-icon"/><small className="burst-timer">{mirrorStatus.count}</small></button><button className="sprint" aria-label={stopCooldown?`時間停止の再使用まで ${stopCooldown}秒`:'時間停止：10秒間'} disabled={stopCooldown>0} {...action('freeze',stopTime)}><Clock3 size={22}/>{stopCooldown>0&&<small className="burst-timer">{stopRemaining||stopCooldown}</small>}</button><button className="sprint" aria-label={burstRemaining?`バースト再使用まで ${burstRemaining}秒`:'バースト：前方120°の敵を9秒スタン'} disabled={burstRemaining>0} {...action('burst',burst)}><Sparkles size={23}/>{burstRemaining>0&&<small className="burst-timer">{burstRemaining}</small>}</button></>}<button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} {...action('sprint',()=>setTouchSprint(touch.current.toggleSprint()))}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><span className="thumb"><Scan size={28}/></span></div></div>
+      <div className="touch-right"><div className="touch-actions">{playMode!=='gallery'&&<><button className="sprint" aria-label="鏡を使う" disabled={mirrorStatus.count===0||mirrorStatus.remaining>0} {...action('mirror',useMirror)}><span className="mirror-icon"/><small className="burst-timer">{mirrorStatus.count}</small></button><button className="sprint" aria-label={stopCooldown?`時間停止の再使用まで ${stopCooldown}秒`:'時間停止：10秒間'} disabled={stopCooldown>0} {...action('freeze',stopTime)}><Clock3 size={22}/>{stopCooldown>0&&<small className="burst-timer">{stopRemaining||stopCooldown}</small>}</button><button className="sprint" aria-label={burstRemaining?`バースト再使用まで ${burstRemaining}秒`:'バースト：前方120°の敵を9秒スタン'} disabled={burstRemaining>0} {...action('burst',burst)}><Sparkles size={23}/>{burstRemaining>0&&<small className="burst-timer">{burstRemaining}</small>}</button></>}<button className="sprint" aria-label={crouch?'立ち上がる':'しゃがむ'} aria-pressed={crouch} {...action('crouch',toggleCrouch)}><ChevronsDown size={23}/></button><button className="sprint" aria-label={touchSprint?'ダッシュをオフ':'ダッシュをオン'} aria-pressed={touchSprint} {...action('sprint',()=>setTouchSprint(touch.current.toggleSprint()))}><Footprints size={24}/></button></div><div className="touch-pad look-pad" role="group" aria-label="視点タッチパッド" {...pointerEvents('look')}><span className="thumb"><Scan size={28}/></span></div></div>
     </div>
-    {!started&&!error&&<section className="start-screen" aria-labelledby="start-title" ref={startPanel}>
-      <div className="start-heading"><span>YŪKYŌ</span><h1 id="start-title">幽境</h1></div>
-      <div className="initial-stages" role="group" aria-label="ステージを選ぶ">
-        {(Object.keys(STAGES) as StageId[]).map(id=><button key={id} data-initial-stage={id} aria-pressed={stage===id} disabled={!ready} onClick={()=>{if(!state.current.started&&id!==stage)onStage(id);}}><strong>{STAGES[id].name}</strong><small>{STAGES[id].subtitle}</small></button>)}
+    {!started&&!error&&!autostart&&<section className="start-screen" data-phase={archiveOpen?'archive':titled?'select':'title'} aria-label="幽境 タイトル" ref={startPanel}>
+      {archiveOpen?<Archive records={records} found={archive} reading={reading} onRead={id=>{setReading(id);sound.current?.ui(id?'open':'close');}} onClose={()=>{setReading(null);setArchiveOpen(false);sound.current?.ui('close');}}/>
+      :!titled?<div className="title-splash">
+        <span className="title-eyebrow">YŪKYŌ</span><h1 id="start-title">幽境</h1><p className="title-tagline">忘れられた場所の、さらに奥へ。</p>
+        <div className="title-actions"><button data-title="start" autoFocus onClick={()=>{sound.current?.unlock();sound.current?.ui('confirm');onTitled();}}>はじめる<span aria-hidden="true">→</span></button><button data-title="archive" onClick={()=>{sound.current?.unlock();sound.current?.ui('open');setArchiveOpen(true);}}><BookOpen size={16} aria-hidden="true"/>記録帳<small>{archive.length} / {NOTE_TOTAL}</small></button></div>
+        <p className="start-help">ヘッドホン推奨 · 音は最初の操作で鳴りはじめます<br/>DualSense・キーボードとマウス・タッチに対応</p>
       </div>
-      <p className="stage-start-description">{STAGES[stage].description}</p>
-      <div className="mode-choices">{PLAY_MODES.map((m,i)=><button key={m.id} data-mode={m.id} disabled={!ready} autoFocus={i===0} onClick={()=>beginGame(m.id)}><small>{m.label}</small><strong>{m.name}</strong><span>{m.detail}</span><b aria-hidden="true">→</b></button>)}</div>
-      <p className="start-help">{ready?'ステージとモードを選択 · 方向キー / × で決定':'回廊を準備しています…'}<br/>{'描画品質：'+QUALITY_LABELS[prefs.quality]} · 開始後に設定で変更できます</p>
+      :<div className="stage-select">
+        <header className="select-heading"><div className="start-heading"><span>YŪKYŌ</span><h1 id="start-title">幽境</h1></div><button className="archive-button" onClick={()=>{sound.current?.ui('open');setArchiveOpen(true);}}><BookOpen size={16} aria-hidden="true"/>記録帳<small>{archive.length} / {NOTE_TOTAL}</small></button></header>
+        <div className="select-body">
+          <div className="initial-stages" role="group" aria-label="ステージを選ぶ">
+            {STAGE_IDS.map(id=>{const summary=stageSummary(records,id);return <button key={id} data-initial-stage={id} aria-pressed={stage===id} disabled={!ready} onClick={()=>{if(!state.current.started&&id!==stage){sound.current?.ui('move');onStage(id);}}}><strong>{STAGES[id].name}</strong><small>{STAGES[id].subtitle}</small>{summary.clears>0&&<b className="rank-badge" data-rank={summary.rank??'clear'} aria-label={summary.rank?'最高評価 '+summary.rank:'踏破済み'}>{summary.rank??'済'}</b>}</button>;})}
+          </div>
+          <div className="stage-detail" aria-live="polite">
+            <small>{STAGES[stage].subtitle}</small><h2>{STAGES[stage].name}</h2>
+            <p>{STAGES[stage].description}</p><p className="stage-challenge">{STAGES[stage].challenge}</p>
+            <dl className="stage-records">{PLAY_MODES.map(m=>{const r=records[recordKey(stage,m.id)];return <div key={m.id}><dt>{m.name}</dt><dd>{r?<>{r.bestRank&&<b className="rank-badge" data-rank={r.bestRank}>{r.bestRank}</b>}{r.bestTime!=null?formatRunTime(r.bestTime):''}<small>{r.clears}回</small></>:<span className="unplayed">未踏破</span>}</dd></div>;})}</dl>
+            <small className="stage-notes"><ScrollText size={13} aria-hidden="true"/>手記 {stageNotes.filter(n=>archive.includes(n.id)).length} / {stageNotes.length}</small>
+          </div>
+        </div>
+        <div className="mode-choices">{PLAY_MODES.map(m=><button key={m.id} data-mode={m.id} disabled={!ready} onClick={()=>beginGame(m.id)}><small>{m.label}</small><strong>{m.name}</strong><span>{m.detail}</span><b aria-hidden="true">→</b></button>)}</div>
+        <p className="start-help">{ready?'ステージとモードを選択 · 方向キー / × で決定 · ○ で戻る':'回廊を準備しています…'}<br/>{'描画品質：'+QUALITY_LABELS[prefs.quality]} · 開始後に一時停止メニューで変更できます</p>
+      </div>}
     </section>}
     <Dialog open={menu} onOpenChange={setMenuOpen}>
       {menu&&<DialogContent ref={dialog} className="settings-dialog" onPointerDownCapture={e=>{if(e.pointerType==='touch'||e.pointerType==='pen')touchMode(e);}} showCloseButton={false} finalFocus={false}>
-        <header className="settings-heading"><div><span className="eyebrow">YŪKYŌ</span><DialogTitle>幽境<span>祭殿回廊</span></DialogTitle></div><button className="close-button" aria-label="回廊に戻る" onClick={()=>setMenuOpen(false)}><X size={20}/></button></header>
-        <DialogDescription className="sr-only">視点と画質の設定。設定を閉じると探索を再開します。</DialogDescription>
-        <Tabs defaultValue="view"><TabsList className="settings-tabs"><TabsTrigger value="view">視点</TabsTrigger><TabsTrigger value="graphics">画質</TabsTrigger><TabsTrigger value="controls">操作</TabsTrigger></TabsList>
+        <header className="settings-heading"><div><span className="eyebrow">YŪKYŌ · 一時停止</span><DialogTitle>{STAGES[stage].name}<span>{modeName}</span></DialogTitle></div><button className="close-button" aria-label="探索に戻る" onClick={()=>setMenuOpen(false)}><X size={20}/></button></header>
+        <DialogDescription className="sr-only">探索状況と手記、視点・画質・音響・操作の設定。閉じると探索を再開します。</DialogDescription>
+        <Tabs value={menuTab} onValueChange={v=>{setMenuTab(String(v));setReading(null);setConfirming(null);}}><TabsList className="settings-tabs"><TabsTrigger value="status">探索</TabsTrigger><TabsTrigger value="notes">手記</TabsTrigger><TabsTrigger value="view">視点</TabsTrigger><TabsTrigger value="graphics">画質</TabsTrigger><TabsTrigger value="audio">音響</TabsTrigger><TabsTrigger value="controls">操作</TabsTrigger></TabsList>
+          <TabsContent value="status" className="settings-panel status-panel">
+            <div className="status-objective" data-step={goalLine.step}><small>目的</small><strong>{goalLine.title}</strong><span>{goalLine.detail}</span></div>
+            <dl className="status-stats"><div><dt>探索時間</dt><dd>{formatRunTime(run.elapsed)}</dd></div><div><dt>復活</dt><dd>{run.deaths}</dd></div><div><dt>追跡回避</dt><dd>{run.escapes}</dd></div><div><dt>手記</dt><dd>{notes.found.length}/{notes.total}</dd></div></dl>
+            <div className="menu-actions"><button className="menu-action primary" onClick={()=>setMenuOpen(false)}>探索に戻る<span aria-hidden="true">→</span></button><button className="menu-action" data-confirming={confirming==='restart'} onClick={restart}>{confirming==='restart'?'もう一度押すと、新しい配置で最初から':'最初からやり直す'}</button><button className="menu-action" data-confirming={confirming==='title'} onClick={leaveToTitle}>{confirming==='title'?'もう一度押すと、タイトルへ戻る':'タイトルへ戻る'}</button></div>
+            <p className="setting-note">やり直すと勾玉・奉納・探索時間は失われます。拾った手記は記録帳に残ります。</p>
+          </TabsContent>
+          <TabsContent value="notes" className="settings-panel notes-panel">
+            {reading?<NoteReader id={reading} onClose={()=>setReading(null)}/>:<ul className="note-list">{stageNotes.map(n=>{const open=notes.found.includes(n.id)||archive.includes(n.id);return <li key={n.id}><button disabled={!open} onClick={()=>{setReading(n.id);sound.current?.ui('open');}}><ScrollText size={16} aria-hidden="true"/><strong>{open?n.title:'？？？'}</strong><small>{open?n.author:'未発見の手記'}</small></button></li>;})}</ul>}
+            <p className="setting-note">各ステージに手記が三つ。浮かぶ巻物に近づくと拾えます。拾った手記はタイトル画面の「記録帳」でいつでも読めます。</p>
+          </TabsContent>
           <TabsContent value="view" className="settings-panel"><div className="settings-grid">
             {range('stickSensitivity','Rスティック感度',.25,3,.05,'×')}{range('touchSensitivity','タッチ視点感度',.25,3,.05,'×')}
             {range('mouseSensitivity','マウス感度',.25,3,.05,'×')}{range('fov','視野角',55,95,1,'°')}
@@ -332,16 +424,20 @@ function ShrineSession({stage,retained,onStage}:{stage:StageId;retained:{current
           </div></TabsContent>
           <TabsContent value="graphics" className="settings-panel"><div className="setting"><label>描画品質</label><RadioGroup value={prefs.quality} onValueChange={v=>change('quality',v as string)} className="quality-options" aria-label="描画品質">{Object.entries(QUALITY_LABELS).map(([value,label])=><label key={value} className="quality-option"><RadioGroupItem value={value}/>{label}</label>)}</RadioGroup></div>
             {range('brightness','明るさ',.7,1.8,.05,'×')}
-            <p className="setting-note">スマートフォンは、質感を簡素化した「低」で起動します。画質はここで変更できます。最高画質では2Kの表面素材、緻密な陰影と水面反射を使用します。負荷に応じて描画解像度を自動調整します。</p>
+            <label className="switch-row">フィルムグレイン<Switch aria-label="フィルムグレイン" checked={prefs.grain} onCheckedChange={v=>change('grain',v)}/></label>
+            <p className="setting-note">スマートフォンは、質感を簡素化した「低」で起動します。画質はここで変更できます。最高画質では2Kの表面素材、緻密な陰影と水面反射を使用します。負荷に応じて描画解像度を自動調整します。フィルムグレインは「低」では表示されません。</p>
           </TabsContent>
+          <TabsContent value="audio" className="settings-panel"><div className="settings-grid">
+            {range('masterVolume','全体音量',0,1,.05,'%',true)}{range('ambienceVolume','環境音',0,1,.05,'%',true)}{range('effectsVolume','効果音・心音',0,1,.05,'%',true)}
+          </div><p className="setting-note">環境音・足音・心音・効果音はすべてブラウザ内で合成しています。心音は画面下の警戒度と連動します。敵は足音を立てません。耳ではなく、灯りと視線で気配を探ってください。</p></TabsContent>
           <TabsContent value="controls" className="settings-panel controls-panel">
             <div className="connection"><Gamepad2 size={17}/><span>{connected?'コントローラー接続中':'接続後、コントローラーのボタンを押してください'}</span></div>
-            <label className="switch-row stamina-option">スタミナを使用<Switch aria-label="スタミナを使用" checked={prefs.stamina} onCheckedChange={v=>change('stamina',v)}/></label><p className="setting-note">オン：連続ダッシュは約8秒。歩行・停止で回復します。使い切ったら、ダッシュを解除するか立ち止まると回復後に再開できます。オフ：ダッシュ制限なし。</p><p className="rules-note">青6個・赤2個・金1個のいずれかを揃えて祭壇へ。揃うと通常の敵が消え、「憎悪」か「憤怒」1体の追跡が始まり、鏡を2つ入手します。通常の敵は消灯して歩くと気づきませんが、走る足音は届きます。最終追跡では消灯や距離で振り切れません。憎悪は追うほど加速し、進路を先読みします。憤怒は身をかがめてから突進し、その後に立て直しの隙が生まれます。バーストで9秒、時間停止で10秒の猶予を作れます。</p><dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>〇 / R2</dt><dd>ふすま・奉納・仕掛け / 前方120°バースト</dd></div><div><dt>□ / V</dt><dd>拾った鏡で12秒間の透視</dd></div><div><dt>L2 / T</dt><dd>10秒間の時間停止</dd></div><div><dt>Options</dt><dd>設定を開く・閉じる</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま・奉納・仕掛け / バースト</dd></div></dl>
-            <p className="setting-note">設定内：方向キーで選択・調整、×で決定、○で戻る。<br/>タッチは左右のパッドで移動・視点、足跡ボタンでダッシュ。<br/>カーソルを固定するには、画面右上の固定ボタンをクリック。Escで解除。</p>
+            <label className="switch-row stamina-option">スタミナを使用<Switch aria-label="スタミナを使用" checked={prefs.stamina||modeAids(playMode).staminaForced} disabled={modeAids(playMode).staminaForced} onCheckedChange={v=>change('stamina',v)}/></label><p className="setting-note">オン：連続ダッシュは約8秒。歩行・停止で回復します。使い切ったら、ダッシュを解除するか立ち止まると回復後に再開できます。オフ：ダッシュ制限なし。悪夢では常にオンです。</p><p className="rules-note">青6個・赤2個・金1個のいずれかを揃えて祭壇へ。揃うと通常の敵が消え、「憎悪」か「憤怒」1体の追跡が始まり、鏡を2つ入手します。通常の敵は消灯して歩くと気づきませんが、走る足音は届きます。しゃがむと、灯りを点けていても見つかる距離が短くなります。最終追跡では消灯や距離で振り切れません。憎悪は追うほど加速し、進路を先読みします。憤怒は身をかがめてから突進し、その後に立て直しの隙が生まれます。バーストで9秒、時間停止で10秒の猶予を作れます。</p><dl className="control-guide"><div><dt>L / R スティック</dt><dd>移動 / 視点</dd></div><div><dt>L1 / R1</dt><dd>ダッシュ / ライト</dd></div><div><dt>〇 / R2</dt><dd>ふすま・奉納・仕掛け / 前方120°バースト</dd></div><div><dt>□ / V</dt><dd>拾った鏡で12秒間の透視</dd></div><div><dt>L2 / T</dt><dd>10秒間の時間停止</dd></div><div><dt>△・R3 / C</dt><dd>しゃがむ・立ち上がる</dd></div><div><dt>Options / P</dt><dd>一時停止メニュー</dd></div><div><dt>WASD / Shift / F</dt><dd>移動 / ダッシュ / ライト</dd></div><div><dt>E / Q</dt><dd>ふすま・奉納・仕掛け / バースト</dd></div></dl>
+            <p className="setting-note">メニュー内：方向キーで選択・調整、×で決定、○で戻る。<br/>タッチは左右のパッドで移動・視点、足跡ボタンでダッシュ、二重山形でしゃがむ。<br/>カーソルを固定するには、画面右上の固定ボタンをクリック。Escで解除。</p>
             {calStep>=0?<div className="calibration"><span>{['Lスティックを右へ','Lスティックを下へ','Rスティックを右へ','Rスティックを下へ','L1ボタンを押す'][Math.min(calStep,4)]}</span><small>操作ごとにスティック・ボタンを離してください。</small><button className="text-button" onClick={()=>{calibration.current=null;setCalStep(-1);}}>中止</button></div>:<button className="text-button" disabled={!connected} onClick={()=>{const p=lastPad.current;if(p){calibration.current=new PadCalibration(mappingKey(p),p);setCalStep(0);}}}>スティックが反応しない場合：手動調整</button>}
           </TabsContent>
         </Tabs>
-        <footer className="settings-footer"><button className="text-button" onClick={()=>applyPreferences({...DEFAULTS})}><RotateCcw size={13}/>初期設定</button><button className="resume-button" onClick={()=>setMenuOpen(false)}>回廊に戻る<span>→</span></button></footer>
+        <footer className="settings-footer"><button className="text-button" onClick={()=>applyPreferences({...DEFAULTS})}><RotateCcw size={13}/>初期設定</button><button className="resume-button" onClick={()=>setMenuOpen(false)}>探索に戻る<span>→</span></button></footer>
       </DialogContent>}
     </Dialog>
   </main>;

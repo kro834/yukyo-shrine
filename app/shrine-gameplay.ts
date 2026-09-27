@@ -7,6 +7,7 @@ import {createAreaLookup,AREA_MULTIPLIERS,type AreaColor} from './area-rules.ts'
 import {SECOND_DECK,THIRD_DECK,HIGH_STAIRS,highRails,highCaps,deckFurnitureWalls,floorBand} from './vertical-layout.ts';
 import {flashHits,lightBlocked} from './flash-visibility.ts';
 import {STAIRS,UPPER_HEIGHT,floorHeightAt,upperPartitions,upperBarriers,stairRails,upperDoors} from './annex.ts';
+import {CROUCH_NEAR,CROUCH_SIGHT,CROUCH_TARGET,STAND_TARGET} from './posture.ts';
 export function segmentBlocked(a:Position,b:Position,obstacles:Obstacle[]){
   const dx=b.x-a.x,dz=b.z-a.z;
   return nearbyObstacles(obstacles,Math.min(a.x,b.x),Math.min(a.z,b.z),Math.max(a.x,b.x),Math.max(a.z,b.z)).some(o=>{
@@ -113,6 +114,8 @@ export class Enemies {
   private finaleObservation:{point:Position;floor:number;velocity:Position}|null=null;
   patrolTargets:PatrolTarget[]=[];
   humanMotion=false;
+  /** A crouched visitor is seen over a shorter range by ordinary enemies. */
+  playerCrouching=false;
   private walls:Obstacle[];
   private mechanismSource:Obstacle[]|null=null;
   private mechanismWalls:Obstacle[]=[];
@@ -259,7 +262,8 @@ export class Enemies {
       const currentStair=omniscient?rampAt(e.position,e.floor):transits.find(s=>e.floor>s.low+1e-6&&e.floor<s.high-1e-6&&e.position.x>=s.minX&&e.position.x<=s.maxX&&e.position.z>=s.minZ&&e.position.z<=s.maxZ),onStair=!!currentStair;
       // A ramp footprint blocks ground navigation, but not sight along its surface.
       const sightBlockers=targetStair&&currentStair===targetStair?blockers.filter(o=>o!==targetStair.footprint):blockers;
-      const sees=(omniscient||detectable&&(!['mire','errorWatch'].includes(e.kind)||lightOn))&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight&&(distance<profile.nearSight||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+(this.humanMotion?1.62:e.kind==='mire'?.52:2.05)},{...player,y:playerFloor+1.5},sightBlockers);
+      const low=this.playerCrouching&&!omniscient;
+      const sees=(omniscient||detectable&&(!['mire','errorWatch'].includes(e.kind)||lightOn))&&Math.abs(playerFloor-e.floor)<1&&distance<profile.sight*(low?CROUCH_SIGHT:1)&&(distance<profile.nearSight*(low?CROUCH_NEAR:1)||facing>profile.cone)&&!lightBlocked({...e.position,y:e.floor+(this.humanMotion?1.62:e.kind==='mire'?.52:2.05)},{...player,y:playerFloor+(low?CROUCH_TARGET:STAND_TARGET)},sightBlockers);
       const previousMode=e.brain.mode,lastSeen=e.brain.lastSeen?{...e.brain.lastSeen}:null,stunAtStart=e.brain.stunRemaining;
       if(omniscient&&stunAtStart>0){if(e.kind==='wrath')e.traitTime=0;e.flankPoint=null;}
       e.brain.update(dt,sees,player);

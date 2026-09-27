@@ -48,13 +48,16 @@ import {createEffects,renderEnemyEcho} from './shrine-effects.ts';
 import {CELL,SPAWN} from './shrine-layout.ts';
 import {createSectorLayout as createLayout} from './sector-layout.ts';
 import type {Preferences} from './preferences';
-import {Doors,Enemies,openPursuedDoor} from './shrine-gameplay.ts';
+import {Doors,Enemies,openPursuedDoor,segmentBlocked} from './shrine-gameplay.ts';
 import {createDoorMeshes,createEnemyMeshes} from './shrine-actors.ts';
 import {ScannedProps,propFootprint,type ScannedPlacement} from './scanned-props.ts';
 import {enemyDirection,enemyFloorHint} from './enemy-direction.ts';
 import {movePlayer} from './movement.ts';
 import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,floorHeightAt} from './annex.ts';
-import {RunningSteps,createFootstepAudio} from './footsteps.ts';
+import {RunningSteps,QuietSteps} from './footsteps.ts';
+import {CueQueue,surfaceFor} from './world-cues.ts';
+import {LORE,placeNotes} from './lore.ts';
+import {createNoteMeshes,type NotePickup} from './note-mesh.ts';
 import {placeMagatama,placeRedMagatama,chooseReadableMagatama,collectMagatama,beadInventory,spendBeads} from './magatama.ts';
 import {createMagatamaMeshes} from './magatama-mesh.ts';
 import {ShrineGoal,GOAL} from './shrine-goal.ts';
@@ -91,9 +94,10 @@ import {Stamina} from './stamina.ts';
 import {TimeStop} from './time-stop.ts';
 import {MirrorInventory} from './mirror-inventory.ts';
 import {createMirrorMeshes} from './mirror-mesh.ts';
-import type {PlayMode} from './play-mode.ts';
+import {modeAids,type PlayMode} from './play-mode.ts';
 import {STAGES,stageRules,type StageId} from './stage-profile.ts';
 import {STAIR_LIGHT_VOLUMES} from './stair-light.ts';
+import {Posture,CROUCH_PACE} from './posture.ts';
 export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.WebGLRenderer,seed=Math.floor(Math.random()*0xffffffff),stage:StageId='shrine') {
   const stageProfile=STAGES[stage],stageFog=new THREE.Color(stageProfile.fog),gothic=stage==='orchestra',circus=stage==='circus',parallel=stage==='parallel',mountain=stage==='mountain',hotel=stage==='ultrareal';
   const elevator=hotel?new HotelElevator():undefined,hotelAtmosphere=hotel?new HotelAtmosphere():undefined;let hotelMotion={x:0,z:0};
@@ -121,7 +125,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const altarRoom=altarRooms[Math.floor(runRandom()*altarRooms.length)],goal=new ShrineGoal({x:(altarRoom.x1+altarRoom.x2)*2,z:(altarRoom.z1+altarRoom.z2)*2-15.5},.7);
   const originalAreaName=()=>{if(stage==='error'){if(elevation>4.5)return elevation>9.3?'三層 · 面裏の桟敷':'二層 · 終わらない橋掛かり';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?(horrorArea(r.themeId)?.name??'無終の能舞台'):'歪んだ舞台裏の回廊';}if(circus){if(elevation>4.5)return elevation>9.3?'三層 · 吊り道具の回廊':'二層 · 空中桟橋';const p=camera.position,r=layout.rooms.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);return r?circusRoomName(r):CIRCUS_AREA_NAMES[layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind??'hall'];}if(elevation>4.5)return (elevation>9.3?"三層 · ":"二層 · ")+deckTheme(camera.position,elevation>9.3?2:1);const p=camera.position,r=layout.expansionAreas.find(r=>p.x>=r.x1*4-2&&p.x<=r.x2*4+2&&p.z>=r.z1*4-2&&p.z<=r.z2*4+2);if(r){if(gothic){const c=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4));return r.themeId?.startsWith('orchestra-')?(horrorArea(r.themeId)?.name??'音楽堂'):((ORCHESTRA_AREA_NAMES[c?.kind??'hall']??'音楽堂')+' · '+r.id.slice(-2));}const parent=layout.sectors.find(s=>p.x>=s.x1*4-2&&p.x<=s.x2*4+2&&p.z>=s.z1*4-2&&p.z<=s.z2*4+2);return (parent?.kind==='yokocho'?'宵闇横丁 · ':'')+(horrorArea(r.themeId)?.name??AREA_THEMES[(Number(r.id.slice(-2))-1)%9]+' · '+r.id.slice(-2));};const kind=layout.grid.get(Math.round(p.x/4)+','+Math.round(p.z/4))?.kind;if(gothic)return ORCHESTRA_AREA_NAMES[kind??'hall']??'音楽堂';const landform=layout.landforms.find(r=>Math.abs(p.x-r.cx*4)<=34&&Math.abs(p.z-r.cz*4)<=34);if(stage==='abyss'&&kind==='field')return '埋没した排水路';if(stage==='abyss'&&kind==='yokocho')return '地底の封鎖横丁 · 最危険';if(kind==='field'&&landform)return LANDSCAPE_NAMES[landform.identity];const visual=visualKind(kind??'hall',p.x,p.z);if(visual!==kind)return visual==='stone'?'石蔵の回廊':'祭具の間';return ({yokocho:'宵闇横丁 · 最危険',factory:'廃工場',bath:'朽ちた湯殿',cistern:'地下水槽',shop:'駄菓子屋横丁',cave:'地底洞穴',field:'夜のあぜ道'} as Record<string,string>)[kind??'']??'祭殿回廊';};
   const areaName=()=>hotel?((Math.round(elevation/4.8)+1)+'F · '+(layout.rooms.find(r=>elevation<1&&camera.position.x>=r.x1*4-2&&camera.position.x<=r.x2*4+2&&camera.position.z>=r.z1*4-2&&camera.position.z<=r.z2*4+2)?.themeId?.startsWith('hotel-')?HOTEL_ROOMS[layout.rooms.find(r=>camera.position.x>=r.x1*4-2&&camera.position.x<=r.x2*4+2&&camera.position.z>=r.z1*4-2&&camera.position.z<=r.z2*4+2)!.themeId!.slice(6) as keyof typeof HOTEL_ROOMS]:elevation>9?'エグゼクティブ・ラウンジ':elevation>4?'客室棟・静寂の回廊':HOTEL_AREAS[hotelArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind??'hall')])):mountain?(MOUNTAIN_AREAS[mountainArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))??{x:0,z:0,kind:'hall'})]+' · 標高 '+mountainAltitude(camera.position.z)+'m'):parallel?((elevation>9.3?'三層 · ':elevation>4.5?'二層 · ':'')+PARALLEL_AREAS[parallelArea(layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind??'hall')]):originalAreaName();
-  const runningSteps=new RunningSteps(),footsteps=createFootstepAudio();let lastMotion={running:false,moving:false};
+  const runningSteps=new RunningSteps(),quietSteps=new QuietSteps(),posture=new Posture(),cues=new CueQueue();let chasing=false;let lastMotion={running:false,moving:false};
   const mats={
     ...Object.fromEntries(Object.entries(HOTEL_MATERIALS).map(([key,p])=>[key,new THREE.MeshStandardMaterial(p)])) as Record<keyof typeof HOTEL_MATERIALS,THREE.MeshStandardMaterial>,
     parallelPaint:new THREE.MeshStandardMaterial(PARALLEL_MATERIALS.parallelPaint),
@@ -729,7 +733,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const beadMeshes=createMagatamaMeshes(scene,beads);
   enemies.addPatrolTargets([...beads.map(b=>({id:'room:'+b.id,position:b.position,floor:b.floor})),...layout.expansionAreas.map(r=>({id:r.id,position:{x:(r.x1+r.x2)*2,z:(r.z1+r.z2)*2},floor:0}))]);
   const goalMeshes=createGoalMeshes(scene,goal);
-  const burstRecharge=new BurstRecharge(),timeStop=new TimeStop(),stamina=new Stamina(),run=new RunProgress();let environmentTime=0;
+  const burstRecharge=new BurstRecharge(),timeStop=new TimeStop(),stamina=new Stamina(),run=new RunProgress();let environmentTime=0,preferredStamina=false;
+  const syncStamina=()=>stamina.setEnabled(preferredStamina||modeAids(playMode).staminaForced);
   let goalBlockers=goal.blockers();
   const thirdFixed=[...(hotel?hotelLiftBlockers():[]),...THIRD_DECK.walls,...deckFurnitureWalls(9.6),...highRails,...highCaps];
   let groundDoors=doors.blockers(),upperDoorBlocks=doors.blockers(UPPER_HEIGHT);
@@ -764,6 +769,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const mirrorPickups:import('./mirror-inventory.ts').MirrorPickup[]=[];
   for(const floor of [0,4.8,9.6])for(const t of mirrorPoints.filter(t=>Math.abs(t.floor-floor)<.3)){if(mirrorPickups.filter(p=>p.floor===floor).length>=4)break;if(mirrorPickups.some(p=>p.floor===floor&&Math.hypot(p.position.x-t.point.x,p.position.z-t.point.z)<15))continue;mirrorPickups.push({id:'mirror-'+mirrorPickups.length,position:{...t.point},floor,collected:false});}
   const mirrorInventory=new MirrorInventory(mirrorPickups),mirrorMeshes=createMirrorMeshes(scene,mirrorPickups);
+  const noteSites=placeNotes(enemies.patrolTargets,[{position:SPAWN,floor:0,radius:16},{position:goal.altar,floor:0,radius:10},...beads.map(b=>({position:b.position,floor:b.floor,radius:5})),...mirrorPickups.map(m=>({position:m.position,floor:m.floor,radius:6}))],seededRandom(seed^0x4e07e5),LORE[stage].notes.length);
+  const notes:NotePickup[]=noteSites.map((site,i)=>({id:LORE[stage].notes[i].id,position:site.point,floor:site.floor,collected:false})),noteMeshes=createNoteMeshes(scene,notes);
   let selectedQuality:Preferences['quality']='medium';
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
@@ -812,14 +819,14 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   finiteSceneFixtures(scene);
   const scanLighting=pendingFixtureFinish(scannedProps.ready,scene);
   return {renderer,scene,camera,layout,stage,terrainHeight:mountain?mountainHeight:(_z:number)=>0,scannedReady:Promise.all([scanLighting.ready,shrubs.ready,hotelBeds.ready]),
-    setMode(mode:PlayMode){circusRuntime?.reset();refreshCollision();playMode=mode;if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=stageRules(stage,mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
+    setMode(mode:PlayMode){circusRuntime?.reset();refreshCollision();playMode=mode;syncStamina();if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}enemies.difficulty=stageRules(stage,mode);enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
     get playMode(){return playMode;},
     get riding(){return !!elevator?.riding||(circusRuntime?.riding??false);},
     circusStatus(){return circusRuntime?.snapshot()??null;},
     circusHint(){if(elevator)return elevator.hint();if(!circusRuntime||!circusPlan||elevation>2.2)return '';const status=circusRuntime.snapshot();if(status.riding)return (status.speed<.05?'トロッコ待機中':'トロッコ乗車中')+' · 次は'+circusPlan.stations[status.destination].name+' · 自動降車';const station=circusPlan.stations.map(s=>({...s,d:Math.hypot(s.exit.x-camera.position.x,s.exit.z-camera.position.z)})).sort((a,b)=>a.d-b.d)[0];return station.d<36?station.name+' '+Math.round(station.d)+'m · 〇で呼ぶ・乗る':'';},
     mechanismNear(){if(elevator)return elevator.prompt(camera.position,elevation);return circusRuntime?.near(camera.position,camera.rotation.y)?.label??'';},
     mirrorStatus(){return mirrorInventory.snapshot();},
-    useMirror(){return playMode!=='gallery'&&mirrorInventory.use();},
+    useMirror(){const used=playMode!=='gallery'&&mirrorInventory.use();if(used)cues.push({kind:'mirror'});return used;},
     stairHint(){const options=[...STAIRS.map(s=>({...s,low:0,high:4.8})),...HIGH_STAIRS.map(s=>({...s,low:4.8,high:9.6}))].flatMap(s=>[{x:(s.minX+s.maxX)/2,z:s.minZ-2,floor:s.low,to:s.high,up:true},{x:(s.minX+s.maxX)/2,z:s.maxZ+2,floor:s.high,to:s.low,up:false}]).filter(s=>Math.abs(s.floor-elevation)<.6).map(s=>({...s,d:Math.hypot(s.x-camera.position.x,s.z-camera.position.z)})).sort((a,b)=>a.d-b.d);const s=options[0];return s&&s.d<22?(s.up?'↑ ':'↓ ')+(['一層','二層','三層'][Math.round(s.to/4.8)])+'への階段 · '+Math.round(s.d)+'m':'';},
     get obstacles(){return collision;},flashlight,
     observeFrame(ms:number,active:boolean){if(budget.observe(ms,active))resizeTargets();},
@@ -832,55 +839,63 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     get timeStopped(){return timeStop.active;},
     get timeStopRemaining(){return timeStop.remaining;},
     get timeStopCooldown(){return timeStop.cooldown;},
-    stopTime(){const used=playMode!=='gallery'&&!goal.completed&&timeStop.use();if(used)run.freezes++;return used;},
+    stopTime(){const used=playMode!=='gallery'&&!goal.completed&&timeStop.use();if(used){run.freezes++;cues.push({kind:'time-stop'});}return used;},
     runStatus(){return run.snapshot();},
     staminaStatus(){return stamina.snapshot();},
+    drainCues(){return cues.drain();},
+    noteStatus(){return {found:notes.filter(n=>n.collected).map(n=>n.id),total:notes.length};},
+    soundState(){return {area:layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind??'hall',elevation,frozen:timeStop.active};},
+    get crouching(){return posture.crouching;},
+    toggleCrouch(){if(!goal.completed&&!elevator?.riding&&!circusRuntime?.riding)posture.toggle();return posture.crouching;},
     goalDirection(){return enemyDirection(camera.position,goal.altar,camera.rotation.y);},
     collection(){return {...beadInventory(beads),areaName:areaName(),blueOffered:goal.blueOffered,redOffered:goal.redOffered,finale:enemies.finalKind,unlocked:goal.unlocked,area:areaAt(camera.position,elevation)};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
       if(goal.completed)return {x:camera.position.x,z:camera.position.z,y:camera.position.y,running:false};
-      if(elevator?.riding){stamina.step(dt,false,false,false);lastMotion={running:false,moving:false};return {...camera.position,running:false};}
-      if(circusRuntime?.riding){stamina.step(dt,false,false,false);lastMotion={running:false,moving:false};const p=circusRuntime.snapshot().cart;return {...p,running:false};}
+      if(elevator?.riding){posture.reset();stamina.step(dt,false,false,false);lastMotion={running:false,moving:false};return {...camera.position,running:false};}
+      if(circusRuntime?.riding){posture.reset();stamina.step(dt,false,false,false);lastMotion={running:false,moving:false};const p=circusRuntime.snapshot().cart;return {...p,running:false};}
       refreshCollision();collision=collisionFor();
-      const allowed=sprint&&stamina.canSprint;if(hotel){const blend=1-Math.exp(-dt*12);hotelMotion.x+=(x-hotelMotion.x)*blend;hotelMotion.z+=(z-hotelMotion.z)*blend;x=hotelMotion.x;z=hotelMotion.z;}const pos=movePlayer(camera.position,x,z,yaw,allowed,dt*(hotel?(allowed?.48:.50):1),collision),moving=Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001;stamina.step(dt,sprint,moving,allowed&&moving);lastMotion={running:allowed&&moving,moving};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+1.68,running:allowed&&moving};
+      const allowed=posture.resolve(sprint,Math.hypot(x,z)>.05)&&stamina.canSprint;if(hotel){const blend=1-Math.exp(-dt*12);hotelMotion.x+=(x-hotelMotion.x)*blend;hotelMotion.z+=(z-hotelMotion.z)*blend;x=hotelMotion.x;z=hotelMotion.z;}const pos=movePlayer(camera.position,x,z,yaw,allowed,dt*(hotel?(allowed?.48:.50):1)*(posture.crouching?CROUCH_PACE:1),collision),moving=Math.hypot(pos.x-camera.position.x,pos.z-camera.position.z)>.0001;stamina.step(dt,sprint,moving,allowed&&moving);lastMotion={running:allowed&&moving,moving};elevation=floorHeightAt(pos,elevation);return {...pos,y:elevation+posture.step(dt),running:allowed&&moving};
     },
     enemyDirections(){return !mirrorInventory.active||playMode==='gallery'?[]:enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned',level:enemyFloorHint(elevation,e.floor),chasing:e.brain.mode==='chase'}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     nearAltar(){return playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
-    interact(){if(elevator?.interact(camera.position,elevation)){hotelMotion={x:0,z:0};return {kind:'mechanism' as const,message:elevator.hint()};}if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);return used.blue||used.red||used.gold?'offered':'empty';}return doors.interact(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
-    burst(){if(playMode==='gallery'||goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x,mountain?mountainHeight:undefined);run.stuns+=hits;return hits;},
+    interact(){if(elevator?.interact(camera.position,elevation)){hotelMotion={x:0,z:0};cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:elevator.hint()};}if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);const offered=!!(used.blue||used.red||used.gold);if(offered)cues.push({kind:'offer',unlocked:goal.unlocked});return offered?'offered':'empty';}
+      const level=floorLevel(),door=doors.nearest(camera.position,camera.rotation.y,fixedFor(level),level),toggled=doors.interact(camera.position,camera.rotation.y,fixedFor(level),level);if(toggled&&door)cues.push({kind:'door',open:door.open});return toggled;},
+    burst(){if(playMode==='gallery'||goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x,mountain?mountainHeight:undefined);run.stuns+=hits;cues.push({kind:'burst',hits});return hits;},
     step(dt:number){
       if(goal.completed)return false;
       burstRecharge.step(dt);mirrorInventory.step(dt);
-      const liveDt=timeStop.step(dt);environmentTime+=liveDt*1000;
+      const wasFrozen=timeStop.active,liveDt=timeStop.step(dt);environmentTime+=liveDt*1000;if(wasFrozen&&!timeStop.active)cues.push({kind:'time-resume'});
       if(elevator){const ride=elevator.step(liveDt);if(ride){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=ride.floor;lastMotion={running:false,moving:false};}}
       if(circusRuntime){const occupants=[...(circusRuntime.riding?[]:[{x:camera.position.x,z:camera.position.z,y:elevation+1.68}]),...(playMode==='gallery'||mountain?[]:enemies.actors.map(e=>({...e.position,y:e.floor+1.68})))];const ride=circusRuntime.step(liveDt,occupants);if(ride.position){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=0;lastMotion={running:false,moving:false};}if(ride.lure&&playMode!=='gallery'&&liveDt>0)enemies.hear(ride.lure,0);}
       const detectable=flashlight.visible||(lastMotion.running&&lastMotion.moving);
-      if(runningSteps.update(dt,lastMotion.running,lastMotion.moving)){
-        if(playMode!=='gallery'&&liveDt>1e-6)enemies.hear(camera.position,elevation);
-        const cell=layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4));footsteps.play(['stone','factory','bath','cistern','cave'].includes(cell?.kind??''));
-      }
+      const heard=runningSteps.update(dt,lastMotion.running,lastMotion.moving);
+      if(heard&&playMode!=='gallery'&&liveDt>1e-6)enemies.hear(camera.position,elevation);
+      if(quietSteps.update(dt,lastMotion.moving&&!lastMotion.running,posture.crouching)||heard)cues.push({kind:'step',surface:surfaceFor(stage,layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind,elevation),pace:heard?'run':posture.crouching?'crouch':'walk'});
       lastMotion={running:false,moving:false};
       if(playMode!=='gallery'&&liveDt>1e-6)for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>9.3?thirdFixed:e.floor>4.5?upperFixed:enemyWalls,liveDt);
       doors.update(dt,camera.position,floorLevel());refreshCollision();collision=collisionFor();
-      mirrorInventory.collect(camera.position,elevation,collision);
-      const uncollected=beads.filter(b=>!b.collected);collectMagatama(beads,camera.position,elevation,collision);for(const b of uncollected)if(b.collected)run.pickup(b.color);
+      if(mirrorInventory.collect(camera.position,elevation,collision))cues.push({kind:'mirror-pickup'});
+      for(const n of notes)if(!n.collected&&Math.abs(n.floor-elevation)<.6&&Math.hypot(n.position.x-camera.position.x,n.position.z-camera.position.z)<1.4&&!segmentBlocked(camera.position,n.position,collision)){n.collected=true;cues.push({kind:'note',id:n.id});}
+      const uncollected=beads.filter(b=>!b.collected);collectMagatama(beads,camera.position,elevation,collision);for(const b of uncollected)if(b.collected){run.pickup(b.color);cues.push({kind:'pickup',color:b.color});}
       const inventory=beadInventory(beads),totals={blue:inventory.blue+goal.blueOffered,red:inventory.red+goal.redOffered,gold:inventory.gold+goal.goldOffered};
-      if(playMode!=='gallery'&&!enemies.finalKind&&collectionReady(totals)){enemies.beginFinale(camera.position,elevation,runRandom);mirrorInventory.grant(2);run.beginFinale();phaseRevision++;}
+      if(playMode!=='gallery'&&!enemies.finalKind&&collectionReady(totals)){cues.push({kind:'finale',foe:enemies.beginFinale(camera.position,elevation,runRandom)});mirrorInventory.grant(2);run.beginFinale();phaseRevision++;}
       const burden=Math.max(totals.blue/BEAD_REQUIREMENTS.blue,totals.red/BEAD_REQUIREMENTS.red,totals.gold);enemies.pressure=Math.min(1,burden);
-      goal.update(dt,playMode==='gallery'?{x:10000,z:10000}:camera.position,elevation);refreshCollision();collision=collisionFor();
+      goal.update(dt,playMode==='gallery'?{x:10000,z:10000}:camera.position,elevation);refreshCollision();collision=collisionFor();if(goal.completed)cues.push({kind:'clear'});
+      enemies.playerCrouching=posture.crouching;
       const caught=playMode!=='gallery'&&!goal.completed&&liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable,thirdFixed,flashlight.visible);
       const activeChase=!goal.completed&&enemies.actors.some(e=>e.brain.mode==='chase');
       const activeSearch=!goal.completed&&enemies.actors.some(e=>e.brain.mode!=='stunned'&&e.investigate&&e.searchTime>0&&Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28);
       const stunned=!activeChase&&!activeSearch&&enemies.actors.some(e=>e.brain.mode==='stunned'&&(!!enemies.finalKind||Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28));
       const threatDistance=Math.min(...enemies.actors.filter(e=>activeChase?e.brain.mode==='chase':e.brain.mode!=='stunned'&&e.investigate&&e.searchTime>0&&Math.abs(e.floor-elevation)<1).map(e=>Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z,e.floor-elevation)));
-      run.step(dt,{chasing:activeChase,searching:activeSearch,hidden:!detectable&&!enemies.finalKind,frozen:timeStop.active,stunned,burden,finale:!!enemies.finalKind,distance:threatDistance});
-      if(caught){elevator?.reset();hotelMotion={x:0,z:0};circusRuntime?.reset();phaseRevision++;elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
+      const escapes=run.escapes;run.step(dt,{chasing:activeChase,searching:activeSearch,hidden:!detectable&&!enemies.finalKind,frozen:timeStop.active,stunned,burden,finale:!!enemies.finalKind,distance:threatDistance});
+      if(activeChase&&!chasing&&!enemies.finalKind&&!caught)cues.push({kind:'chase'});chasing=activeChase;if(run.escapes>escapes)cues.push({kind:'escape'});
+      if(caught){cues.push({kind:'caught'});chasing=false;elevator?.reset();posture.reset();hotelMotion={x:0,z:0};circusRuntime?.reset();phaseRevision++;elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();enemies.pressure=0;enemies.reset();goal.reset();for(const b of beads){b.collected=false;b.offered=false;}refreshCollision();collision=groundCollision;
         const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
         const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
     },
     configure(p:Preferences){
-      stamina.setEnabled(p.stamina);
+      preferredStamina=p.stamina;syncStamina();
       renderer.toneMappingExposure=p.brightness*.88;
       camera.fov=p.fov;camera.updateProjectionMatrix();
       selectedQuality=p.quality;const quality=budget.quality(p.quality);
@@ -935,7 +950,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       doorMeshes.update(camera.position,configuredQuality==='low'?72:110);
       scannedProps.update(camera.position);shrubs.update(camera.position);hotelBeds.update(camera.position,configuredQuality==='low');elevatorMeshes?.update(camera.position,playMode!=='gallery');
       enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);
-      beadMeshes.update(environmentTime);
+      beadMeshes.update(environmentTime);noteMeshes.update(environmentTime);
       goalMeshes.update();
       if(outdoorReflection){
         const active=outdoorReflection.update(renderer,scene,camera,time,configuredQuality==='ultra'&&area==='field'&&elevation<3,reflectionExcluded);
@@ -945,7 +960,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       try {if(mountain)dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}}finally{restoreTerrain?.();}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;hotelBeds.dispose();elevatorMeshes?.dispose();anomalies?.dispose();scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();circusMeshes?.cart.removeFromParent();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();footsteps.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;hotelBeds.dispose();elevatorMeshes?.dispose();anomalies?.dispose();scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();circusMeshes?.cart.removeFromParent();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();noteMeshes.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
 

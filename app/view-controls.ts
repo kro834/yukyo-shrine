@@ -1,7 +1,8 @@
 import type {Preferences} from './preferences.ts';
-export type RangeKey='stickSensitivity'|'touchSensitivity'|'mouseSensitivity'|'fov'|'brightness';
+export type RangeKey='stickSensitivity'|'touchSensitivity'|'mouseSensitivity'|'fov'|'brightness'|'masterVolume'|'ambienceVolume'|'effectsVolume';
 export const RANGE_LIMITS:Record<RangeKey,{min:number;max:number;step:number}>={
   stickSensitivity:{min:.25,max:3,step:.25},touchSensitivity:{min:.25,max:3,step:.25},mouseSensitivity:{min:.25,max:3,step:.25},fov:{min:55,max:95,step:1},brightness:{min:.7,max:1.8,step:.05},
+  masterVolume:{min:0,max:1,step:.05},ambienceVolume:{min:0,max:1,step:.05},effectsVolume:{min:0,max:1,step:.05},
 };
 export function adjustRange(p:Preferences,key:RangeKey,direction:number):Preferences {
   const r=RANGE_LIMITS[key];
