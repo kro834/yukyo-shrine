@@ -127,7 +127,7 @@ The UI font subsets were rebuilt as v66 from the recorded Noto sources to cover 
 ## Development and verification
 
 - `pnpm dev` starts the local site; `pnpm build` produces the static client.
-- `node --test tests/*.test.ts` runs the regression suite (Node24 used). On Node 22 add `--experimental-transform-types`, because several modules use TypeScript parameter properties.
+- `node --experimental-transform-types --test tests/*.test.ts` runs the regression suite (Node24 used). Type transformation is required on Node 22 and 24 because several modules use TypeScript parameter properties.
 - `node node_modules/typescript/bin/tsc --noEmit` checks types.
 
 Tests cover input transitions, concurrent touch actions, slider sensitivity, cursor state policy, all objective routes, furnished connectivity, stairs, door interaction, rendering resource/texture lifetimes, final pursuit transitions,32 real-ramp pursuit cases, mirror grants and reset, and threat/freeze/stun reliability.

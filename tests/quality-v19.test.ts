@@ -27,8 +27,8 @@ test('PBR details load only on High; callbacks cannot restore maps after switchi
  const g=globalThis as unknown as Record<string,unknown>;g.document={createElement:()=>({width:0,height:0,getContext:()=>({drawImage(){}})})};
  const m=new THREE.MeshStandardMaterial(),library=new SurfaceLibrary([m],16,loader);
  library.add('diff',[m],{normal:'normal',roughness:'rough'});library.setQuality('low');callbacks.get('diff')!(new THREE.Texture({}));
- assert.deepEqual(requested,['diff']);assert.equal((m.map!.image as {width:number}).width,128);assert.equal(m.normalMap,null);assert.equal(m.roughnessMap,null);
- library.setQuality('high');assert.deepEqual(requested,['diff','normal','rough']);library.setQuality('low');callbacks.get('normal')!(new THREE.Texture({}));callbacks.get('rough')!(new THREE.Texture({}));assert.equal(m.normalMap,null);assert.equal(m.roughnessMap,null);assert.equal((m.map!.image as {width:number}).width,128);
+ assert.deepEqual(requested,['diff']);assert.equal((m.map!.image as {width:number}).width,256);assert.equal(m.normalMap,null);assert.equal(m.roughnessMap,null);
+ library.setQuality('high');assert.deepEqual(requested,['diff','normal','rough']);library.setQuality('low');callbacks.get('normal')!(new THREE.Texture({}));callbacks.get('rough')!(new THREE.Texture({}));assert.equal(m.normalMap,null);assert.equal(m.roughnessMap,null);assert.equal((m.map!.image as {width:number}).width,256);
  library.setQuality('high');assert.ok(m.normalMap);assert.ok(m.roughnessMap);assert.equal((m.normalMap as THREE.Texture).colorSpace,THREE.NoColorSpace);assert.equal((m.roughnessMap as THREE.Texture).colorSpace,THREE.NoColorSpace);assert.equal(m.map!.colorSpace,THREE.SRGBColorSpace);assert.equal(requested.length,3);
  library.setQuality('medium');assert.equal(m.normalMap,null);assert.equal(m.roughnessMap,null);library.dispose();
  const late=new THREE.Texture();let disposed=0;late.addEventListener('dispose',()=>disposed++);callbacks.get('normal')!(late);assert.equal(disposed,1);
