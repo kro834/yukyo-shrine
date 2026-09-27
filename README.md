@@ -1,6 +1,6 @@
 # 幽境 / YUKYO
 
-DualSense・タッチ・キーボードに対応した、一人称視点のブラウザホラーゲームです。ランダム生成の三層構造を探索し、勾玉を集めて祭壇からの脱出を目指します。敵のいないギャラリーモード、ノーマル、ハードを選択できます。
+DualSense・タッチ・キーボードに対応した、一人称視点のブラウザホラーゲームです。ランダム生成の三層構造を探索し、勾玉を集めて祭壇からの脱出を目指します。敵のいないギャラリーモード、ノーマル、ハード、最高難度の悪夢を選択できます。各ステージには物語を綴る手記が隠され、クリアするとS〜Dの評価と記録が残ります。
 
 **[ブラウザでプレイ](https://yukyo-shrine.akiopromax13.chatgpt.site/)**
 
@@ -29,6 +29,15 @@ pnpm dev
 | 霧嶺 | 霧の高山、廃坑、高速トロッコ |
 | ウルトラリアル | 三階を結ぶエレベーターと多様な客室を備えた陰鬱なホテル |
 
+## 本格化アップデート
+
+- **しゃがみ**：△ / R3 / C キー / タッチボタン。移動は半分の速さになり、灯りを点けていても通常の敵に見つかる距離が短くなります。ダッシュ操作で立ち上がります。
+- **手記と記録帳**：各ステージに浮かぶ巻物が三つ。拾った手記はタイトル画面の「記録帳」に残り、縦書きで読めます。
+- **評価と記録**：クリア時に探索時間・復活回数・追跡回避・手記から得点とS〜Dの評価を算出し、ステージとモードごとの最速時間と最高評価を保存します。
+- **悪夢**：敵の感覚・速度・捜索が最も鋭く、スタミナは常に有効。祭壇の針は灯りを消している間だけ現れます。
+- **音響**：環境音、警戒度と連動する心音、床材ごとの足音、各種効果音をすべてブラウザ内で合成します（外部音源なし）。敵は従来どおり無音です。
+- **画面**：タイトル画面、ステージ詳細と記録、一時停止メニュー（目的・やり直し・タイトルへ）、目的表示、ステージ導入演出、捕獲演出、フィルムグレイン。
+
 `app/` にゲームと描画処理、`public/` に配信素材、`tests/` に回帰テスト、`assets/blender/` と `scripts/` にモデル制作関連のファイルがあります。素材の出典は [MATERIALS.md](MATERIALS.md)、[モデルの出典](public/models/SOURCES.md)、[ホテル素材の出典](public/models/hotel/SOURCES.md) を参照してください。
 
 以下はゲーム仕様と実装の詳細です。ステージ固有の移動速度・敵・仕掛けには、それぞれ専用の調整があります。
@@ -45,7 +54,7 @@ Capture restores the ordinary roster, empties held/offered beads and mirrors, cl
 
 ## Modes and stages
 
-Choose any of the nine stages listed above from the initial screen, then start with Gallery, Normal or Hard. Every stage is available immediately, with no clear or unlock requirement. Gallery provides safe sightseeing with no active enemies. After clearing, select another stage or regenerate the same one. A stage change recreates the world and input lifecycle while retaining preferences.
+Choose any of the nine stages listed above from the initial screen, then start with Gallery, Normal, Hard or Nightmare. Nightmare raises enemy sensing, speed and search beyond Hard, always limits sprinting and shows the altar needle only while the flashlight is off. Every stage is available immediately, with no clear or unlock requirement. Gallery provides safe sightseeing with no active enemies. After clearing, select another stage or regenerate the same one. A stage change recreates the world and input lifecycle while retaining preferences.
 
 Abyss has lower cave ceilings, damp dark surfaces, fewer inter-sector links and longer enemy searches. Outer Reach emphasizes open fenced fields, moonlit sky, alleys and shops, with wider detection and faster pursuit. Both preserve all bead routes and tested ground navigation.
 
@@ -74,7 +83,8 @@ Ordinary room and door paper uses a restrained aged-wallpaper photograph, and ta
 | Forward burst | R2 | Q / burst button |
 | Time stop | L2 | T / time-stop button |
 | Consumable mirror | Square | V / mirror button |
-| Settings | Options | P or O / settings button |
+| Crouch | Triangle or R3 | C / crouch button |
+| Pause menu and settings | Options | P or O / settings button |
 
 Burst affects visible enemy bodies within10m and the forward120-degree cone for9 simulation seconds, with14s recharge. Time stop lasts10s with30s recharge. A mirror reveals enemies for12s, consumes one charge and cannot stack while active. Normal enemies are hidden behind walls unless a mirror is active. Running emits footsteps and attracts investigation of the last heard location; normal enemies do not detect dark, quiet walking. Breaking sight ends normal visual pursuit after0.65s with reacquisition grace. The final pursuer intentionally ignores these stealth acquisition rules.
 
@@ -100,10 +110,24 @@ Low omits relief maps, shadows and postprocessing; phones start on Low. Medium r
 
 See [MATERIALS.md](MATERIALS.md) and bundled provenance JSON for official CC0 material sources. This is realtime graphics with remaining geometric simplifications; photographic equivalence is not claimed.
 
+## Presentation, sound and progression
+
+A title screen leads to stage selection with per-stage records. The pause menu shows the current objective and run statistics, offers restart (a new seed, same mode) or return to title behind a second confirming press, and hosts the document, view, graphics, sound and control settings. Starting a stage plays a letterboxed prologue; capture shows a brief red-black sequence before waking elsewhere.
+
+Crouching halves walking pace and lowers the eye to 1.02m. Ordinary enemies see a crouched visitor over 60% of their usual range and aim their line of sight at the lowered body; the final pursuer ignores posture. Any sprint request stands the visitor up.
+
+Each stage hides three documents (27 in total) on reachable patrol points: two on the ground floor and one upstairs, at least 48m apart where possible and clear of the spawn, altar, magatama and mirrors. Placement uses its own seeded stream, so magatama, mirror and finale choices for a seed are unchanged. Found documents persist in `localStorage` (`yukyo-archive-v1`).
+
+A clear scores exploration time (full value within ten minutes, none after forty), a deathless bonus or capture penalty, escapes and documents, multiplied by 1.2 on Hard and 1.5 on Nightmare. S needs 6000 points. Best time, score and rank per stage and mode persist in `yukyo-records-v1`; Gallery walks count as clears without a rank.
+
+All audio is synthesized with Web Audio after the first user gesture, and nothing is downloaded. Stage beds combine detuned drones, gusting filtered noise and stage layers (rain, hum, shimmer), plus sparse events such as creaks, drips, insects, bells, a music box or noh drums. The heartbeat follows the on-screen threat meter; footsteps depend on the surface; time stop and menus muffle the bed. Enemies remain silent. Master, ambience and effect volumes are stored with the other preferences.
+
+The UI font subsets were rebuilt as v66 from the recorded Noto sources to cover the new copy.
+
 ## Development and verification
 
 - `pnpm dev` starts the local site; `pnpm build` produces the static client.
-- `node --test tests/*.test.ts` runs the regression suite (Node24 used).
+- `node --test tests/*.test.ts` runs the regression suite (Node24 used). On Node 22 add `--experimental-transform-types`, because several modules use TypeScript parameter properties.
 - `node node_modules/typescript/bin/tsc --noEmit` checks types.
 
 Tests cover input transitions, concurrent touch actions, slider sensitivity, cursor state policy, all objective routes, furnished connectivity, stairs, door interaction, rendering resource/texture lifetimes, final pursuit transitions,32 real-ramp pursuit cases, mirror grants and reset, and threat/freeze/stun reliability.

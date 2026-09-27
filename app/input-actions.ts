@@ -10,7 +10,8 @@ export class ButtonEdges {
     const pressed=current.map((b,i)=>b&&!this.previous[i]);this.previous=current;
     // Standard API: Circle=1, Cross=0. Unmapped Sony USB HID: Circle=2, Cross=1.
     const circle=rawSony?2:1,cross=rawSony?1:0;
-    return {mirror:!!pressed[rawSony?0:2],flashlight:!!pressed[5],burst:!!pressed[7],timeStop:!!pressed[6],menu:!!pressed[9],confirm:!!pressed[cross],interact:!!pressed[circle],back:!!pressed[circle],up:!!pressed[12],down:!!pressed[13],left:!!pressed[14],right:!!pressed[15]};
+    // Triangle and R3 share index 3 and 11 in both layouts.
+    return {crouch:!!(pressed[3]||pressed[11]),mirror:!!pressed[rawSony?0:2],flashlight:!!pressed[5],burst:!!pressed[7],timeStop:!!pressed[6],menu:!!pressed[9],confirm:!!pressed[cross],interact:!!pressed[circle],back:!!pressed[circle],up:!!pressed[12],down:!!pressed[13],left:!!pressed[14],right:!!pressed[15]};
   }
 }
 export function allowMouseLook(mode:string,paused:boolean,locked:boolean){return mode!=='gamepad'&&!paused&&locked;}
