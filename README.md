@@ -1,4 +1,37 @@
-# 幽境 — 祭殿回廊
+# 幽境 / YUKYO
+
+DualSense・タッチ・キーボードに対応した、一人称視点のブラウザホラーゲームです。ランダム生成の三層構造を探索し、勾玉を集めて祭壇からの脱出を目指します。敵のいないギャラリーモード、ノーマル、ハードを選択できます。
+
+**[ブラウザでプレイ](https://yukyo-shrine.akiopromax13.chatgpt.site/)**
+
+## はじめに
+
+Node.js 24 と pnpm を用意し、次のコマンドで起動します。
+
+```sh
+git clone https://github.com/kro834/yukyo-shrine.git
+cd yukyo-shrine
+pnpm install --frozen-lockfile
+pnpm dev
+```
+
+起動時に表示されるローカルURLをブラウザで開いてください。`pnpm build` の静的クライアント出力先は `dist/client` です。
+
+| ステージ | 舞台 |
+| --- | --- |
+| 祭殿回廊 | 灯りの残る和風回廊と、忘れられた街 |
+| 深淵 | 低い岩盤、埋没した横丁、地下水槽 |
+| 外縁 | 月下のあぜ道、廃駅、廃校舎 |
+| オーケストラ・ツー | ゴシック建築の暗い音楽堂 |
+| 夜廻りサーカス | トロッコと可動装置のある大天幕 |
+| エラー | 二種類の能面の敵が巡る異常な能舞台 |
+| パラレルワールド | 空中の渡り場、家、庭園がつながる街 |
+| 霧嶺 | 霧の高山、廃坑、高速トロッコ |
+| ウルトラリアル | 三階を結ぶエレベーターと多様な客室を備えた陰鬱なホテル |
+
+`app/` にゲームと描画処理、`public/` に配信素材、`tests/` に回帰テスト、`assets/blender/` と `scripts/` にモデル制作関連のファイルがあります。素材の出典は [MATERIALS.md](MATERIALS.md)、[モデルの出典](public/models/SOURCES.md)、[ホテル素材の出典](public/models/hotel/SOURCES.md) を参照してください。
+
+以下はゲーム仕様と実装の詳細です。ステージ固有の移動速度・敵・仕掛けには、それぞれ専用の調整があります。
 
 An original, silent-enemy first-person horror game. The screen stays fixed during exploration. Three connected storeys sit above a seeded, shuffled 5 by 5 ground-floor layout with87 chambers,30 additional room themes and shrine, alley, sweet-shop, cave, field, factory, bathhouse and cistern sectors. Geometry and navigation share occupancy data; doors and stairs use matching-floor collision.
 
@@ -12,7 +45,7 @@ Capture restores the ordinary roster, empties held/offered beads and mirrors, cl
 
 ## Modes and stages
 
-Choose **祭殿回廊 (Shrine)**, **深淵 (Abyss)**, **外縁 (Outer Reach)** or **オーケストラ・ツー (Orchestra Two)** from the initial screen, then start with Gallery, Normal or Hard. Every stage is available immediately, with no clear or unlock requirement. Gallery provides safe sightseeing with no active enemies. After clearing, select another stage or regenerate the same one. A stage change recreates the world and input lifecycle while retaining preferences.
+Choose any of the nine stages listed above from the initial screen, then start with Gallery, Normal or Hard. Every stage is available immediately, with no clear or unlock requirement. Gallery provides safe sightseeing with no active enemies. After clearing, select another stage or regenerate the same one. A stage change recreates the world and input lifecycle while retaining preferences.
 
 Abyss has lower cave ceilings, damp dark surfaces, fewer inter-sector links and longer enemy searches. Outer Reach emphasizes open fenced fields, moonlit sky, alleys and shops, with wider detection and faster pursuit. Both preserve all bead routes and tested ground navigation.
 
