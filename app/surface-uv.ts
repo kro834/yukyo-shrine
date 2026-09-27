@@ -9,6 +9,9 @@ export function surfaceUV(g:THREE.BufferGeometry,scale:number,grain?:'timber'|'t
   const sideVertices=(radialSegments+1)*(heightSegments+1),radius=(radiusTop+radiusBottom)/2;
   for(let i=0;i<uv.count;i++){
    if(grain==='timber-photo')uv.setXY(i,.035+uv.getY(i)*.93,.76+uv.getX(i)*.09);
+   // A turned pillar is one board: stay inside a single cedar plank and mirror
+   // around the circumference, so no plank seams or wrap line appear.
+   else if(grain==='timber'&&i<sideVertices)uv.setXY(i,.212+.076*(1-Math.abs(2*uv.getX(i)-1)),uv.getY(i)*height*scale);
    else if(i<sideVertices)uv.setXY(i,uv.getX(i)*thetaLength*radius*scale,uv.getY(i)*height*scale);
    else uv.setXY(i,(uv.getX(i)-.5)*2*Math.max(radiusTop,radiusBottom)*scale,(uv.getY(i)-.5)*2*Math.max(radiusTop,radiusBottom)*scale);
   }
