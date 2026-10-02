@@ -3,7 +3,7 @@ import type {Room,Cell} from './shrine-layout.ts';
 import {RED_AREAS} from './area-rules.ts';
 import {segmentBlocked} from './shrine-gameplay.ts';
 import {nearbyObstacles} from './spatial.ts';
-export type Bead={id:string;position:Position;floor:number;collected:boolean;color:'blue'|'red'|'gold';offered:boolean};
+export type Bead={id:string;position:Position;floor:number;collected:boolean;color:'blue'|'red'|'gold';offered:boolean;home:{x:number;z:number;floor:number};dropped?:boolean};
 /** Keep the caller's area and random choice, preferring places visible from
  * several nearby walk nodes over blind pockets. Navigation nodes use 4 m cells.
  * One random sample is consumed; never move a bead outside its candidate set.
@@ -39,7 +39,7 @@ export function placeMagatama(rooms:Room[],walls:Obstacle[],upperWalls:Obstacle[
     candidates.sort((a,b)=>Math.hypot(a.x-cx,a.z-cz)-Math.hypot(b.x-cx,b.z-cz));
     const position=candidates.find(p=>!(r.floor?upperWalls:walls).some(o=>p.x>o.minX-.8&&p.x<o.maxX+.8&&p.z>o.minZ-.8&&p.z<o.maxZ+.8));
     if(!position)throw new Error('No accessible magatama location: '+r.id);
-    return {id:r.id,position,floor:r.floor,collected:false,color:'blue' as const,offered:false};
+    return {id:r.id,position,floor:r.floor,collected:false,color:'blue' as const,offered:false,home:{...position,floor:r.floor}};
   });
 }
 export function placeRedMagatama(cells:Cell[],nodes:Iterable<Position>,walls:Obstacle[],random:()=>number):Bead[]{
@@ -48,11 +48,23 @@ export function placeRedMagatama(cells:Cell[],nodes:Iterable<Position>,walls:Obs
   const candidates=points.filter(p=>kinds.get(Math.round(p.x/4)+','+Math.round(p.z/4))===area&&!walls.some(o=>p.x>o.minX-.85&&p.x<o.maxX+.85&&p.z>o.minZ-.85&&p.z<o.maxZ+.85));
   if(!candidates.length)throw new Error('No reachable red magatama location: '+area);
   const position=chooseReadableMagatama(candidates,points,walls,random);
-  return {id:'red-'+area,position,floor:0,collected:false,color:'red',offered:false};
+  return {id:'red-'+area,position,floor:0,collected:false,color:'red',offered:false,home:{...position,floor:0}};
  });
 }
 export function beadInventory(beads:Bead[]){return {gold:beads.filter(b=>b.collected&&!b.offered&&b.color==='gold').length,blue:beads.filter(b=>b.collected&&!b.offered&&b.color==='blue').length,red:beads.filter(b=>b.collected&&!b.offered&&b.color==='red').length};}
 export function spendBeads(beads:Bead[],used:{blue:number;red:number;gold?:number}){for(const color of ['blue','red','gold'] as const){let left=used[color]??0;for(const b of beads)if(left>0&&b.collected&&!b.offered&&b.color===color){b.offered=true;left--;}}}
+/** A captured visitor's held beads fall in a small ring where they stood; the
+ * caller supplies a point on walkable floor. Offered beads are never touched. */
+export function dropHeld(beads:Bead[],point:Position,floor:number){
+ const held=beads.filter(b=>b.collected&&!b.offered);
+ held.forEach((b,i)=>{const a=i*Math.PI*2/held.length;b.collected=false;b.dropped=true;b.position={x:point.x+Math.cos(a)*.35,z:point.z+Math.sin(a)*.35};b.floor=floor;});
+ return held.length;
+}
+/** An unrecovered bundle returns to its rooms when the visitor is caught again. */
+export function scatterDropped(beads:Bead[]){
+ let count=0;for(const b of beads)if(b.dropped&&!b.collected){b.dropped=false;b.position={x:b.home.x,z:b.home.z};b.floor=b.home.floor;count++;}
+ return count;
+}
 export function collectMagatama(beads:Bead[],player:Position,floor:number,walls:Obstacle[]){
   let count=0;
   for(const b of beads)if(!b.collected&&Math.abs(b.floor-floor)<.5&&Math.hypot(b.position.x-player.x,b.position.z-player.z)<1.15&&!segmentBlocked(player,b.position,walls)){b.collected=true;count++;}

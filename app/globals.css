@@ -289,3 +289,29 @@ body{font-family:var(--font-game-ui);font-weight:500;font-synthesis:none;text-re
 /* Five touch actions (mirror, time stop, burst, crouch, dash) stay on one portrait row. */
 @media(max-width:600px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(5,44px);gap:7px}.touch-actions .sprint{width:44px;height:44px}}
 @media(max-width:360px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(5,40px);gap:5px}.touch-actions .sprint{width:40px;height:40px}}
+
+/* ── 夜刻・気配・道具・落とし物・儀式 ── */
+.play-state[data-threat=noticed]{color:#d8b48f}.play-state[data-threat=noticed] .pressure-meter i{background:linear-gradient(90deg,#9a7a5a,#d8b48f)}
+.threat-veil[data-gaze=true]{opacity:var(--gaze,0);box-shadow:inset 0 0 110px #b4894a66;animation:none}
+.night-row{display:flex;align-items:center;gap:9px;margin-top:7px;font-size:12px;color:#d2b89a}
+.night-row>small:first-child{color:#c9a26b;letter-spacing:.14em}
+.incense{flex:1;height:3px;background:#2a2622;border-radius:2px;overflow:hidden;box-shadow:inset 0 0 0 1px #6b533855}
+.incense i{display:block;height:100%;background:linear-gradient(90deg,#c9825a,#f0b27a);transition:width .3s linear;box-shadow:0 0 6px #f0b27a88}
+.night-row[data-state=warning] small,.night-row[data-state=hunt] small{color:#f1b48a}.night-row[data-state=hunt] .incense i{background:linear-gradient(90deg,#c4473a,#ef8a6c)}
+.collection-status .item-line{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;font-size:12px;color:#b7b09f}
+.collection-status .item-line b{font-weight:500;color:#f0d9a8;text-shadow:0 0 8px #e8c47a55}
+.collection-status .item-line em{font-style:normal;color:#9d9484}
+.compass-dial>i.drop-needle:before{background:#9fb8c9;height:16px;width:7px}.compass-dial>i.drop-needle:after{display:none}
+.altar-compass .drop-line{display:block;font-size:11px;color:#9fb8c9;margin-top:2px}
+.compass-dial[data-rite]{background:conic-gradient(#e8c47a calc(var(--rite,0)*1turn),#202b26c9 0)}.compass-dial[data-rite]>b{background:#fff2c7;box-shadow:0 0 10px #ffe6a6}
+.touch-actions{grid-template-columns:repeat(3,52px)}
+.item-button{position:relative}.item-button .item-slot{position:absolute;top:-16px;left:50%;transform:translateX(-50%);padding:1px 7px;border:1px solid #cbb79355;border-radius:9px;background:#141917d9;color:#eadcb8;font-size:10px;letter-spacing:.08em;white-space:nowrap;pointer-events:auto}
+.item-button .item-slot[data-kind=ward]{color:#f3b9a4;border-color:#c3645855}
+.omen-line{margin-top:6px!important;font-size:13px!important;letter-spacing:.14em!important;color:#d9bd84!important}
+.status-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
+.rite-note{display:block;margin-top:6px;color:#f1d9a3;font-size:12px}
+.posture-tag[data-kind=hunt]{color:#f1b48a;border-color:#c4473a66}
+@media(max-width:600px){.touch-actions{grid-template-columns:repeat(3,44px)}.night-row{margin-top:5px;font-size:11px}}
+@media(max-width:600px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(6,44px);gap:6px}.item-button .item-slot{top:-15px;font-size:9px}}
+@media(max-width:400px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(6,40px);gap:4px}.touch-actions .sprint{width:40px;height:40px}}
+@media(max-height:510px){.night-row{margin-top:3px}.collection-status .item-line{margin-top:4px}}

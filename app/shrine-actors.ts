@@ -116,7 +116,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies,human=false)
     return {root,...echo,animate(e:Enemy,time:number){const stunned=e.brain.mode==='stunned',gait=motion.sample(e,time),swing=Math.sin(gait.phase)*gait.weight;
       feet.forEach((foot,j)=>{const step=footCycle(gait.phase,j),travel=step.travel*gait.weight*(.085+.03*gait.run);foot.position.y=step.lift*gait.weight*(.045+.025*gait.run);foot.position.z=.05+travel*gait.forward;});
       arms.forEach((arm,j)=>arm.rotation.x=stunned?.08:Math.sin(gait.phase+j*Math.PI)*gait.weight*(.11+.06*gait.run));
-      head.rotation.z=tilt+(stunned?.25:Math.sin(time*.0009+i)*.035);body.rotation.z=stunned?.08:swing*.008;
+      head.rotation.z=tilt+(stunned?.25:Math.sin(time*.0009+i)*.035)+(e.alert??0)*.32;body.rotation.z=stunned?.08:swing*.008;
       body.rotation.y=-swing*.028;body.position.y=baseY+(1-Math.cos(gait.phase*2))*gait.weight*.010;
     }};
   };
@@ -133,7 +133,9 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies,human=false)
     for(const e of enemies.actors){const key=e.id+':'+e.kind;let a=actors.get(key);if(!a){a=createActor(e);actors.set(key,a);}
       // Sample culled actors too: re-entering view must not replay their entire hidden travel.
       a.animate(e,time);a.root.visible=enabled&&(!viewer||Math.hypot(e.position.x-viewer.x,e.position.z-viewer.z)<range);a.echoGroup.visible=reveal;if(!a.root.visible)continue;
-      a.root.position.set(e.position.x,e.floor,e.position.z);a.root.rotation.y=e.facing;a.sync();
+      a.root.position.set(e.position.x,e.floor,e.position.z);a.root.rotation.y=e.facing;
+      // A sleeper only breathes; an omen-bound pursuer resolves out of nothing over its last 1.5 s.
+      a.root.rotation.z=e.dormant?Math.sin(time*.0006+e.id)*.004:0;const wake=e.wakeIn??0;a.root.scale.setScalar(wake>1.5?.02:1-(wake/1.5)*.98);a.sync();
     }
   },dispose(){surfaces.dispose();for(const m of [cloth,paleCloth,tailoredCloth,tailoredPale,sculpt,skin,mask,black,cord,aura])m.dispose();}};
 }

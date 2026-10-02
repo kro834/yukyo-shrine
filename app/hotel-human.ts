@@ -30,7 +30,7 @@ export function hotelHuman(root:THREE.Group,kind:string,m:{cloth:THREE.Material;
   const gaze=stunned?-.08:intent?Math.max(-.9,Math.min(.9,Math.atan2(Math.sin(angle),Math.cos(angle)))):Math.sin(time*.00024+e.id)*.13;
   // The face turns towards a remembered sighting first; the body follows its
   // navigation heading. No knowledge of a hidden player's live position.
-  head.rotation.y+=(gaze-head.rotation.y)*(1-Math.exp(-dt*3));head.rotation.x=stunned?.22:intent?-.025:staff?.05:.13;
+  head.rotation.y+=(gaze-head.rotation.y)*(1-Math.exp(-dt*3));head.rotation.x=(stunned?.22:intent?-.025:staff?.05:.13)-((e.alert??0)>=.35?.12:0);
   head.rotation.z=staff?.015:-.075;body.rotation.x=stunned?.14:staff?.024:.065;
   for(let i=0;i<2;i++){const a=phase+i*Math.PI;legs[i].hip.rotation.x=Math.sin(a)*.33*drive;legs[i].knee.rotation.x=Math.max(0,-Math.cos(a))*.38*drive;legs[i].hip.position.y=.87+Math.max(0,Math.cos(a))*.022*drive;arms[i].rotation.x=-Math.sin(a)*(staff?.12:.18)*drive;arms[i].rotation.z=(i?1:-1)*.035;}
  }};

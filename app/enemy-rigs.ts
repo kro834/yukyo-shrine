@@ -365,7 +365,8 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     });
     const headScan=isHatred&&chasing?Math.sin(e.traitTime*1.75)*(.060+.070*pressure):0;
     head.rotation.y=headY+(stunned?0:kind==='parallax'&&e.riftWindup?Math.sin(time*.008)*.20:headScan);
-    head.rotation.z=headZ+(stunned?.10:isWarden&&e.investigate?.10:Math.sin(time*.00085)*.018);
+    // A rising gauge tilts the head toward the visitor before the chase begins: the only telegraph of noticing.
+    head.rotation.z=headZ+(stunned?.10:isWarden&&e.investigate?.10:Math.sin(time*.00085)*.018)+(e.alert??0)*.32;
     const wrathHead=isWrath&&chasing?(phase==='rush'?.055:phase==='windup'?-.022:.012):null;
     head.rotation.x=headX+(stunned?.035:isHatred&&chasing?.055:wrathHead??Math.sin(time*.0007)*.012);
   }};
