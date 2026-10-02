@@ -38,7 +38,7 @@ void test('red placements retain one randomized candidate inside every existing 
  for(const [i,bead] of first.entries()){assert.equal(bead.id,'red-'+RED_AREAS[i]);assert.equal(bead.color,'red');assert.equal(bead.floor,0);assert.ok(cells.some(c=>c.kind===RED_AREAS[i]&&c.x*4===bead.position.x&&c.z*4===bead.position.z));}
 });
 
-const beads=():Bead[]=>['blue','red','gold'].map((color,i)=>({id:color,position:{x:i*3,z:0},floor:0,collected:false,color:color as Bead['color'],offered:false}));
+const beads=():Bead[]=>['blue','red','gold'].map((color,i)=>({id:color,position:{x:i*3,z:0},floor:0,collected:false,color:color as Bead['color'],offered:false,home:{x:i*3,z:0,floor:0}}));
 
 void test('red is modestly larger and brighter while gold halo stays depth-tested, local and cheap',()=>{
  const scene=new THREE.Scene(),items=beads(),visuals=createMagatamaMeshes(scene,items);
@@ -58,7 +58,7 @@ void test('red is modestly larger and brighter while gold halo stays depth-teste
 
 void test('visual changes keep collection radius and wall blocking intact for red and gold',()=>{
  for(const color of ['red','gold'] as const){
-  const bead:Bead={id:color,position:{x:0,z:0},floor:0,collected:false,color,offered:false};
+  const bead:Bead={id:color,position:{x:0,z:0},floor:0,collected:false,color,offered:false,home:{x:0,z:0,floor:0}};
   assert.equal(collectMagatama([bead],{x:1.15,z:0},0,[]),0);
   assert.equal(collectMagatama([bead],{x:1,z:0},0,[{minX:.4,maxX:.6,minZ:-2,maxZ:2}]),0);
   assert.equal(collectMagatama([bead],{x:1,z:0},4.8,[]),0);

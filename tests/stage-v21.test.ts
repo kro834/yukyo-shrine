@@ -71,7 +71,7 @@ test('new furnished stages can collect and offer every route, then physically en
    assert.equal(actual!.actors.length,1);assert.equal(w.mirrorStatus().count,2);assert.equal(w.phaseRevision,1);
    assert.equal(w.useMirror(),true);for(let i=0;i<10;i++)w.step(.05);assert.equal(w.mirrorStatus().count,1);assert.equal(w.phaseRevision,1);
    w.camera.position.set(w.altarPosition.x,1.68,w.altarPosition.z-2);w.camera.rotation.y=Math.PI;assert.equal(w.interact(),'offered');
-   for(let i=0;i<45;i++)w.step(.05);w.camera.position.set(w.goalPosition.x,1.68,w.goalPosition.z-1.5);
+   for(let i=0;i<200;i++)w.step(.05);w.camera.position.set(w.goalPosition.x,1.68,w.goalPosition.z-1.5);
    for(let i=0;i<(stage==='ultrareal'?17:8);i++){const p=w.move(0,1,0,true,.05);w.camera.position.set(p.x,p.y,p.z);w.step(.05);}
    assert.equal(w.completed,true,stage+'/'+color);
   }finally{w.dispose();actual=undefined;points=[];for(const mocked of [updateMock,hearMock,collectMock,patrolMock,doorMock])mocked.mock.resetCalls();}

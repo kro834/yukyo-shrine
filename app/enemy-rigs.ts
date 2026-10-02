@@ -1,4 +1,5 @@
 /** Layered clothing and articulated extremities share the actor material/merge lifecycle. */
+import {SUSPECT_AT} from './notice.ts';
 import * as THREE from 'three';
 import type {Enemy} from './shrine-gameplay.ts';
 import {finalePhase,hatredPressure,rushPhase} from './enemy-traits.ts';
@@ -341,6 +342,8 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     // Wrath has a readable three-beat threat: gather back, lunge, then settle.
     if(isWrath&&chasing)lean=phase==='windup'?-.055:phase==='rush'?.12:.022;
     if(stunned)lean=0;
+    // Suspicion reads as a small lean back before the head turns.
+    if(!stunned&&!chasing&&(e.alert??0)>=SUSPECT_AT)lean-=.06;
     const pivot=isMire?.29:waist+.055;
     upper.rotation.x=lean;upper.rotation.z=(isFox&&e.flankPoint?.026:0)+swing*(isMire?.005:.003);
     upper.rotation.y=-swing*(isMire?.016:.028);
@@ -365,7 +368,8 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     });
     const headScan=isHatred&&chasing?Math.sin(e.traitTime*1.75)*(.060+.070*pressure):0;
     head.rotation.y=headY+(stunned?0:kind==='parallax'&&e.riftWindup?Math.sin(time*.008)*.20:headScan);
-    head.rotation.z=headZ+(stunned?.10:isWarden&&e.investigate?.10:Math.sin(time*.00085)*.018);
+    // A rising gauge tilts the head toward the visitor before the chase begins: the only telegraph of noticing.
+    head.rotation.z=headZ+(stunned?.10:isWarden&&e.investigate?.10:Math.sin(time*.00085)*.018)+(e.alert??0)*.32;
     const wrathHead=isWrath&&chasing?(phase==='rush'?.055:phase==='windup'?-.022:.012):null;
     head.rotation.x=headX+(stunned?.035:isHatred&&chasing?.055:wrathHead??Math.sin(time*.0007)*.012);
   }};

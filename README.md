@@ -37,6 +37,17 @@ pnpm dev
 | 霧嶺 | 霧の高山、廃坑、高速トロッコ |
 | ウルトラリアル | 三階を結ぶエレベーターと多様な客室を備えた陰鬱なホテル |
 
+## 夜刻アップデート（コアループ刷新）
+
+- **気配**：見つかる・見つからないの二択ではなく、敵の注意が段階的に高まります。灯りを点けていると距離に応じて気づかれ、消灯していても至近距離で「動けば」気配を悟られます。立ち止まる・しゃがむ・遮蔽物で切る、が対策です。気づかれかけた敵は立ち止まり、首をこちらへ傾けます。
+- **夜刻の鐘**：線香が燃え尽きるごとに鐘が鳴ります。12秒前に余韻が響き、そのとき立っていた場所へ影が集まります。鐘が鳴るたび夜が深まり（宵→夜半→丑三つ時）、眠っていた影が目覚め、青い回廊の安全が薄れます。祭壇への奉納は夜を祓って鐘を遠ざけ、鐘を凌げばバーストが再充填され道具を授かります。
+- **眠る影**：開始時、何体かの影は壁を向いて立ち尽くしています。鐘か、至近での動き、走る足音、鈴、バーストで目覚めます。
+- **奉納は残る・落とし物**：捕まっても祭壇への奉納は失われません。持っていた勾玉は捕まった場所に落ち、近くの影が見張ります。拾い直すか、別の勾玉を探すかの選択になります。
+- **道具（鈴・御札）**：タッチパッド/↑ または R で使用、L3 または 1・2 で持ち替え。鈴は投げた先へ近くの影を二体まで誘います。御札は足元に置き、追ってくる影だけを縛ります。
+- **前兆と封門の儀**：条件が揃うと鐘が三つ鳴り、祭壇の反対側に追跡者が現れます。奉納後は祭壇の輪の中で8秒耐える儀式が始まり、輪の中では追跡者の速さがダッシュを超えません。
+- **今宵の兆し**：同じステージ・モードの二回目以降は、夜ごとに兆し（新月・静寂・長夜・雨夜・丑の刻参り）が引かれ、鐘や影の数、聴力が変わります。評価にも倍率が付きます。
+- **余剰奉納**：封門が開いた後も、余った勾玉を祭壇に捧げると点になります。
+
 ## 本格化アップデート
 
 - **しゃがみ**：△ / R3 / C キー / タッチボタン。移動は半分の速さになり、灯りを点けていても通常の敵に見つかる距離が短くなります。ダッシュ操作で立ち上がります。
@@ -117,6 +128,18 @@ Caves use continuous vaulted surfaces, outward weathered wall relief, sealed flo
 Low omits relief maps, shadows and postprocessing; phones start on Low. Medium retains bloom and shadows. High uses1K PBR detail and contact occlusion. Ultra lazily loads2K maps for four major surfaces,32-sample AO, higher flashlight shadows and reflection targets. Rendering resolution adapts within device pixel budgets; mobile omits planar reflections. Static geometry is batched in24m chunks, spatially culled, and enemy parts are merged while animated joints remain independent.
 
 See [MATERIALS.md](MATERIALS.md) and bundled provenance JSON for official CC0 material sources. This is realtime graphics with remaining geometric simplifications; photographic equivalence is not claimed.
+
+## Night clock, noticing, sleepers, tools and the rite
+
+Enemies.notice gives each ordinary enemy a 0–1 alert gauge. A lit or running visitor fills it over about 1.2 s at the edge of sight (faster up close, instant inside nearSight or when running within 12 m); a moving visitor in the dark fills it within 2.4 m (normal) scaled per enemy kind, halved behind the enemy. Crouching slows both fills. Between 0.35 and 1 the enemy halts and turns toward the visitor; if the gauge decays below 0.2 the enemy searches the last suspected point for 8 s. The final pursuers ignore the gauge. Gallery uses NOTICE_OFF, which reproduces the previous instant rule.
+
+The night clock (app/night-clock.ts) burns an incense fraction on live time (150/130/110 s per toll for normal/hard/nightmare) plus 0.10 per blue and 0.25 per red pickup. Twelve seconds before a toll a warning snapshots the visitor's position; at the toll 2/3/4 hunters converge on nodes within 12 m of that snapshot, a batch of sleepers wakes (never within 20 m or in view), blue-area multipliers lerp toward 1 (0.40 → 0.55 → 0.73) and fog thickens. Offering purifies 0.15 per blue and 0.40 per red. Surviving the 35 s hunt without a chase refills burst and grants a tool. Capture adds 0.6 and holds warnings for 25 s. The clock stops when the finale begins.
+
+Sleepers are chosen per seed (5/4/3 by mode, never the gold guardian, at least one awake actor per storey). Capture keeps offerings and the open gate, drops held beads in a 0.35 m ring at the capture point (snapped to a nav node on ramps) and sends the nearest regular enemy to search there for 40 s; a second capture scatters the previous bundle home. The finale re-arms 12 s after a respawn.
+
+Items (app/item-bag.ts): bells (cap 3) and wards (cap 2), four pickups per map, +1 ward at the finale. A thrown bell flies at 13 m/s with gravity, stops at walls, and when it lands the two nearest same-floor patrollers within clamp(0.3×hearing, 10, 45) m investigate for max(14, d/3.6+6) s; thrown during a time stop it rings when time resumes. A ward arms in 0.6 s and stuns only a chasing enemy that crosses within 1.3 m (6 s, or 2.5 s for a final pursuer followed by 8 s of immunity).
+
+The finale opens with a 6 s omen during which the pursuer stands motionless, spawned preferably on the far side from the altar. The unlocking offering starts an 8 s rite accrued on live time within 7 m of the altar; inside that ring the pursuer's speed is scaled so it stays below the sprint speed (hatred ×0.6, wrath ×0.459). Omens (app/run-omens.ts) are drawn per seed after the first run of a stage and mode; 丑の刻参り unlocks after a ranked clear. Scoring adds survived tolls (+150 each, cap 5), a phase bonus (宵 +600, 夜半 +250) and surplus offerings (blue +200, red +500, cap 1200), multiplied by the omen.
 
 ## Presentation, sound and progression
 

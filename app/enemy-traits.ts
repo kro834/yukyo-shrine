@@ -1,3 +1,4 @@
+import {SPRINT_SPEED} from './movement.ts';
 export const EXTRA_ENEMY_PROFILES={
  hotelStaff:{sight:24,nearSight:2,cone:.48,chase:2.3,patrol:1.05,hearing:46},
  hotelGuest:{sight:19,nearSight:2,cone:.42,chase:2.05,patrol:.85,hearing:34},
@@ -32,6 +33,10 @@ export function finaleSpeed(kind:FinaleKind,time:number,difficulty=1){
  const speed=kind==='hatred'?h.startSpeed+(h.maximumSpeed-h.startSpeed)*hatredPressure(time):phase==='windup'?w.windupSpeed:phase==='rush'?w.rushSpeed:w.recoverySpeed;
  return speed*Math.max(.85,Math.min(1.2,difficulty));
 }
+/** The fastest the final pursuer ever moves: hatred at full pressure, wrath mid-rush. */
+export function finalePeakSpeed(kind:FinaleKind,difficulty=1){const d=Math.max(.85,Math.min(1.2,difficulty));return (kind==='hatred'?FINALE_BALANCE.hatred.maximumSpeed:FINALE_BALANCE.wrath.rushSpeed)*d;}
+/** Inside the altar ring the pursuer's peak stays below a sprinting visitor. */
+export const ringScale=(kind:FinaleKind,difficulty=1)=>Math.min(.6,.97*SPRINT_SPEED/finalePeakSpeed(kind,difficulty));
 /** Integrate phase boundaries, so a frame ending at rush onset cannot steal
  * movement from the advertised windup or shorten the recovery interval. */
 export function finaleDistance(kind:FinaleKind,time:number,dt:number,difficulty=1){

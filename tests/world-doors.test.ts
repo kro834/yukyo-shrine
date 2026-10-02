@@ -68,7 +68,17 @@ test('furnished random worlds collect and offer either route, then allow entry t
    assert.equal(world.nearAltar(),true);assert.ok(Math.abs(world.goalDirection().angle)<1e-6);
    assert.equal(world.interact(),'offered');assert.equal(world.collection()[color],0);assert.equal(world.collection().unlocked,true);
    assert.equal(world.interact(),'empty','beads cannot be offered twice');
-   for(let i=0;i<45;i++)world.step(.05);
+   // The gate waits for the eight-second rite inside the altar ring before it opens.
+   const gate=world.goalPosition,sealed=()=>world.obstacles.some(o=>Math.abs(o.minZ-(gate.z-.1))<1e-6&&Math.abs(o.maxZ-(gate.z+.15))<1e-6&&Math.abs((o.minX+o.maxX)/2-gate.x)<1e-6);
+   assert.ok(world.finale,`${color} route began the finale`);assert.deepEqual(world.riteStatus(),{progress:0,remaining:8},'the unlocking offering demands the rite');
+   assert.equal(sealed(),true,'the gate is sealed right after the unlocking offering');assert.equal(world.completed,false);
+   for(let i=0;i<100;i++)world.step(.05);
+   assert.ok(Math.abs(world.riteStatus()!.progress-.625)<1e-9,'five live seconds into the rite');assert.equal(sealed(),true,'the gate stays sealed until the rite completes');
+   world.camera.position.set(gate.x,1.68,gate.z-1.5);
+   for(let i=0;i<8;i++){const p=world.move(0,1,0,true,.05);world.camera.position.set(p.x,p.y,p.z);world.step(.05);}
+   assert.equal(world.completed,false,'the sealed gate cannot be entered mid-rite');assert.ok(world.camera.position.z<gate.z-.1,'the seal stops the visitor');
+   for(let i=0;i<100;i++)world.step(.05);
+   assert.equal(world.riteStatus(),null);assert.equal(sealed(),false,'the rite and then the opening have finished');
    world.camera.position.set(world.goalPosition.x,1.68,world.goalPosition.z-1.5);
    for(let i=0;i<8;i++){const p=world.move(0,1,0,true,.05);world.camera.position.set(p.x,p.y,p.z);world.step(.05);}
    assert.equal(world.completed,true,`${color} route can enter the goal: ${JSON.stringify({position:world.camera.position,obstacles:world.obstacles.filter(o=>o.minX<2&&o.maxX>-2&&o.minZ<18&&o.maxZ>14)})}`);
@@ -97,8 +107,8 @@ test('random altar and gold route survive defeat with empty inventory and a new 
   altars.add(JSON.stringify(w.altarPosition));const gold=points.find(p=>p.id==='room:gold-yokocho')!;assert.ok(gold);
   w.camera.position.set(gold.position.x,1.68,gold.position.z);w.step(.05);assert.equal(w.collection().gold,1);assert.equal(w.collection().area,'red');assert.ok(w.collection().areaName.includes('横丁'));
   w.camera.position.set(w.altarPosition.x,1.68,w.altarPosition.z-2);w.camera.rotation.y=Math.PI;assert.equal(w.interact(),'offered');assert.equal(w.collection().unlocked,true);
-  for(let i=0;i<2;i++){const old=w.camera.position.clone();defeat=true;assert.equal(w.step(.05),true);defeat=false;const c=w.collection();assert.equal(c.gold+c.blue+c.red+c.blueOffered+c.redOffered,0);assert.equal(c.unlocked,false);assert.ok(w.camera.position.distanceTo(old)>24);assert.ok(actual!.actors.every(e=>Math.hypot(e.position.x-w.camera.position.x,e.position.z-w.camera.position.z)>24));assert.ok(!w.obstacles.some(o=>w.camera.position.x>o.minX-.5&&w.camera.position.x<o.maxX+.5&&w.camera.position.z>o.minZ-.5&&w.camera.position.z<o.maxZ+.5));spawns.add(w.camera.position.toArray().join(','));}
-  w.camera.position.set(gold.position.x,1.68,gold.position.z);w.step(.05);assert.equal(w.collection().gold,1,'gold can be collected again after defeat');
+  for(let i=0;i<2;i++){const old=w.camera.position.clone();defeat=true;assert.equal(w.step(.05),true);defeat=false;const c=w.collection();assert.equal(c.gold+c.blue+c.red+c.blueOffered+c.redOffered,0);assert.equal(c.unlocked,true,'offerings stay on the altar through a capture');assert.ok(w.camera.position.distanceTo(old)>24);assert.ok(actual!.actors.every(e=>Math.hypot(e.position.x-w.camera.position.x,e.position.z-w.camera.position.z)>24));assert.ok(!w.obstacles.some(o=>w.camera.position.x>o.minX-.5&&w.camera.position.x<o.maxX+.5&&w.camera.position.z>o.minZ-.5&&w.camera.position.z<o.maxZ+.5));spawns.add(w.camera.position.toArray().join(','));}
+  w.camera.position.set(gold.position.x,1.68,gold.position.z);w.step(.05);assert.equal(w.collection().gold,0,'an offered gold stays on the altar');assert.equal(w.collection().unlocked,true);
  }finally{w.dispose();}}
  assert.ok(altars.size>1);assert.equal(spawns.size,6);
 });

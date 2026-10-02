@@ -1,5 +1,5 @@
 import type {StageId} from './stage-profile.ts';
-import type {Pace,Surface,WorldCue} from './world-cues.ts';
+import {WARD_BURN_HEARD,type Pace,type Surface,type WorldCue} from './world-cues.ts';
 /** Procedural sound: every layer is synthesized, so nothing is downloaded and
  * the audio clock never waits on the network. Enemies remain silent; the
  * visitor hears the place, their own body and the consequences of actions. */
@@ -27,6 +27,8 @@ export function heartbeat(pressure:number,chase:boolean,frozen:boolean){
  const intensity=frozen?0:Math.max(chase?.45:0,Math.min(1,Math.max(0,pressure)));
  return intensity<.06?null:{bpm:58+92*intensity,level:.25+.75*intensity};
 }
+/** A landed bell or a flaring ward is quieter the farther it is from the visitor. */
+export function ringFalloff(distance?:number){return 1/(1+Math.max(0,Number.isFinite(distance)?distance!:0)/8);}
 /** Ambience is muffled by menus, a time stop and the moment of capture. */
 export function moodFilter(mood:Mood,frozen:boolean,stunned:boolean){
  if(mood==='paused')return {cutoff:700,level:.45};
@@ -109,6 +111,8 @@ export function createSoundscape(options:Options={}){
  };
  events?.addEventListener('pointerdown',unlock,true);events?.addEventListener('keydown',unlock,true);
  const now=()=>ctx!.currentTime+.01,pan=()=>(random()*2-1)*.8;
+ /** Halves the ambience bed for a moment so a distant bell reads over it. */
+ const duck=(seconds:number)=>{if(!running()||!bed||!(seconds>0))return;const t=ctx!.currentTime,g=bed.level.gain;g.cancelScheduledValues(t);g.setTargetAtTime(.5,t,.08);g.setTargetAtTime(1,t+Math.min(seconds,30),.35);};
  const ambient:Record<Ambient,(t:number)=>void>={
   creak:t=>{const s=sound({bus:'amb',gain:.3,wet:.5,pan:pan()}),f=380+random()*160;for(let i=0;i<5;i++)s.hiss({t:t+i*.085,attack:.02,decay:.08,gain:.7*(1-i*.12),type:'bandpass',f:f-i*22,q:14});},
   drip:t=>{const s=sound({bus:'amb',gain:.28,wet:.85,pan:pan()});s.tone({f:1500+random()*900,to:650,t,attack:.002,decay:.07,gain:.8});if(random()<.5)s.tone({f:1300+random()*700,to:600,t:t+.35+random()*.4,attack:.002,decay:.06,gain:.45});},
@@ -135,15 +139,26 @@ export function createSoundscape(options:Options={}){
   else if(surface==='grass')s.hiss({t,attack:.02,decay:.14,gain:.45,type:'bandpass',f:2600*pitch,q:.5});
   else {s.hiss({t,attack:.008,decay:.09,gain:.45,type:'lowpass',f:480*pitch,q:.5});s.tone({f:80,to:45,t,decay:.07,gain:.25});}
  };
+ const glint=(t:number,pitch:number,gain:number)=>{const s=sound({gain,wet:.6});for(const f of [2637,3136,3520])s.tone({f:f*pitch,t:t+random()*.05,attack:.005,decay:.9,gain:.5});s.hiss({t,attack:.05,decay:.5,gain:.2,type:'highpass',f:6000*pitch});};
+ const opening=(s:ReturnType<typeof sound>,t:number)=>{s.hiss({t,attack:1.2,decay:2.5,gain:.8,type:'lowpass',f:110});[587.3,784,880,1174.7].forEach((f,i)=>s.bell(f,t+.6+i*.12,.4,2.5));};
+ const item=(c:Extract<WorldCue,{kind:'item'}>,t:number)=>{
+  const near=ringFalloff(c.distance),aim=Number.isFinite(c.angle)?Math.sin(c.angle!):0;
+  if(c.action==='throw')sound({gain:.2,wet:.08}).hiss({t,attack:.03,decay:.15,gain:1,type:'bandpass',f:700,to:2400,q:.9});
+  else if(c.action==='ring'){const s=sound({gain:.22*near,wet:.5,pan:aim});s.tone({f:3600,t,decay:.03,gain:.5,type:'triangle'});s.tone({f:3300,t:t+.13,decay:.03,gain:.35,type:'triangle'});s.bell(2093,t,1,1.6);s.bell(2637,t+.13,.6,1.3);}
+  else if(c.action==='pickup')glint(t,.5,.22);
+  else if(c.action==='place'){const s=sound({gain:.26,wet:.12});s.hiss({t,attack:.01,decay:.12,gain:.8,type:'bandpass',f:3200,q:.7});s.hiss({t:t+.14,attack:.02,decay:.16,gain:.5,type:'bandpass',f:3200,to:2600,q:.7});}
+  // Beyond sight range a flare would betray the enemy that stepped on the ward.
+  else if((c.distance??0)<=WARD_BURN_HEARD.seen){const s=sound({gain:.3*near,wet:.35,pan:aim});s.hiss({t,attack:.03,decay:.47,gain:1,type:'bandpass',f:1800,to:600,q:.8});s.tone({f:90,to:42,t,decay:.3,gain:.9});}
+ };
  const cue=(c:WorldCue)=>{
   if(!running())return;const t=now();
   switch(c.kind){
    case 'step':step(c.surface,c.pace);break;
    case 'pickup':{const s=sound({gain:.28,wet:.55});if(c.color==='blue'){s.bell(1318.5,t,1,1.6);s.bell(1975.5,t+.09,.45,1.2);}else if(c.color==='red'){s.bell(880,t,1,2.2);s.bell(932.3,t+.02,.7,2.2);s.tone({f:220,t,attack:.3,decay:1.5,gain:.25,type:'triangle'});}else{[659.3,830.6,987.8,1318.5,1661].forEach((f,i)=>s.bell(f,t+i*.07,.8,2.4));s.hiss({t,attack:.4,decay:1.2,gain:.15,type:'highpass',f:5000});}break;}
-   case 'mirror-pickup':{const s=sound({gain:.2,wet:.6});for(const f of [2637,3136,3520])s.tone({f,t:t+random()*.05,attack:.005,decay:.9,gain:.5});s.hiss({t,attack:.05,decay:.5,gain:.2,type:'highpass',f:6000});break;}
+   case 'mirror-pickup':glint(t,1,.2);break;
    case 'note':{const s=sound({gain:.32,wet:.15});s.hiss({t,attack:.01,decay:.12,gain:.8,type:'bandpass',f:3200,q:.7});s.hiss({t:t+.16,attack:.02,decay:.2,gain:.6,type:'bandpass',f:2400,q:.7});s.bell(1568,t+.2,.25,1.2);break;}
    case 'door':{const s=sound({gain:.32,wet:.25});s.hiss({t,attack:.12,decay:.38,gain:1,type:'lowpass',f:c.open?600:1100,to:c.open?1400:500,q:.8});if(!c.open)s.tone({f:95,to:60,t:t+.46,decay:.12,gain:.6});break;}
-   case 'offer':{const s=sound({gain:.38,wet:.75});s.bell(98,t,1,5);s.tone({f:49,t,attack:.02,decay:3.5,gain:.5});s.bell(1318.5,t+.25,.3,2);if(c.unlocked){s.hiss({t:t+.6,attack:1.2,decay:2.5,gain:.8,type:'lowpass',f:110});[587.3,784,880,1174.7].forEach((f,i)=>s.bell(f,t+1.2+i*.12,.4,2.5));}break;}
+   case 'offer':{if(c.surplus){sound({gain:.26,wet:.6}).bell(1568,t,1,2.4);break;}const s=sound({gain:.38,wet:.75});s.bell(98,t,1,5);s.tone({f:49,t,attack:.02,decay:3.5,gain:.5});s.bell(1318.5,t+.25,.3,2);if(c.unlocked&&!c.rite)opening(s,t+.6);break;}
    case 'mechanism':{const s=sound({gain:.28,wet:.35});s.hiss({t,decay:.12,gain:.7,type:'lowpass',f:420});s.tone({f:88,to:60,t,decay:.14,gain:.7});s.tone({f:1250,t:t+.02,decay:.06,gain:.2,type:'triangle'});break;}
    case 'burst':{const s=sound({gain:.3,wet:.35});s.hiss({t,attack:.03,decay:.4,gain:1,type:'bandpass',f:500,to:3200,q:.9});s.tone({f:2200,to:700,t,decay:.3,gain:.3});if(c.hits>0)s.bell(2489,t+.08,.4,.8);break;}
    case 'time-stop':{const s=sound({gain:.3,wet:.6});s.tone({f:880,to:110,t,attack:.02,decay:1.2,gain:.5});s.hiss({t,attack:.5,decay:.08,gain:.7,type:'highpass',f:3000});s.tone({f:55,t:t+.5,decay:1.8,gain:.6});break;}
@@ -154,6 +169,21 @@ export function createSoundscape(options:Options={}){
    case 'finale':{const s=sound({gain:.42,wet:.6});for(const f of [36.7,55,73.4])s.tone({f,t,attack:1.6,decay:2.6,gain:.7,type:'sawtooth',lowpass:600});s.hiss({t,attack:1.8,decay:.4,gain:.5,type:'lowpass',f:300,to:1800});s.tone({f:48,to:30,t:t+1.8,decay:1.6,gain:1});break;}
    case 'caught':{const s=sound({gain:.48,wet:.5});s.hiss({t,decay:.6,gain:1,type:'lowpass',f:3200,to:200});s.tone({f:70,to:28,t,decay:1.2,gain:1});s.tone({f:2600,t:t+.05,attack:.05,decay:2.4,gain:.08});stunnedUntil=t+2.6;nextBeat=0;break;}
    case 'clear':{const s=sound({gain:.3,wet:.7});[587.3,659.3,784,880,1174.7,1568].forEach((f,i)=>s.bell(f,t+i*.16,.7,3));s.tone({f:146.8,t,attack:1,decay:4,gain:.35,type:'triangle'});break;}
+   // The shrine's own bells mark the night; none of them comes from an enemy.
+   case 'bell':{
+    if(c.beat==='warning'){sound({gain:.32,wet:1}).bell(65,t,.5,6);duck(1.5);}
+    else if(c.beat==='toll'){const s=sound({gain:.42,wet:.8}),n=Math.max(1,Math.min(5,Math.floor(c.count)||1));for(let i=0;i<n;i++){s.bell(65,t+i*2.2,1,6);s.tone({f:32.5,t:t+i*2.2,decay:7,gain:.6});}}
+    else if(c.survived){const s=sound({gain:.16,wet:.7});[1760,2093,2637].forEach((f,i)=>s.tone({f,t:t+i*.14,attack:.01,decay:1.4,gain:.6}));}
+    break;}
+   case 'purify':{const s=sound({gain:.3,wet:1});s.bell(392,t,1,4.5);s.bell(784,t+.08,.6,4);break;}
+   case 'notice':sound({gain:.08}).hiss({t,attack:.06,decay:.34,gain:1,type:'bandpass',f:900,q:1.2});break;
+   case 'item':item(c,t);break;
+   case 'recover':{const s=sound({gain:.16,wet:.6});[1318.5,1568,1760].forEach((f,i)=>s.bell(f,t+i*.16,.8,1.2));break;}
+   case 'rite':{
+    if(c.beat==='start'){const s=sound({gain:.36,wet:.8});s.bell(98,t,1,5);s.tone({f:880,to:1318.5,t:t+.4,attack:.6,decay:1.8,gain:.35});s.hiss({t:t+.4,attack:.5,decay:1.6,gain:.25,type:'bandpass',f:1100,to:1650,q:6});}
+    else if(c.beat==='tick')sound({gain:.25,wet:.15}).tone({f:55,t,attack:.04,decay:.6,gain:1});
+    else opening(sound({gain:.38,wet:.75}),t);
+    break;}
   }
  };
  return {
@@ -162,6 +192,7 @@ export function createSoundscape(options:Options={}){
   setStage(next:StageId){if(next===stage&&bed)return;stage=next;if(!ctx||!graph)return;dropBed(bed);bed=makeBed(ctx,graph,PROFILES[stage]);graph.wetReturn.gain.setTargetAtTime(PROFILES[stage].wet*.6,ctx.currentTime,.4);nextEvent=0;lastWind=lastHum=-1;},
   setMix(next:Mix){mix={master:Math.max(0,Math.min(1,next.master)),ambience:Math.max(0,Math.min(1,next.ambience)),effects:Math.max(0,Math.min(1,next.effects))};lastFilter='';if(!graph||!ctx)return;const t=ctx.currentTime;graph.master.gain.setTargetAtTime(mix.master,t,.05);graph.effects.gain.setTargetAtTime(mix.effects,t,.05);},
   cue,
+  duck,
   ui(kind:'move'|'open'|'close'|'confirm'){if(!running())return;const t=now(),s=sound({gain:kind==='move'?.035:.07,wet:.1});if(kind==='move')s.tone({f:1500,t,decay:.03,gain:1});else s.hiss({t,decay:kind==='confirm'?.09:.06,gain:1,type:'bandpass',f:kind==='close'?900:kind==='open'?1500:2200,q:2});},
   /** Called every frame; schedules only what is due within the next moment. */
   frame(f:SoundFrame){

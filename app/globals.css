@@ -32,6 +32,8 @@ html[data-shrine-playing=true],html[data-shrine-playing=true] *{cursor:none!impo
 .collection-status .blue-bead{color:#79bded}.altar-compass>span{font-size:12px}@media(max-width:600px){.altar-compass{top:158px;left:16px}.clear-screen h1{margin:10px 0}.clear-screen p{margin:8px 0}}@media(max-height:510px){.play-state{bottom:18px}.altar-compass{top:112px}.run-results{gap:8px 20px;margin-bottom:12px}.clear-screen>span{font-size:30px}.clear-screen h1{font-size:26px}.clear-screen strong{margin:6px 0 12px}.clear-screen small{margin-top:8px}}
 
 .enemy-bearing{display:flex;flex-direction:column;align-items:center;gap:5px}.enemy-bearing>i{display:block;font-style:normal}.enemy-bearing>small{font-family:var(--font-sans);font-size:12px;font-weight:400;letter-spacing:.1em;white-space:nowrap}.enemy-bearing[data-chasing=true]>i{filter:drop-shadow(0 0 6px currentColor)}
+/* A sleeper is drawn hollow: an outline with no glow, so it reads as dormant at a glance. */
+.enemy-bearing[data-dormant=true]{text-shadow:none}.enemy-bearing[data-dormant=true]>i{color:transparent;-webkit-text-stroke:1.5px #9aa3a6;filter:none}
 /* Keep urgent feedback clear of the movement pads and ability controls. */
 .toast{bottom:175px;max-width:min(90vw,560px);font-size:14px;pointer-events:none}.notice{pointer-events:auto}.settings-dialog{display:flex!important;flex-direction:column}.settings-dialog>[data-slot=tabs]{min-height:0;flex:1}.settings-footer,.settings-heading,.settings-tabs{flex-shrink:0}
 @media(max-width:600px){.toast{bottom:265px;font-size:13px}.door-action{bottom:85px}.time-stop-status{bottom:150px}.burst-cooldown{bottom:130px}}
@@ -243,7 +245,7 @@ body{font-family:var(--font-game-ui);font-weight:500;font-synthesis:none;text-re
 .status-objective{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-left:3px solid var(--shu-dim);background:#0f141266}
 .status-objective small{font-size:11px;letter-spacing:.2em;color:#d38d7f}.status-objective strong{font:600 19px var(--font-game-title);letter-spacing:.1em;color:#efe3cb}.status-objective span{font-size:12px;color:#b9b09c}
 .status-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0}
-.status-stats div{border:1px solid var(--border);padding:8px 10px}.status-stats dt{font-size:11px;color:#9fa493}.status-stats dd{margin:4px 0 0;font-size:18px;font-variant-numeric:tabular-nums;color:#e5dac3}
+.status-stats div{border:1px solid var(--border);padding:8px 10px}.status-stats dt{font-size:11px;color:#9fa493}.status-stats dd{margin:4px 0 0;font-size:18px;font-variant-numeric:tabular-nums;color:#e5dac3;overflow-wrap:anywhere}
 .menu-actions{display:flex;flex-direction:column;gap:8px}
 .menu-action{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border:1px solid #9c80513f;background:#1b221f99;color:#dccfb4;font-size:13px;text-align:left}
 .menu-action.primary{border-color:#bca06a66;background:#bba36c17;color:#e8cf9d}
@@ -289,3 +291,32 @@ body{font-family:var(--font-game-ui);font-weight:500;font-synthesis:none;text-re
 /* Five touch actions (mirror, time stop, burst, crouch, dash) stay on one portrait row. */
 @media(max-width:600px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(5,44px);gap:7px}.touch-actions .sprint{width:44px;height:44px}}
 @media(max-width:360px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(5,40px);gap:5px}.touch-actions .sprint{width:40px;height:40px}}
+
+/* ── 夜刻・気配・道具・落とし物・儀式 ── */
+.play-state[data-threat=noticed]{color:#d8b48f}.play-state[data-threat=noticed] .pressure-meter i{background:linear-gradient(90deg,#9a7a5a,#d8b48f)}
+.threat-veil[data-gaze=true]{opacity:var(--gaze,0);box-shadow:inset 0 0 110px #b4894a66;animation:none}
+.night-row{display:flex;align-items:center;gap:9px;margin-top:7px;font-size:12px;color:#d2b89a}
+.night-row>small:first-child{color:#c9a26b;letter-spacing:.14em}
+.incense{flex:1;height:3px;background:#2a2622;border-radius:2px;overflow:hidden;box-shadow:inset 0 0 0 1px #6b533855}
+.incense i{display:block;height:100%;background:linear-gradient(90deg,#c9825a,#f0b27a);transition:width .3s linear;box-shadow:0 0 6px #f0b27a88}
+.night-row[data-state=warning] small,.night-row[data-state=hunt] small{color:#f1b48a}.night-row[data-state=hunt] .incense i{background:linear-gradient(90deg,#c4473a,#ef8a6c)}
+.collection-status .item-line{display:flex;flex-wrap:wrap;gap:4px 10px;margin-top:8px;font-size:12px;color:#b7b09f}
+.collection-status .item-line b{font-weight:500;color:#f0d9a8;text-shadow:0 0 8px #e8c47a55}
+.collection-status .item-line em{font-style:normal;color:#9d9484}
+.compass-dial>i.drop-needle:before{background:#9fb8c9;height:16px;width:7px}.compass-dial>i.drop-needle:after{display:none}
+.altar-compass .drop-line{display:block;font-size:11px;color:#9fb8c9;margin-top:2px}
+.compass-dial[data-rite]{background:conic-gradient(#e8c47a calc(var(--rite,0)*1turn),#202b26c9 0)}.compass-dial[data-rite]>b{background:#fff2c7;box-shadow:0 0 10px #ffe6a6}
+.touch-actions{grid-template-columns:repeat(3,52px)}
+.item-button{position:relative}.item-button .item-slot{position:absolute;top:-16px;left:50%;transform:translateX(-50%);padding:1px 7px;border:1px solid #cbb79355;border-radius:9px;background:#141917d9;color:#eadcb8;font-size:10px;letter-spacing:.08em;white-space:nowrap;pointer-events:auto}
+.item-button .item-slot[data-kind=ward]{color:#f3b9a4;border-color:#c3645855}
+.omen-line{margin-top:6px!important;font-size:13px!important;letter-spacing:.14em!important;color:#d9bd84!important}
+.rite-note{display:block;margin-top:6px;color:#f1d9a3;font-size:12px}
+.posture-tag[data-kind=hunt]{color:#f1b48a;border-color:#c4473a66}
+@media(max-width:600px){.touch-actions{grid-template-columns:repeat(3,44px)}.night-row{margin-top:5px;font-size:11px}}
+@media(max-width:600px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(6,44px);gap:6px}.item-button .item-slot{top:-15px;font-size:9px}}
+@media(max-width:400px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(6,40px);gap:4px}.touch-actions .sprint{width:40px;height:40px}}
+@media(max-height:510px){.night-row{margin-top:3px}.collection-status .item-line{margin-top:4px}}
+.clear-screen .run-results{grid-template-columns:repeat(5,auto)}
+@media(max-width:600px){.clear-screen .run-results{grid-template-columns:repeat(3,auto)}}
+/* The incense row makes the play state taller; keep it clear of the portrait touch row. */
+@media(max-width:600px) and (min-height:511px){.play-state{bottom:286px}.toast{bottom:420px}.note-card{bottom:380px}}

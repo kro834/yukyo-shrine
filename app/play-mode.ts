@@ -8,3 +8,5 @@ export const PLAY_MODES = [
 export const modeRules=(mode:PlayMode)=>({enemies:mode!=='gallery',sense:mode==='nightmare'?1.6:mode==='hard'?1.35:1,speed:mode==='nightmare'?1.15:mode==='hard'?1.1:1,search:mode==='nightmare'?1.85:mode==='hard'?1.45:1});
 /** Nightmare shows the altar bearing only in darkness and always limits sprinting. */
 export const modeAids=(mode:PlayMode)=>({darkCompass:mode==='nightmare',staminaForced:mode==='nightmare'});
+/** Graded noticing per mode; gallery keeps enemies inert. */
+export const noticeRules=(mode:PlayMode):{seconds:number;darkRadius:number;darkFill:number}=>mode==='gallery'?{seconds:0,darkRadius:0,darkFill:0}:mode==='nightmare'?{seconds:.6,darkRadius:3.6,darkFill:1.5}:mode==='hard'?{seconds:.85,darkRadius:3,darkFill:1.25}:{seconds:1.2,darkRadius:2.4,darkFill:1};
