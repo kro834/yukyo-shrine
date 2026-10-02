@@ -979,7 +979,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         // Offerings stay on the altar; held beads fall in a ring where the visitor stood, and the nearest mask is sent to guard them.
         const bundleFloor=floorBand(elevation),bundleNode=enemies.nodesNear(camera.position,bundleFloor,6).sort((a,b)=>Math.hypot(a.x-camera.position.x,a.z-camera.position.z)-Math.hypot(b.x-camera.position.x,b.z-camera.position.z))[0];
         const bundlePoint=Math.abs(elevation-bundleFloor)>.05&&bundleNode?bundleNode:{x:camera.position.x,z:camera.position.z};
-        lastCapture={scattered:scatterDropped(beads),dropped:dropHeld(beads,bundlePoint,bundleFloor)};
+        lastCapture={scattered:scatterDropped(beads),dropped:dropHeld(beads,bundlePoint,bundleFloor)};recovering={blue:0,red:0,gold:0};
         const finaleCleared=!!enemies.finalKind;
         elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();itemBag.loseCarried();enemies.pressure=0;enemies.reset();if(finaleCleared&&!goal.unlocked)night.resume();night.captured();finaleGrace=12;if(pendingWake>0)pendingWakeFor=60;refreshCollision();collision=groundCollision;
         if(lastCapture.dropped){const guard=enemies.actors.filter(e=>!e.dormant&&!isFinale(e.kind)&&Math.abs(floorBand(e.floor)-bundleFloor)<.3).map(e=>({e,d:Math.hypot(e.position.x-bundlePoint.x,e.position.z-bundlePoint.z)})).filter(g=>g.d<64).sort((a,b)=>a.d-b.d)[0];if(guard)enemies.attend(guard.e,bundlePoint,bundleFloor,40*enemies.difficulty.search,3);}
