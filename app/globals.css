@@ -315,3 +315,7 @@ body{font-family:var(--font-game-ui);font-weight:500;font-synthesis:none;text-re
 @media(max-width:600px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(6,44px);gap:6px}.item-button .item-slot{top:-15px;font-size:9px}}
 @media(max-width:400px) and (min-height:511px){.touch-actions{grid-template-columns:repeat(6,40px);gap:4px}.touch-actions .sprint{width:40px;height:40px}}
 @media(max-height:510px){.night-row{margin-top:3px}.collection-status .item-line{margin-top:4px}}
+.clear-screen .run-results{grid-template-columns:repeat(5,auto)}
+@media(max-width:600px){.clear-screen .run-results{grid-template-columns:repeat(3,auto)}}
+/* The incense row makes the play state taller; keep it clear of the portrait touch row. */
+@media(max-width:600px) and (min-height:511px){.play-state{bottom:286px}.toast{bottom:420px}.note-card{bottom:380px}}
