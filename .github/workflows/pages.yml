@@ -8,14 +8,38 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: github-pages
-  cancel-in-progress: false
-
 jobs:
+  tests:
+    name: Regression tests (${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    concurrency:
+      group: pages-tests-${{ github.ref }}-${{ matrix.shard }}
+      cancel-in-progress: true
+    env:
+      NEXT_PUBLIC_BASE_PATH: /yukyo-shrine
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.19.0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run regression tests
+        run: node --experimental-transform-types --test --test-concurrency=2 --test-shard=${{ matrix.shard }}/3 tests/*.test.ts
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    concurrency:
+      group: pages-build-${{ github.ref }}
+      cancel-in-progress: true
     env:
       NEXT_PUBLIC_BASE_PATH: /yukyo-shrine
     steps:
@@ -30,8 +54,6 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - name: Check types
         run: pnpm exec tsc --noEmit
-      - name: Run regression tests
-        run: node --experimental-transform-types --test --test-concurrency=2 tests/*.test.ts
       - name: Build game
         run: pnpm build
       - name: Prepare subdirectory assets and app icons
@@ -40,16 +62,38 @@ jobs:
         with:
           path: dist/client
   deploy:
-    needs: build
+    needs: [build, tests]
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # Let an actual Pages deployment finish; only preparation is superseded.
+    concurrency:
+      group: github-pages
+      cancel-in-progress: false
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - name: Skip superseded commits
+        id: latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          latest_sha=$(curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/git/ref/heads/main" | jq -er '.object.sha')
+          if [[ "$latest_sha" == "$GITHUB_SHA" ]]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            echo "A newer main commit exists; skipping this deployment."
+          fi
       - name: Publish GitHub Pages
+        if: steps.latest.outputs.publish == 'true'
         id: deployment
         uses: actions/deploy-pages@v4
