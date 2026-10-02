@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {scoreRun,sanitizeRecords,applyClear,stageSummary,recordKey,type RunSummary} from '../app/records.ts';
+import {scoreRun,sanitizeRecords,applyClear,stageSummary,recordKey,surplusPoints,type RunSummary} from '../app/records.ts';
 const run=(patch:Partial<RunSummary>):RunSummary=>({stage:'shrine',mode:'normal',elapsed:540,deaths:0,escapes:3,notes:3,notesTotal:3,...patch});
 test('a fast deathless clear with every note earns S, while captures and long searches lower the rank',()=>{
  assert.equal(scoreRun(run({})).rank,'S');
@@ -89,4 +89,16 @@ test('run progress counts survived tolls and shows a faint 気配 state below a 
  assert.equal(state({noticed:.4,searching:true}),'search');assert.equal(state({noticed:.4,chasing:true}),'chase');assert.equal(state({noticed:.4,frozen:true}),'frozen');assert.equal(state({noticed:.4,stunned:true}),'stunned');
  const fill=new RunProgress();for(let i=0;i<120;i++)fill.step(1/60,{...quiet,noticed:1});assert.ok(fill.pressure>.2&&fill.pressure<=.28);
  fill.step(.05,quiet);assert.equal(fill.pressure,0,'a gauge that empties clears the bar at once');assert.equal(fill.escapes,0,'being noticed is not a chase to escape');
+});
+test('surplusPoints is min(1200, 200·blue + 500·red) and the 余剰奉納 line uses exactly that',()=>{
+ assert.deepEqual([[0,0],[1,0],[0,1],[2,1],[3,1],[1,2],[4,1],[6,0],[0,3],[7,3]].map(([blue,red])=>surplusPoints({blue,red})),[0,200,500,900,1100,1200,1200,1200,1200,1200]);
+ assert.equal(surplusPoints({blue:2.9,red:1.5}),900,'partial counts floor');assert.equal(surplusPoints({blue:-3,red:1}),500,'negative counts are ignored');
+ for(let blue=0;blue<=7;blue++)for(let red=0;red<=3;red++){
+  const lines=scoreRun(run({surplus:{blue,red}})).lines,line=lines.find(l=>l.label==='余剰奉納');
+  if(blue+red===0){assert.equal(line,undefined);continue;}
+  assert.deepEqual(line,{label:'余剰奉納',detail:'青'+blue+'・赤'+red,points:Math.min(1200,200*blue+500*red)});assert.equal(line!.points,surplusPoints({blue,red}));
+  assert.equal(scoreRun(run({surplus:{blue,red}})).score,6350+line!.points,'the line adds to the base clear score');
+ }
+ // The HUD's "+n点" notice is the difference of two surplusPoints calls: the cap clips the bead that crosses it.
+ assert.equal(surplusPoints({blue:2,red:1})-surplusPoints({blue:1,red:1}),200);assert.equal(surplusPoints({blue:2,red:2})-surplusPoints({blue:2,red:1}),300);assert.equal(surplusPoints({blue:3,red:2})-surplusPoints({blue:2,red:2}),0);
 });
