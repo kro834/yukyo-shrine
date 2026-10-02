@@ -57,14 +57,17 @@ import {lightBlocked} from './flash-visibility.ts';
 import {movePlayer} from './movement.ts';
 import {UPPER_HEIGHT,STAIRS,upperDoors,upperPartitions,upperBarriers,stairRails,floorHeightAt} from './annex.ts';
 import {RunningSteps,QuietSteps} from './footsteps.ts';
-import {CueQueue,surfaceFor} from './world-cues.ts';
+import {CueQueue,surfaceFor,wardBurnAudible} from './world-cues.ts';
+import {ItemBag,ThrownBells,Wards,throwArc,bellHear,placeItemPickups,collectItems,type ItemKind} from './item-bag.ts';
+import {createItemMeshes} from './item-mesh.ts';
+import {OMENS,omenParams,omenMultiplier,type OmenId} from './run-omens.ts';
 import {LORE,placeNotes} from './lore.ts';
 import {createNoteMeshes,type NotePickup} from './note-mesh.ts';
 import {placeMagatama,placeRedMagatama,chooseReadableMagatama,collectMagatama,beadInventory,spendBeads,dropHeld,scatterDropped} from './magatama.ts';
 import {NightClock,nightConfig,chooseSleepers} from './night-clock.ts';
-import {isFinale} from './enemy-traits.ts';
+import {isFinale,ringScale} from './enemy-traits.ts';
 import {createMagatamaMeshes} from './magatama-mesh.ts';
-import {ShrineGoal,GOAL} from './shrine-goal.ts';
+import {ShrineGoal,GOAL,RITE_SECONDS,RITE_RADIUS} from './shrine-goal.ts';
 import {seededRandom} from './seeded-random.ts';
 import {createAreaLookup} from './area-rules.ts';
 import {createGoalMeshes} from './goal-mesh.ts';
@@ -784,6 +787,11 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const mirrorInventory=new MirrorInventory(mirrorPickups),mirrorMeshes=createMirrorMeshes(scene,mirrorPickups);
   const noteSites=placeNotes(enemies.patrolTargets,[{position:SPAWN,floor:0,radius:16},{position:goal.altar,floor:0,radius:10},...beads.map(b=>({position:b.position,floor:b.floor,radius:5})),...mirrorPickups.map(m=>({position:m.position,floor:m.floor,radius:6}))],seededRandom(seed^0x4e07e5),LORE[stage].notes.length);
   const notes:NotePickup[]=noteSites.map((site,i)=>({id:LORE[stage].notes[i].id,position:site.point,floor:site.floor,collected:false})),noteMeshes=createNoteMeshes(scene,notes);
+  // Tools: a bell to move patrols before they see you, a ward to turn a chase into a doorway trap.
+  const itemPickups=placeItemPickups(enemies.patrolTargets,[{position:SPAWN,floor:0,radius:16},{position:goal.altar,floor:0,radius:10},...beads.map(b=>({position:b.position,floor:b.floor,radius:5})),...mirrorPickups.map(m=>({position:m.position,floor:m.floor,radius:6})),...noteSites.map(n=>({position:n.point,floor:n.floor,radius:5}))],seededRandom(seed^0x1e3a),4);
+  let itemBag=new ItemBag({bell:1,ward:0}),omens:OmenId[]=[],omen=omenParams([]),clearPhase:0|1|2|null=null;
+  const bells=new ThrownBells(),wards=new Wards(),itemMeshes=createItemMeshes(scene,itemPickups,glowTex,mountain?mountainHeight:undefined);
+  grantReward=()=>{const kind:ItemKind=itemBag.ward<2?'ward':'bell';itemBag.grant(kind);return kind;};
   let selectedQuality:Preferences['quality']='medium';
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
@@ -832,11 +840,39 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   finiteSceneFixtures(scene);
   const scanLighting=pendingFixtureFinish(scannedProps.ready,scene);
   return {renderer,scene,camera,layout,stage,terrainHeight:mountain?mountainHeight:(_z:number)=>0,scannedReady:Promise.all([scanLighting.ready,shrubs.ready,hotelBeds.ready]),
-    setMode(mode:PlayMode){circusRuntime?.reset();refreshCollision();playMode=mode;syncStamina();if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}
-      enemies.difficulty=stageRules(stage,mode);enemies.notice=noticeRules(mode);enemies.modifiers={blueBalance:0,sense:1,hearing:1};
-      night=new NightClock(nightConfig(mode));sleeperCount=night.config.sleepers[0]+night.config.sleepers[1];pendingWake=0;finaleGrace=0;finales=0;noticedOnce=false;lastReward=null;
-      enemies.setDormant(sleeperIds());enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
-    nightStatus(){return {...night.snapshot(),sleeping:enemies.actors.filter(e=>e.dormant).length,reward:lastReward};},
+    setMode(mode:PlayMode,opts?:{omens?:readonly OmenId[]}){circusRuntime?.reset();refreshCollision();playMode=mode;syncStamina();if(mode==='gallery'){goal.offer({blue:0,red:0,gold:1});}
+      omens=mode==='gallery'?[]:[...(opts?.omens??[])];omen=omenParams(omens);
+      enemies.difficulty=stageRules(stage,mode);enemies.notice=noticeRules(mode);
+      night=new NightClock(nightConfig(mode,omen));enemies.modifiers={blueBalance:night.blueBalance,sense:omen.sense,hearing:omen.hearing};
+      // Omens that start the night late have already woken the first batch.
+      const batches=night.config.sleepers;sleeperCount=batches[0]+batches[1];const asleep=batches.slice(night.config.startTolls).reduce((a,b)=>a+b,0),chosen=sleeperIds();
+      pendingWake=0;finaleGrace=0;finales=0;noticedOnce=false;lastReward=null;clearPhase=null;fogBlend=1;
+      itemBag=new ItemBag({bell:(mode==='nightmare'?0:1)+omen.startBell,ward:0});bells.reset();wards.reset();for(const p of itemPickups)p.collected=false;
+      enemies.setDormant(chosen.slice(chosen.length-asleep));enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
+    get seed(){return seed;},
+    nightStatus(){return {...night.snapshot(),sleeping:enemies.actors.filter(e=>e.dormant).length,reward:lastReward,clearPhase};},
+    omenStatus(){return {ids:[...omens],multiplier:omenMultiplier(omens),names:omens.map(id=>OMENS[id].name),lines:omens.map(id=>OMENS[id].line)};},
+    itemStatus(){return {...itemBag.snapshot(),placed:wards.placed.length};},
+    selectItem(kind:ItemKind){itemBag.select(kind);},
+    cycleItem(){return itemBag.cycle();},
+    useItem():'thrown'|'placed'|'empty'|'ramp'|'near'|'full'|'riding'|'blocked'{
+      if(playMode==='gallery'||goal.completed)return 'blocked';
+      if(elevator?.riding||circusRuntime?.riding)return 'riding';
+      if(itemBag.selected==='bell'){
+        if(!bells.canThrow())return 'blocked';
+        if(!itemBag.take('bell'))return 'empty';
+        // Game space is flat; the mountain lifts everything at render time, so the arc flies in lifted space.
+        const lift=mountain?mountainHeight(camera.position.z):0;
+        bells.throw(throwArc({x:camera.position.x,y:camera.position.y+lift,z:camera.position.z},camera.rotation.y,camera.rotation.x,collision,p=>floorHeightAt(p,elevation)+(mountain?mountainHeight(p.z):0)),floorBand(elevation));
+        cues.push({kind:'item',action:'throw',item:'bell'});return 'thrown';
+      }
+      if(itemBag.ward<=0)return 'empty';
+      const result=wards.place(camera.position,floorBand(elevation),Math.abs(floorHeightAt(camera.position,elevation)-floorBand(elevation))>.05);
+      if(result==='placed'){itemBag.take('ward');cues.push({kind:'item',action:'place',item:'ward'});}
+      return result;
+    },
+    riteStatus(){return goal.riteActive?{progress:goal.rite/goal.riteSeconds,remaining:goal.riteSeconds-goal.rite}:null;},
+    omenRemaining(){return enemies.finalKind?Math.max(0,enemies.actors[0]?.wakeIn??0):0;},
     noticeLevel,
     bundleDirection(){const dropped=beads.filter(b=>b.dropped&&!b.collected);return dropped.length?{...enemyDirection(camera.position,dropped[0].position,camera.rotation.y),count:dropped.length}:null;},
     captureReport(){return {...lastCapture};},
@@ -868,7 +904,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     get crouching(){return posture.crouching;},
     toggleCrouch(){if(!goal.completed&&!elevator?.riding&&!circusRuntime?.riding)posture.toggle();return posture.crouching;},
     goalDirection(){return enemyDirection(camera.position,goal.altar,camera.rotation.y);},
-    collection(){return {...beadInventory(beads),areaName:areaName(),blueOffered:goal.blueOffered,redOffered:goal.redOffered,finale:enemies.finalKind,unlocked:goal.unlocked,area:areaAt(camera.position,elevation),dropped:beads.filter(b=>b.dropped&&!b.collected).length};},
+    collection(){return {...beadInventory(beads),areaName:areaName(),blueOffered:goal.blueOffered,redOffered:goal.redOffered,finale:enemies.finalKind,unlocked:goal.unlocked,area:areaAt(camera.position,elevation),dropped:beads.filter(b=>b.dropped&&!b.collected).length,surplus:{...goal.surplus}};},
     move(x:number,z:number,yaw:number,sprint:boolean,dt:number){
       if(goal.completed)return {x:camera.position.x,z:camera.position.z,y:camera.position.y,running:false};
       if(elevator?.riding){posture.reset();stamina.step(dt,false,false,false);lastMotion={running:false,moving:false};return {...camera.position,running:false};}
@@ -879,33 +915,42 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     enemyDirections(){return !mirrorInventory.active||playMode==='gallery'?[]:enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned',level:enemyFloorHint(elevation,e.floor),chasing:e.brain.mode==='chase',dormant:!!e.dormant}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     nearAltar(){return playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
-    interact(){if(elevator?.interact(camera.position,elevation)){hotelMotion={x:0,z:0};cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:elevator.hint()};}if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);const offered=!!(used.blue||used.red||used.gold);if(offered){cues.push({kind:'offer',unlocked:goal.unlocked});if(night.purify(used)>0)cues.push({kind:'purify'});}return offered?'offered':'empty';}
+    interact(){if(elevator?.interact(camera.position,elevation)){hotelMotion={x:0,z:0};cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:elevator.hint()};}if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);if(used.blue||used.red||used.gold){cues.push({kind:'offer',unlocked:goal.unlocked});if(night.purify(used)>0)cues.push({kind:'purify'});return 'offered';}
+      // Once the gate is open the altar still takes spare beads, for score alone.
+      if(goal.unlocked){const extra=goal.offerSurplus(beadInventory(beads));spendBeads(beads,extra);if(extra.blue||extra.red||extra.gold){cues.push({kind:'offer',unlocked:true,surplus:true});return 'surplus';}}return 'empty';}
       const level=floorLevel(),door=doors.nearest(camera.position,camera.rotation.y,fixedFor(level),level),toggled=doors.interact(camera.position,camera.rotation.y,fixedFor(level),level);if(toggled&&door)cues.push({kind:'door',open:door.open});return toggled;},
     burst(){if(playMode==='gallery'||goal.completed||!burstRecharge.use())return null;const hits=enemies.burst(camera.position,[...collision,...STAIR_LIGHT_VOLUMES],elevation,camera.rotation.y,camera.rotation.x,mountain?mountainHeight:undefined);run.stuns+=hits;cues.push({kind:'burst',hits});return hits;},
     step(dt:number){
       if(goal.completed)return false;
       burstRecharge.step(dt);mirrorInventory.step(dt);
       const wasFrozen=timeStop.active,liveDt=timeStop.step(dt);environmentTime+=liveDt*1000;if(wasFrozen&&!timeStop.active)cues.push({kind:'time-resume'});
+      bells.step(dt,liveDt,(point,floor)=>{if(playMode!=='gallery')enemies.hear(point,floor,bellHear(enemies.difficulty.search,areaAt(point,floor)==='red'));const d=enemyDirection(camera.position,point,camera.rotation.y);cues.push({kind:'item',action:'ring',distance:d.distance,angle:d.angle,item:'bell'});});
       if(elevator){const ride=elevator.step(liveDt);if(ride){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=ride.floor;lastMotion={running:false,moving:false};}}
       if(circusRuntime){const occupants=[...(circusRuntime.riding?[]:[{x:camera.position.x,z:camera.position.z,y:elevation+1.68}]),...(playMode==='gallery'||mountain?[]:enemies.actors.map(e=>({...e.position,y:e.floor+1.68})))];const ride=circusRuntime.step(liveDt,occupants);if(ride.position){camera.position.set(ride.position.x,ride.position.y,ride.position.z);elevation=0;lastMotion={running:false,moving:false};}if(ride.lure&&playMode!=='gallery'&&liveDt>0)enemies.hear(ride.lure,0);}
       const detectable=flashlight.visible||(lastMotion.running&&lastMotion.moving);
       enemies.playerMoving=lastMotion.moving;enemies.playerRunning=lastMotion.running&&lastMotion.moving;
       const heard=runningSteps.update(dt,lastMotion.running,lastMotion.moving);
-      if(heard&&playMode!=='gallery'&&liveDt>1e-6)enemies.hear(camera.position,elevation);
+      if(heard&&playMode!=='gallery'&&liveDt>1e-6)enemies.hear(camera.position,elevation,omen.runHearing!==1?{scale:omen.runHearing}:undefined);
       if(quietSteps.update(dt,lastMotion.moving&&!lastMotion.running,posture.crouching)||heard)cues.push({kind:'step',surface:surfaceFor(stage,layout.grid.get(Math.round(camera.position.x/4)+','+Math.round(camera.position.z/4))?.kind,elevation),pace:heard?'run':posture.crouching?'crouch':'walk'});
       lastMotion={running:false,moving:false};
       if(playMode!=='gallery'&&liveDt>1e-6)for(const e of enemies.actors)openPursuedDoor(doors,e,e.floor>9.3?thirdFixed:e.floor>4.5?upperFixed:enemyWalls,liveDt);
       doors.update(dt,camera.position,floorLevel());refreshCollision();collision=collisionFor();
       if(mirrorInventory.collect(camera.position,elevation,collision))cues.push({kind:'mirror-pickup'});
+      for(const item of collectItems(itemPickups,itemBag,camera.position,elevation,collision))cues.push({kind:'item',action:'pickup',item});
       for(const n of notes)if(!n.collected&&Math.abs(n.floor-elevation)<.6&&Math.hypot(n.position.x-camera.position.x,n.position.z-camera.position.z)<1.4&&!segmentBlocked(camera.position,n.position,collision)){n.collected=true;cues.push({kind:'note',id:n.id});}
       const uncollected=beads.filter(b=>!b.collected);collectMagatama(beads,camera.position,elevation,collision);let recovered=0;for(const b of uncollected)if(b.collected){if(b.dropped){b.dropped=false;recovered++;}else{run.pickup(b.color);night.pickup(b.color);cues.push({kind:'pickup',color:b.color});}}if(recovered)cues.push({kind:'recover',count:recovered});
       const inventory=beadInventory(beads),totals={blue:inventory.blue+goal.blueOffered,red:inventory.red+goal.redOffered,gold:inventory.gold+goal.goldOffered};
       finaleGrace=Math.max(0,finaleGrace-liveDt);
-      if(playMode!=='gallery'&&!enemies.finalKind&&finaleGrace<=0&&collectionReady(totals)){const omenSeconds=finales++?REARM_OMEN_SECONDS:OMEN_SECONDS;cues.push({kind:'finale',foe:enemies.beginFinale(camera.position,elevation,runRandom,omenSeconds,goal.altar)});cues.push({kind:'bell',beat:'toll',count:omenSeconds>=OMEN_SECONDS?3:2});night.stop();mirrorInventory.grant(2);run.beginFinale();phaseRevision++;}
+      if(playMode!=='gallery'&&!enemies.finalKind&&finaleGrace<=0&&collectionReady(totals)){const omenSeconds=finales++?REARM_OMEN_SECONDS:OMEN_SECONDS;cues.push({kind:'finale',foe:enemies.beginFinale(camera.position,elevation,runRandom,omenSeconds,goal.altar)});cues.push({kind:'bell',beat:'toll',count:omenSeconds>=OMEN_SECONDS?3:2});clearPhase??=night.phase;night.stop();mirrorInventory.grant(2);itemBag.grant('ward');run.beginFinale();phaseRevision++;}
       const burden=Math.max(totals.blue/BEAD_REQUIREMENTS.blue,totals.red/BEAD_REQUIREMENTS.red,totals.gold);enemies.pressure=Math.min(1,burden);
-      goal.update(dt,playMode==='gallery'?{x:10000,z:10000}:camera.position,elevation);refreshCollision();collision=collisionFor();if(goal.completed)cues.push({kind:'clear'});
+      // The unlocking offering starts the gate rite: eight live seconds inside the altar ring, where the pursuer is slowed below a sprint.
+      goal.riteSeconds=enemies.finalKind?RITE_SECONDS:0;const riteBefore=goal.riteActive,riteTicks=Math.floor(goal.rite);
+      goal.update(dt,playMode==='gallery'?{x:10000,z:10000}:camera.position,elevation,liveDt);refreshCollision();collision=collisionFor();if(goal.completed)cues.push({kind:'clear'});
+      enemies.ring=goal.riteActive&&enemies.finalKind?{center:goal.altar,radius:RITE_RADIUS,scale:ringScale(enemies.finalKind,enemies.difficulty.speed)}:null;
+      if(goal.riteActive&&!riteBefore)cues.push({kind:'rite',beat:'start'});else if(riteBefore&&!goal.riteActive)cues.push({kind:'rite',beat:'complete'});else if(goal.riteActive&&Math.floor(goal.rite)>riteTicks)cues.push({kind:'rite',beat:'tick'});
       enemies.playerCrouching=posture.crouching;
       const caught=playMode!=='gallery'&&!goal.completed&&liveDt>1e-6&&enemies.update(liveDt,camera.position,groundEnemyCollision,elevation,upperCollision,detectable,thirdFixed,flashlight.visible);
+      if(!caught&&playMode!=='gallery')for(const hit of wards.step(dt,liveDt,enemies.actors,(e,seconds)=>enemies.stunActor(e,seconds))){run.stuns++;const d=enemyDirection(camera.position,hit.ward.position,camera.rotation.y);if(wardBurnAudible(d.distance,Math.abs(d.angle)<.75))cues.push({kind:'item',action:'burn',distance:d.distance,angle:d.angle,item:'ward'});}
       const activeChase=!goal.completed&&enemies.actors.some(e=>e.brain.mode==='chase');
       const activeSearch=!goal.completed&&enemies.actors.some(e=>e.brain.mode!=='stunned'&&e.investigate&&e.searchTime>0&&Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28);
       const stunned=!activeChase&&!activeSearch&&enemies.actors.some(e=>e.brain.mode==='stunned'&&(!!enemies.finalKind||Math.abs(e.floor-elevation)<1&&Math.hypot(e.position.x-camera.position.x,e.position.z-camera.position.z)<28));
@@ -930,7 +975,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         const bundleFloor=floorBand(elevation),bundleNode=enemies.nodesNear(camera.position,bundleFloor,6).sort((a,b)=>Math.hypot(a.x-camera.position.x,a.z-camera.position.z)-Math.hypot(b.x-camera.position.x,b.z-camera.position.z))[0];
         const bundlePoint=Math.abs(elevation-bundleFloor)>.05&&bundleNode?bundleNode:{x:camera.position.x,z:camera.position.z};
         lastCapture={scattered:scatterDropped(beads),dropped:dropHeld(beads,bundlePoint,bundleFloor)};
-        elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();enemies.pressure=0;enemies.reset();night.captured();finaleGrace=12;pendingWake=0;refreshCollision();collision=groundCollision;
+        elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();itemBag.loseCarried();enemies.pressure=0;enemies.reset();night.captured();finaleGrace=12;pendingWake=0;refreshCollision();collision=groundCollision;
         if(lastCapture.dropped){const guard=enemies.actors.filter(e=>!e.dormant&&!isFinale(e.kind)&&Math.abs(floorBand(e.floor)-bundleFloor)<.3).map(e=>({e,d:Math.hypot(e.position.x-bundlePoint.x,e.position.z-bundlePoint.z)})).filter(g=>g.d<64).sort((a,b)=>a.d-b.d)[0];if(guard)enemies.attend(guard.e,bundlePoint,bundleFloor,40*enemies.difficulty.search,3);}
         const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
         const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
@@ -970,7 +1015,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       moodTarget.copy(area==='shop'||area==='factory'||area==='bath'||area==='cistern'||area==='cave'||area==='field'?moods[area]:moods.shrine);
       if(stage!=='shrine')moodTarget.lerp(stageFog,.72);
       scene.fog!.color.lerp(moodTarget,.025);backgroundColor.lerp(moodTarget,.025);
-      fogBlend+=((enemies.finalKind?1.6:night.fogScale)-fogBlend)*.012;
+      fogBlend+=((enemies.finalKind?1.6:night.fogScale)*omen.fogScale-fogBlend)*.012;
       (scene.fog as THREE.FogExp2).density=(stage==='shrine'?(area==='field'?.019:configuredQuality==='low'?.027:.0205):Math.max(stageProfile.density,configuredQuality==='low'?.027:0))*(playMode==='gallery'?1:fogBlend);
       if(time-lastLight>220){
         fixtureLighting.select(camera.position,floorBand(elevation),lightFixtures,collisionFor(),configuredQuality==='low'?3:6);
@@ -991,7 +1036,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       lightPool.forEach((l,i)=>{const slot=fixtureLighting.slots[i];if(slot.current){l.position.copy(slot.current.position as THREE.Vector3);l.color.set(slot.current.color);}l.intensity=(gothic?3.8:7)*((slot.current?.power??7)/7)*slot.gain*fixtureShadow.pointGain(slot.current?.id??-1)*(hotelAtmosphere?hotelAtmosphere.gain(l.position):1+.012*Math.sin(environmentTime*.0021+(slot.current?.id??0)*2.3));});
       doorMeshes.update(camera.position,configuredQuality==='low'?72:110);
       scannedProps.update(camera.position);shrubs.update(camera.position);hotelBeds.update(camera.position,configuredQuality==='low');elevatorMeshes?.update(camera.position,playMode!=='gallery');
-      enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);
+      enemyMeshes.update(environmentTime,camera.position,configuredQuality==='low'?80:125,mirrorInventory.active&&playMode!=='gallery');mirrorMeshes.update(environmentTime);itemMeshes.update(environmentTime,bells,wards);
       beadMeshes.update(environmentTime);noteMeshes.update(environmentTime);
       goalMeshes.update();
       if(outdoorReflection){
@@ -1004,7 +1049,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       try {if(mountain)dustParticles.update(environmentTime,camera,flashlight.visible,canvas.height||innerHeight);if(effects)effects.render(mirrorInventory.active&&playMode!=='gallery');else {renderer.render(scene,camera);if(mirrorInventory.active&&playMode!=='gallery')renderEnemyEcho(renderer,scene,camera);}}finally{restoreTerrain?.();}
     },
     resize(){resizeTargets();camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();},
-    dispose(){disposed=true;hotelBeds.dispose();elevatorMeshes?.dispose();anomalies?.dispose();scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();circusMeshes?.cart.removeFromParent();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();noteMeshes.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
+    dispose(){disposed=true;hotelBeds.dispose();elevatorMeshes?.dispose();anomalies?.dispose();scanLighting.cancel();circusMeshes?.group.removeFromParent();circusMeshes?.dispose();circusMeshes?.cart.removeFromParent();scannedProps.dispose();shrubs.dispose();fixtureShadow.dispose();outdoorReflection?.dispose();nightSkyTarget?.dispose();mirrorMeshes.dispose();noteMeshes.dispose();itemMeshes.dispose();goalMeshes.dispose();beadMeshes.dispose();effects?.dispose();environment?.dispose();surfaces.dispose();const geometrySet=new Set<THREE.BufferGeometry>();scene.traverse(o=>{if(o instanceof THREE.Mesh)geometrySet.add(o.geometry);});geometrySet.forEach(g=>g.dispose());Object.values(mats).forEach(m=>{if('map'in m)m.map?.dispose();m.dispose();});doorMeshes.dispose(false);enemyMeshes.dispose();mirror.dispose();dustParticles.dispose();water.material.dispose();glowGeometry.dispose();glowMat.dispose();glowTex.dispose();flashlight.map?.dispose();flashlight.shadow.dispose();renderer.dispose();},
   };
 }
 

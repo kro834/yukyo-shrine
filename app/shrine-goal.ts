@@ -3,6 +3,7 @@ import {segmentBlocked} from './shrine-gameplay.ts';
 import {BEAD_REQUIREMENTS,collectionReady} from './goal-rules.ts';
 export const GOAL={x:0,z:15.5};
 export const ALTAR={x:-2.8,z:13.3};
+export const RITE_SECONDS=8,RITE_RADIUS=7;
 export const GOAL_WALLS:Obstacle[]=[
  {minX:-4,maxX:-1.8,minZ:15.35,maxZ:15.75},{minX:1.8,maxX:4,minZ:15.35,maxZ:15.75},
  {minX:-4.15,maxX:-3.85,minZ:15.5,maxZ:18},{minX:3.85,maxX:4.15,minZ:15.5,maxZ:18},
@@ -11,12 +12,17 @@ export const GOAL_WALLS:Obstacle[]=[
 ];
 const CLOSED:Obstacle[]=[{minX:-1.8,maxX:1.8,minZ:15.4,maxZ:15.65}],OPEN:Obstacle[]=[];
 export class ShrineGoal {
- progress=0;completed=false;
+ progress=0;completed=false;rite=0;surplus={blue:0,red:0};private riteNeed=0;
  readonly required=BEAD_REQUIREMENTS.blue;blueOffered=0;redOffered=0;goldOffered=0;
  readonly horizontalScale:number;readonly offset:Position;readonly altar:Position;readonly walls:Obstacle[];private closed:Obstacle[];
  constructor(offset:Position={x:0,z:0},horizontalScale=1){this.horizontalScale=horizontalScale;this.offset=offset;this.altar={x:ALTAR.x*horizontalScale+offset.x,z:ALTAR.z+offset.z};const shift=(w:Obstacle)=>({...w,minX:w.minX*horizontalScale+offset.x,maxX:w.maxX*horizontalScale+offset.x,minZ:w.minZ+offset.z,maxZ:w.maxZ+offset.z});this.walls=offset.x===0&&offset.z===0&&horizontalScale===1?GOAL_WALLS:GOAL_WALLS.map(shift);this.closed=CLOSED.map(shift);}
- reset(){this.blueOffered=this.redOffered=this.goldOffered=this.progress=0;this.completed=false;}
+ reset(){this.blueOffered=this.redOffered=this.goldOffered=this.progress=this.rite=0;this.surplus={blue:0,red:0};this.completed=false;}
  get unlocked(){return collectionReady({blue:this.blueOffered,red:this.redOffered,gold:this.goldOffered});}
+ /** Locked in by the unlocking offering: a capture that briefly clears the
+  * finale can neither skip the rite nor add one to a gate already opening. */
+ get riteSeconds(){return this.riteNeed;}
+ set riteSeconds(seconds:number){if(!this.unlocked||this.riteNeed===0&&this.progress===0)this.riteNeed=Number.isFinite(seconds)?Math.max(0,seconds):0;}
+ get riteActive(){return this.unlocked&&this.riteSeconds>0&&this.rite<this.riteSeconds;}
  nearAltar(player:Position,yaw:number,floor:number,walls:Obstacle[]){
   const dx=this.altar.x-player.x,dz=this.altar.z-player.z,d=Math.hypot(dx,dz);
   // Test the reachable front edge, not the centre inside the altar pedestal.
@@ -30,9 +36,21 @@ export class ShrineGoal {
   else {used.blue=Math.min(Math.max(0,inventory.blue),BEAD_REQUIREMENTS.blue-this.blueOffered);this.blueOffered+=used.blue;}
   return used;
  }
+ /** Extra beads after the unlock become score; gold counts as red. */
+ offerSurplus(inventory:{blue:number;red:number;gold?:number}){
+  const used={blue:0,red:0,gold:0};if(!this.unlocked)return used;
+  used.blue=Math.max(0,inventory.blue);used.red=Math.max(0,inventory.red);used.gold=Math.max(0,inventory.gold??0);
+  this.surplus.blue+=used.blue;this.surplus.red+=used.red+used.gold;return used;
+ }
  blockers(){return this.progress<.98?this.closed:OPEN;}
- update(dt:number,player:Position,floor:number){
+ update(dt:number,player:Position,floor:number,riteLive=dt){
   if(this.completed)return;
+  if(this.riteActive){
+   // Leaving the ring or stopping time pauses the rite; it never decays.
+   const live=Number.isFinite(riteLive)?Math.max(0,Math.min(riteLive,.05)):0;
+   if(Math.abs(floor)<.4&&Math.hypot(player.x-this.altar.x,player.z-this.altar.z)<RITE_RADIUS)this.rite=this.rite+live>=this.riteSeconds-1e-9?this.riteSeconds:this.rite+live;
+   return;
+  }
   const ready=this.unlocked;
   if(ready)this.progress=Math.min(1,this.progress+Math.max(0,Math.min(dt,.05))*.9);
   if(ready&&this.progress>=.98&&Math.abs(floor)<.4&&Math.abs(player.x-this.offset.x)<1.5*this.horizontalScale&&player.z-this.offset.z>16.5&&player.z-this.offset.z<17.45)this.completed=true;

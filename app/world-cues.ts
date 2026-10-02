@@ -10,7 +10,7 @@ export type WorldCue=
  |{kind:'mirror-pickup'}
  |{kind:'note';id:string}
  |{kind:'door';open:boolean}
- |{kind:'offer';unlocked:boolean}
+ |{kind:'offer';unlocked:boolean;surplus?:boolean}
  |{kind:'mechanism'}
  |{kind:'burst';hits:number}
  |{kind:'time-stop'}
@@ -20,7 +20,17 @@ export type WorldCue=
  |{kind:'escape'}
  |{kind:'finale';foe:FinaleKind}
  |{kind:'caught'}
- |{kind:'clear'};
+ |{kind:'clear'}
+ |{kind:'bell';beat:'warning'|'toll'|'end';count:number;survived?:boolean}
+ |{kind:'purify'}
+ |{kind:'notice'}
+ |{kind:'item';action:'throw'|'ring'|'pickup'|'place'|'burn';distance?:number;angle?:number;item?:'bell'|'ward'}
+ |{kind:'recover';count:number}
+ |{kind:'rite';beat:'start'|'tick'|'complete'};
+/** A ward flares under an enemy's foot, so it may only be heard where the visitor
+ * could already perceive it: close by, or within sight. */
+export const WARD_BURN_HEARD={near:12,seen:30} as const;
+export function wardBurnAudible(distance:number,inView:boolean){return distance<=WARD_BURN_HEARD.near||inView&&distance<=WARD_BURN_HEARD.seen;}
 const HARD=new Set(['stone','factory','bath','cistern','cave','yokocho']);
 export function surfaceFor(stage:StageId,kind:string|undefined,elevation:number):Surface{
  if(stage==='ultrareal')return 'carpet';

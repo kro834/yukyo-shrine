@@ -40,3 +40,53 @@ test('the objective advances from collecting to offering to the gate, naming the
  assert.equal(objective('nightmare',{...base,unlocked:true,finale:'hatred'}).title,'封門をくぐる');assert.match(objective('normal',{...base,unlocked:true,finale:'hatred'}).detail,/憎悪/);
  assert.deepEqual(routePips(3,2,6),['offered','offered','held','held','held','empty']);assert.deepEqual(routePips(9,0,2),['held','held']);assert.deepEqual(routePips(1,5,2),['offered','offered']);
 });
+test('without the new fields the score keeps exactly the four original lines',()=>{
+ for(const patch of [{},{deaths:2},{elapsed:1800,escapes:0,notes:0},{hunts:0,surplus:{blue:0,red:0}}])assert.deepEqual(scoreRun(run(patch)).lines.map(l=>l.label),['探索時間',(patch as Partial<RunSummary>).deaths?'復活':'無傷踏破','追跡回避','手記']);
+ assert.equal(scoreRun(run({})).score,6350);assert.equal(scoreRun(run({})).omenMultiplier,undefined);
+});
+test('surviving tolls, sealing the gate early and surplus beads append lines after the original four',()=>{
+ const r=scoreRun(run({hunts:3,clearPhase:1,surplus:{blue:2,red:1}}));
+ assert.deepEqual(r.lines.slice(4),[{label:'鐘を凌いだ',detail:'3回',points:450},{label:'刻',detail:'夜半の刻に封門',points:250},{label:'余剰奉納',detail:'青2・赤1',points:900}]);
+ assert.equal(r.score,6350+450+250+900);
+ assert.deepEqual(scoreRun(run({hunts:9})).lines[4],{label:'鐘を凌いだ',detail:'9回',points:750},'toll survival is capped at five');
+ assert.deepEqual([0,1,2].map(p=>scoreRun(run({clearPhase:p as 0|1|2})).lines[4]),[{label:'刻',detail:'宵の刻に封門',points:600},{label:'刻',detail:'夜半の刻に封門',points:250},{label:'刻',detail:'丑三つ時に封門',points:0}]);
+ assert.deepEqual(scoreRun(run({surplus:{blue:0,red:3}})).lines[4],{label:'余剰奉納',detail:'青0・赤3',points:1200},'surplus is capped at 1200');
+ assert.equal(scoreRun(run({surplus:{blue:6,red:0}})).lines[4].points,1200);assert.equal(scoreRun(run({surplus:{blue:1,red:0}})).lines[4].points,200);
+ assert.deepEqual(scoreRun(run({clearPhase:2,surplus:{blue:1,red:0}})).lines.slice(4).map(l=>l.label),['刻','余剰奉納'],'only defined fields append, in order');
+ for(const bad of [{hunts:-2},{hunts:NaN},{surplus:{blue:-1,red:-4}},{surplus:{blue:NaN,red:0}}])assert.equal(scoreRun(run(bad as Partial<RunSummary>)).lines.length,4);
+ assert.equal(scoreRun(run({hunts:2.9})).lines[4].detail,'2回');
+});
+test('mode and omen multipliers apply to the whole sum; the clear screen gets the omen factor',()=>{
+ const extra={hunts:2,clearPhase:0 as const,surplus:{blue:1,red:1}},sum=6350+300+600+700;
+ assert.equal(scoreRun(run(extra)).score,sum);assert.equal(scoreRun(run({...extra,mode:'hard'})).score,Math.round(sum*1.2));assert.equal(scoreRun(run({...extra,mode:'nightmare'})).score,Math.round(sum*1.5));
+ const surplusOnly=scoreRun(run({mode:'hard',surplus:{blue:0,red:3}})).score-scoreRun(run({mode:'hard'})).score;assert.equal(surplusOnly,1440,'the capped surplus is multiplied by the mode');
+ const omen=scoreRun(run({...extra,mode:'hard',omen:{ids:['newmoon'],multiplier:1.1}}));
+ assert.equal(omen.score,Math.round(sum*1.2*1.1));assert.equal(omen.multiplier,1.2);assert.equal(omen.omenMultiplier,1.1);
+ const calm=scoreRun(run({omen:{ids:['calm'],multiplier:1}}));assert.equal(calm.score,6350);assert.equal(calm.omenMultiplier,1);
+ assert.equal(scoreRun(run({omen:{ids:[],multiplier:NaN}})).score,6350,'a corrupt multiplier is neutral');
+ assert.deepEqual(scoreRun(run({mode:'gallery',...extra,omen:{ids:['newmoon'],multiplier:1.1}})),{score:0,rank:null,multiplier:0,lines:[]});
+});
+test('the rank reflects the bonuses, so risk is what lifts a clean run to S',()=>{
+ const clean=run({escapes:1,notes:1});assert.equal(scoreRun(clean).score,5450);assert.equal(scoreRun(clean).rank,'A');
+ assert.equal(scoreRun({...clean,clearPhase:0}).rank,'S');assert.equal(scoreRun({...clean,hunts:4}).rank,'S');assert.equal(scoreRun({...clean,surplus:{blue:3,red:0}}).rank,'S');
+ assert.equal(scoreRun({...clean,clearPhase:2}).rank,'A','丑三つ earns nothing');assert.equal(scoreRun({...clean,omen:{ids:['newmoon'],multiplier:1.1}}).score,5995);assert.equal(scoreRun({...clean,omen:{ids:['ushimitsu'],multiplier:1.2}}).rank,'S');
+ let records=sanitizeRecords(null);const best=scoreRun({...clean,clearPhase:0});records=applyClear(records,{...clean,clearPhase:0},best).records;
+ assert.deepEqual(records[recordKey('shrine','normal')],{clears:1,bestTime:540,bestScore:best.score,bestRank:'S',fewestDeaths:0},'the stored record shape is unchanged');
+});
+test('run progress counts survived tolls and shows a faint 気配 state below a search',async()=>{
+ const {RunProgress,threatTarget}=await import('../app/run-progress.ts');
+ const quiet={chasing:false,searching:false,hidden:false,frozen:false,burden:0,distance:5};
+ const p=new RunProgress();assert.equal(p.snapshot().hunts,0);p.hunts+=2;p.defeated();assert.equal(p.snapshot().hunts,2,'captures do not erase survived tolls');
+ assert.equal(threatTarget(quiet),0);assert.equal(threatTarget({...quiet,noticed:0}),0);
+ assert.ok(Math.abs(threatTarget({...quiet,noticed:.5})-.14)<1e-12);assert.ok(Math.abs(threatTarget({...quiet,noticed:1})-.28)<1e-12);
+ assert.equal(threatTarget({...quiet,noticed:7}),.28);for(const bad of [NaN,-1,Infinity])assert.equal(threatTarget({...quiet,noticed:bad}),0);
+ assert.equal(threatTarget({...quiet,hidden:true,noticed:1}),.28,'darkness does not hide a foe that already senses the visitor');
+ for(const patch of [{frozen:true},{stunned:true}])assert.equal(threatTarget({...quiet,...patch,noticed:1}),0);
+ assert.equal(threatTarget({...quiet,searching:true,noticed:1}),threatTarget({...quiet,searching:true}),'a search or chase ignores the gauge');
+ assert.equal(threatTarget({...quiet,chasing:true,noticed:1}),threatTarget({...quiet,chasing:true}));
+ const state=(patch:object)=>{const r=new RunProgress();r.step(.05,{...quiet,...patch});return r.state;};
+ assert.equal(state({noticed:.4}),'noticed');assert.equal(state({noticed:.4,hidden:true}),'noticed');assert.equal(state({hidden:true}),'hidden');assert.equal(state({}),'quiet');assert.equal(state({noticed:0,hidden:true}),'hidden');
+ assert.equal(state({noticed:.4,searching:true}),'search');assert.equal(state({noticed:.4,chasing:true}),'chase');assert.equal(state({noticed:.4,frozen:true}),'frozen');assert.equal(state({noticed:.4,stunned:true}),'stunned');
+ const fill=new RunProgress();for(let i=0;i<120;i++)fill.step(1/60,{...quiet,noticed:1});assert.ok(fill.pressure>.2&&fill.pressure<=.28);
+ fill.step(.05,quiet);assert.equal(fill.pressure,0,'a gauge that empties clears the bar at once');assert.equal(fill.escapes,0,'being noticed is not a chase to escape');
+});

@@ -1,9 +1,11 @@
 import {PLAY_MODES,type PlayMode} from './play-mode.ts';
 import {STAGES,type StageId} from './stage-profile.ts';
+import {PHASE_NAMES,type NightPhase} from './night-clock.ts';
+import type {OmenId} from './run-omens.ts';
 export type Rank='S'|'A'|'B'|'C'|'D';
-export type RunSummary={stage:StageId;mode:PlayMode;elapsed:number;deaths:number;escapes:number;notes:number;notesTotal:number};
+export type RunSummary={stage:StageId;mode:PlayMode;elapsed:number;deaths:number;escapes:number;notes:number;notesTotal:number;hunts?:number;clearPhase?:NightPhase;surplus?:{blue:number;red:number};omen?:{ids:OmenId[];multiplier:number}};
 export type ScoreLine={label:string;detail:string;points:number};
-export type ScoreResult={score:number;rank:Rank|null;multiplier:number;lines:ScoreLine[]};
+export type ScoreResult={score:number;rank:Rank|null;multiplier:number;omenMultiplier?:number;lines:ScoreLine[]};
 export type StageRecord={clears:number;bestTime:number|null;bestScore:number|null;bestRank:Rank|null;fewestDeaths:number|null};
 export type Records=Record<string,StageRecord>;
 export const RECORDS_KEY='yukyo-records-v1';
@@ -12,7 +14,8 @@ export const RANK_FLOORS:readonly [Rank,number][]=[['S',6000],['A',4500],['B',30
 const RANK_ORDER:Rank[]=['S','A','B','C','D'];
 const clock=(seconds:number)=>Math.floor(seconds/60).toString().padStart(2,'0')+':'+Math.floor(seconds%60).toString().padStart(2,'0');
 /** Time earns its full value within ten minutes and none after forty; a
- * deathless clear earns a bonus, while each capture costs points. Gallery
+ * deathless clear earns a bonus, while each capture costs points. Surviving
+ * tolls, sealing the gate early and surplus beads reward risk on top. Gallery
  * walks are recorded as clears without a rank. */
 export function scoreRun(r:RunSummary):ScoreResult{
  const multiplier=MODE_MULTIPLIER[r.mode];
@@ -24,8 +27,13 @@ export function scoreRun(r:RunSummary):ScoreResult{
   {label:'追跡回避',detail:escapes+'回',points:Math.min(8,escapes)*150},
   {label:'手記',detail:notes+' / '+r.notesTotal,points:notes*300},
  ];
- const score=Math.max(0,Math.round(lines.reduce((sum,l)=>sum+l.points,0)*multiplier));
- return {score,rank:RANK_FLOORS.find(([,floor])=>score>=floor)![0],multiplier,lines};
+ const hunts=Math.max(0,Math.floor(r.hunts??0)||0),blue=Math.max(0,Math.floor(r.surplus?.blue??0)||0),red=Math.max(0,Math.floor(r.surplus?.red??0)||0);
+ if(hunts>0)lines.push({label:'鐘を凌いだ',detail:hunts+'回',points:Math.min(5,hunts)*150});
+ if(r.clearPhase!==undefined&&PHASE_NAMES[r.clearPhase])lines.push({label:'刻',detail:PHASE_NAMES[r.clearPhase]+'に封門',points:[600,250,0][r.clearPhase]});
+ if(blue+red>0)lines.push({label:'余剰奉納',detail:'青'+blue+'・赤'+red,points:Math.min(1200,blue*200+red*500)});
+ const omen=r.omen&&Number.isFinite(r.omen.multiplier)&&r.omen.multiplier>0?r.omen.multiplier:1;
+ const score=Math.max(0,Math.round(lines.reduce((sum,l)=>sum+l.points,0)*multiplier*omen));
+ return {score,rank:RANK_FLOORS.find(([,floor])=>score>=floor)![0],multiplier,...r.omen?{omenMultiplier:omen}:{},lines};
 }
 export const recordKey=(stage:StageId,mode:PlayMode)=>stage+':'+mode;
 const count=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0?Math.floor(v):null;
