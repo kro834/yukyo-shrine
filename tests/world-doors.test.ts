@@ -69,7 +69,16 @@ test('furnished random worlds collect and offer either route, then allow entry t
    assert.equal(world.interact(),'offered');assert.equal(world.collection()[color],0);assert.equal(world.collection().unlocked,true);
    assert.equal(world.interact(),'empty','beads cannot be offered twice');
    // The gate waits for the eight-second rite inside the altar ring before it opens.
-   for(let i=0;i<200;i++)world.step(.05);
+   const gate=world.goalPosition,sealed=()=>world.obstacles.some(o=>Math.abs(o.minZ-(gate.z-.1))<1e-6&&Math.abs(o.maxZ-(gate.z+.15))<1e-6&&Math.abs((o.minX+o.maxX)/2-gate.x)<1e-6);
+   assert.ok(world.finale,`${color} route began the finale`);assert.deepEqual(world.riteStatus(),{progress:0,remaining:8},'the unlocking offering demands the rite');
+   assert.equal(sealed(),true,'the gate is sealed right after the unlocking offering');assert.equal(world.completed,false);
+   for(let i=0;i<100;i++)world.step(.05);
+   assert.ok(Math.abs(world.riteStatus()!.progress-.625)<1e-9,'five live seconds into the rite');assert.equal(sealed(),true,'the gate stays sealed until the rite completes');
+   world.camera.position.set(gate.x,1.68,gate.z-1.5);
+   for(let i=0;i<8;i++){const p=world.move(0,1,0,true,.05);world.camera.position.set(p.x,p.y,p.z);world.step(.05);}
+   assert.equal(world.completed,false,'the sealed gate cannot be entered mid-rite');assert.ok(world.camera.position.z<gate.z-.1,'the seal stops the visitor');
+   for(let i=0;i<100;i++)world.step(.05);
+   assert.equal(world.riteStatus(),null);assert.equal(sealed(),false,'the rite and then the opening have finished');
    world.camera.position.set(world.goalPosition.x,1.68,world.goalPosition.z-1.5);
    for(let i=0;i<8;i++){const p=world.move(0,1,0,true,.05);world.camera.position.set(p.x,p.y,p.z);world.step(.05);}
    assert.equal(world.completed,true,`${color} route can enter the goal: ${JSON.stringify({position:world.camera.position,obstacles:world.obstacles.filter(o=>o.minX<2&&o.maxX>-2&&o.minZ<18&&o.maxZ>14)})}`);

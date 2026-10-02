@@ -745,10 +745,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const burstRecharge=new BurstRecharge(),timeStop=new TimeStop(),stamina=new Stamina(),run=new RunProgress();let environmentTime=0,preferredStamina=false;
   const syncStamina=()=>stamina.setEnabled(preferredStamina||modeAids(playMode).staminaForced);
   // The night clock, its sleepers and the hunt draws use their own seeded streams so magatama, mirror and finale choices are unchanged.
-  let night=new NightClock(nightConfig('normal')),sleeperCount=0,pendingWake=0,pendingWakeFor=0,finaleGrace=0,finales=0,fogBlend=1,lastRenderTime=0,riteWasActive=false,noticedOnce=false,lastReward:'bell'|'ward'|null=null,lastCapture={dropped:0,scattered:0},recovering={blue:0,red:0,gold:0};
+  let night=new NightClock(nightConfig('normal')),sleeperCount=0,pendingWake=0,pendingWakeFor=0,finaleGrace=0,finales=0,fogBlend=1,lastRenderTime=0,riteWasActive=false,noticedOnce=false,lastReward:'bell'|'ward'|null=null,lastCapture={dropped:0,scattered:0},recovering={blue:0,red:0,gold:0},finaleWard=false;
   const nightRandom=seededRandom(seed^0x7a11),OMEN_SECONDS=6,REARM_OMEN_SECONDS=4;
   // A survived toll pays a tool: a ward while fewer than two are carried, otherwise a bell.
-  let grantReward=():'bell'|'ward'=>'ward';
+  let grantReward=():'bell'|'ward'|null=>'ward';
   const sleeperIds=()=>sleeperCount>0?chooseSleepers(enemies.actors,pursuer.id,sleeperCount,seededRandom(seed^0x51ee9)):[];
   // The strongest suspicion in view; `darkOnly` counts only gauges filled by movement in the dark, for the one-time 気配 lesson.
   const noticeLevel=(darkOnly=false)=>{let level=0;const yaw=camera.rotation.y;for(const e of enemies.actors){const alert=e.alert??0;if(alert<=level||e.dormant||e.brain.mode!=='patrol'||Math.abs(e.floor-elevation)>=1||darkOnly&&e.alertSource!=='dark')continue;if(Math.abs(enemyDirection(camera.position,e.position,yaw).angle)>.75)continue;if(lightBlocked({x:camera.position.x,z:camera.position.z,y:camera.position.y},{...e.position,y:e.floor+1.5},collision))continue;level=alert;}return level;};
@@ -793,7 +793,8 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const itemPickups=placeItemPickups(enemies.patrolTargets,[{position:SPAWN,floor:0,radius:16},{position:goal.altar,floor:0,radius:10},...beads.map(b=>({position:b.position,floor:b.floor,radius:5})),...mirrorPickups.map(m=>({position:m.position,floor:m.floor,radius:6})),...noteSites.map(n=>({position:n.point,floor:n.floor,radius:5}))],seededRandom(seed^0x1e3a),4);
   let itemBag=new ItemBag({bell:1,ward:0}),omens:OmenId[]=[],omen=omenParams([]),clearPhase:0|1|2|null=null;
   const bells=new ThrownBells(),wards=new Wards(),itemMeshes=createItemMeshes(scene,itemPickups,glowTex,mountain?mountainHeight:undefined);
-  grantReward=()=>{const kind:ItemKind=itemBag.ward<2?'ward':'bell';itemBag.grant(kind);return kind;};
+  // A full bag earns nothing, and the toast says so.
+  grantReward=()=>{const kind:ItemKind=itemBag.ward<2?'ward':'bell';return itemBag.grant(kind)>0?kind:null;};
   let selectedQuality:Preferences['quality']='medium';
   const resizeTargets=()=>{renderer.setPixelRatio(budget.pixelRatio(selectedQuality,innerWidth,innerHeight,devicePixelRatio));renderer.setSize(innerWidth,innerHeight);effects?.resize();};
   const moods={shop:new THREE.Color('#17100b'),factory:new THREE.Color('#090f14'),bath:new THREE.Color('#0c1715'),cistern:new THREE.Color('#071114'),cave:new THREE.Color('#070d10'),field:new THREE.Color('#17212b'),shrine:new THREE.Color('#100c09')};
@@ -848,13 +849,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       night=new NightClock(nightConfig(mode,omen));enemies.modifiers={blueBalance:night.blueBalance,sense:omen.sense,hearing:omen.hearing};
       // Omens that start the night late have already woken the first batch.
       const batches=night.config.sleepers;sleeperCount=batches[0]+batches[1];const asleep=batches.slice(night.config.startTolls).reduce((a,b)=>a+b,0),chosen=sleeperIds();
-      pendingWake=0;finaleGrace=0;finales=0;noticedOnce=false;lastReward=null;clearPhase=null;fogBlend=1;riteWasActive=false;recovering={blue:0,red:0,gold:0};
+      pendingWake=0;finaleGrace=0;finales=0;noticedOnce=false;lastReward=null;clearPhase=null;fogBlend=1;riteWasActive=false;recovering={blue:0,red:0,gold:0};finaleWard=false;
       itemBag=new ItemBag({bell:(mode==='nightmare'?0:1)+omen.startBell,ward:0});bells.reset();wards.reset();for(const p of itemPickups)p.collected=false;
       enemies.setDormant(chosen.slice(chosen.length-asleep));enemies.reset();enemyMeshes.setEnabled(mode!=='gallery');},
     get seed(){return seed;},
     nightStatus(){return {...night.snapshot(),startTolls:night.config.startTolls,sleeping:enemies.actors.filter(e=>e.dormant).length,reward:lastReward,clearPhase};},
     omenStatus(){return {ids:[...omens],multiplier:omenMultiplier(omens),names:omens.map(id=>OMENS[id].name),lines:omens.map(id=>OMENS[id].line)};},
-    itemStatus(){return {...itemBag.snapshot(),placed:wards.placed.length};},
+    itemStatus(){return {...itemBag.snapshot(),placed:wards.placed.length,finaleWard};},
     selectItem(kind:ItemKind){itemBag.select(kind);},
     cycleItem(){return itemBag.cycle();},
     useItem():'thrown'|'placed'|'empty'|'ramp'|'near'|'full'|'riding'|'blocked'{
@@ -917,7 +918,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
     enemyDirections(){return !mirrorInventory.active||playMode==='gallery'?[]:enemies.actors.map(e=>({id:e.id,...enemyDirection(camera.position,e.position,camera.rotation.y),stunned:e.brain.mode==='stunned',level:enemyFloorHint(elevation,e.floor),chasing:e.brain.mode==='chase',dormant:!!e.dormant}));},
     nearDoor(){return !!doors.nearest(camera.position,camera.rotation.y,fixedFor(floorLevel()),floorLevel());},
     nearAltar(){return playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision);},
-    interact(){if(elevator?.interact(camera.position,elevation)){hotelMotion={x:0,z:0};cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:elevator.hint()};}if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);if(used.blue||used.red||used.gold){cues.push({kind:'offer',unlocked:goal.unlocked});if(night.purify(used)>0)cues.push({kind:'purify'});return 'offered';}
+    interact(){if(elevator?.interact(camera.position,elevation)){hotelMotion={x:0,z:0};cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:elevator.hint()};}if(circusRuntime){const action=circusRuntime.interact(camera.position,camera.rotation.y);if(action.handled){if(action.position){elevation=0;camera.position.copy(action.position as THREE.Vector3);}refreshCollision();collision=collisionFor();cues.push({kind:'mechanism'});return {kind:'mechanism' as const,message:action.message};}}if(playMode!=='gallery'&&goal.nearAltar(camera.position,camera.rotation.y,elevation,collision)){const used=goal.offer(beadInventory(beads));spendBeads(beads,used);if(used.blue||used.red||used.gold){cues.push({kind:'offer',unlocked:goal.unlocked,...goal.riteActive?{rite:true}:{}});if(night.purify(used)>0)cues.push({kind:'purify'});return 'offered';}
       // Once the gate is open the altar still takes spare beads, for score alone.
       if(goal.unlocked){const extra=goal.offerSurplus(beadInventory(beads));spendBeads(beads,extra);if(extra.blue||extra.red||extra.gold){cues.push({kind:'offer',unlocked:true,surplus:true});return 'surplus';}}return 'empty';}
       const level=floorLevel(),door=doors.nearest(camera.position,camera.rotation.y,fixedFor(level),level),toggled=doors.interact(camera.position,camera.rotation.y,fixedFor(level),level);if(toggled&&door)cues.push({kind:'door',open:door.open});return toggled;},
@@ -944,7 +945,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       if(recovered){cues.push({kind:'recover',count:recovered,...recovering});if(!beads.some(b=>b.dropped&&!b.collected))recovering={blue:0,red:0,gold:0};}
       const inventory=beadInventory(beads),totals={blue:inventory.blue+goal.blueOffered,red:inventory.red+goal.redOffered,gold:inventory.gold+goal.goldOffered};
       finaleGrace=Math.max(0,finaleGrace-liveDt);
-      if(playMode!=='gallery'&&!enemies.finalKind&&finaleGrace<=0&&collectionReady(totals)){const omenSeconds=finales++&&goal.unlocked?REARM_OMEN_SECONDS:OMEN_SECONDS;cues.push({kind:'finale',foe:enemies.beginFinale(camera.position,elevation,runRandom,omenSeconds,goal.altar)});cues.push({kind:'bell',beat:'toll',count:omenSeconds>=OMEN_SECONDS?3:2});clearPhase=night.phase;night.stop();mirrorInventory.grant(2);itemBag.grant('ward');run.beginFinale();phaseRevision++;}
+      if(playMode!=='gallery'&&!enemies.finalKind&&finaleGrace<=0&&collectionReady(totals)){const omenSeconds=finales++&&goal.unlocked?REARM_OMEN_SECONDS:OMEN_SECONDS;cues.push({kind:'finale',foe:enemies.beginFinale(camera.position,elevation,runRandom,omenSeconds,goal.altar)});cues.push({kind:'bell',beat:'toll',count:omenSeconds>=OMEN_SECONDS?3:2});clearPhase=night.phase;night.stop();mirrorInventory.grant(2);finaleWard=itemBag.grant('ward')>0;run.beginFinale();phaseRevision++;}
       const burden=Math.max(totals.blue/BEAD_REQUIREMENTS.blue,totals.red/BEAD_REQUIREMENTS.red,totals.gold);enemies.pressure=Math.min(1,burden);
       // The unlocking offering starts the gate rite: eight live seconds inside the altar ring, where the pursuer is slowed below a sprint.
       // Once a finale has begun the demand stays, so an offering made in the grace after a capture cannot slip past it; the rite only counts while a pursuer exists.

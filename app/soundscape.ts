@@ -158,7 +158,7 @@ export function createSoundscape(options:Options={}){
    case 'mirror-pickup':glint(t,1,.2);break;
    case 'note':{const s=sound({gain:.32,wet:.15});s.hiss({t,attack:.01,decay:.12,gain:.8,type:'bandpass',f:3200,q:.7});s.hiss({t:t+.16,attack:.02,decay:.2,gain:.6,type:'bandpass',f:2400,q:.7});s.bell(1568,t+.2,.25,1.2);break;}
    case 'door':{const s=sound({gain:.32,wet:.25});s.hiss({t,attack:.12,decay:.38,gain:1,type:'lowpass',f:c.open?600:1100,to:c.open?1400:500,q:.8});if(!c.open)s.tone({f:95,to:60,t:t+.46,decay:.12,gain:.6});break;}
-   case 'offer':{if(c.surplus){sound({gain:.26,wet:.6}).bell(1568,t,1,2.4);break;}const s=sound({gain:.38,wet:.75});s.bell(98,t,1,5);s.tone({f:49,t,attack:.02,decay:3.5,gain:.5});s.bell(1318.5,t+.25,.3,2);if(c.unlocked)opening(s,t+.6);break;}
+   case 'offer':{if(c.surplus){sound({gain:.26,wet:.6}).bell(1568,t,1,2.4);break;}const s=sound({gain:.38,wet:.75});s.bell(98,t,1,5);s.tone({f:49,t,attack:.02,decay:3.5,gain:.5});s.bell(1318.5,t+.25,.3,2);if(c.unlocked&&!c.rite)opening(s,t+.6);break;}
    case 'mechanism':{const s=sound({gain:.28,wet:.35});s.hiss({t,decay:.12,gain:.7,type:'lowpass',f:420});s.tone({f:88,to:60,t,decay:.14,gain:.7});s.tone({f:1250,t:t+.02,decay:.06,gain:.2,type:'triangle'});break;}
    case 'burst':{const s=sound({gain:.3,wet:.35});s.hiss({t,attack:.03,decay:.4,gain:1,type:'bandpass',f:500,to:3200,q:.9});s.tone({f:2200,to:700,t,decay:.3,gain:.3});if(c.hits>0)s.bell(2489,t+.08,.4,.8);break;}
    case 'time-stop':{const s=sound({gain:.3,wet:.6});s.tone({f:880,to:110,t,attack:.02,decay:1.2,gain:.5});s.hiss({t,attack:.5,decay:.08,gain:.7,type:'highpass',f:3000});s.tone({f:55,t:t+.5,decay:1.8,gain:.6});break;}

@@ -1,3 +1,4 @@
+import {SUSPECT_AT} from './notice.ts';
 import {hotelHuman} from './hotel-human.ts';
 import {specialEnemyRig} from './enemy-rigs.ts';
 import {mergeEnemyParts} from './enemy-batches.ts';
@@ -116,7 +117,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies,human=false)
     return {root,...echo,animate(e:Enemy,time:number){const stunned=e.brain.mode==='stunned',gait=motion.sample(e,time),swing=Math.sin(gait.phase)*gait.weight;
       feet.forEach((foot,j)=>{const step=footCycle(gait.phase,j),travel=step.travel*gait.weight*(.085+.03*gait.run);foot.position.y=step.lift*gait.weight*(.045+.025*gait.run);foot.position.z=.05+travel*gait.forward;});
       arms.forEach((arm,j)=>arm.rotation.x=stunned?.08:Math.sin(gait.phase+j*Math.PI)*gait.weight*(.11+.06*gait.run));
-      head.rotation.z=tilt+(stunned?.25:Math.sin(time*.0009+i)*.035)+(e.alert??0)*.32;body.rotation.z=stunned?.08:swing*.008;body.rotation.x=bodyLean-((e.alert??0)>=.35?.06:0);
+      head.rotation.z=tilt+(stunned?.25:Math.sin(time*.0009+i)*.035)+(e.alert??0)*.32;body.rotation.z=stunned?.08:swing*.008;body.rotation.x=bodyLean-(e.brain.mode==='patrol'&&(e.alert??0)>=SUSPECT_AT?.06:0);
       body.rotation.y=-swing*.028;body.position.y=baseY+(1-Math.cos(gait.phase*2))*gait.weight*.010;
     }};
   };

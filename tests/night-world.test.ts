@@ -313,7 +313,7 @@ test('夜刻の鐘 in the world: bells, sleepers, notice, capture calm, purifica
    assert.deepEqual(ofKind(p.cues,'bell'),[{kind:'bell',beat:'toll',count:3}]);
    const frozen=night().fraction;
    assert.equal(offerAtAltar(),'offered');let cues=w.drainCues();
-   assert.deepEqual(ofKind(cues,'offer'),[{kind:'offer',unlocked:true}]);assert.equal(w.collection().unlocked,true);
+   assert.deepEqual(ofKind(cues,'offer'),[{kind:'offer',unlocked:true,rite:true}]);assert.equal(w.collection().unlocked,true);
    assert.equal(ofKind(cues,'purify').length,0,'the night is stopped for the finale: nothing is purified');assert.equal(night().fraction,frozen);
    for(const b of [gold,b2,r2])pick(b);
    assert.deepEqual([w.collection().gold,w.collection().blue,w.collection().red],[1,1,1]);w.drainCues();

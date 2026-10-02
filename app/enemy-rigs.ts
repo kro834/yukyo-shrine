@@ -1,4 +1,5 @@
 /** Layered clothing and articulated extremities share the actor material/merge lifecycle. */
+import {SUSPECT_AT} from './notice.ts';
 import * as THREE from 'three';
 import type {Enemy} from './shrine-gameplay.ts';
 import {finalePhase,hatredPressure,rushPhase} from './enemy-traits.ts';
@@ -342,7 +343,7 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     if(isWrath&&chasing)lean=phase==='windup'?-.055:phase==='rush'?.12:.022;
     if(stunned)lean=0;
     // Suspicion reads as a small lean back before the head turns.
-    if(!stunned&&!chasing&&(e.alert??0)>=.35)lean-=.06;
+    if(!stunned&&!chasing&&(e.alert??0)>=SUSPECT_AT)lean-=.06;
     const pivot=isMire?.29:waist+.055;
     upper.rotation.x=lean;upper.rotation.z=(isFox&&e.flankPoint?.026:0)+swing*(isMire?.005:.003);
     upper.rotation.y=-swing*(isMire?.016:.028);

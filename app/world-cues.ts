@@ -10,7 +10,7 @@ export type WorldCue=
  |{kind:'mirror-pickup'}
  |{kind:'note';id:string}
  |{kind:'door';open:boolean}
- |{kind:'offer';unlocked:boolean;surplus?:boolean}
+ |{kind:'offer';unlocked:boolean;surplus?:boolean;rite?:boolean}
  |{kind:'mechanism'}
  |{kind:'burst';hits:number}
  |{kind:'time-stop'}
