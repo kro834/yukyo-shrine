@@ -10,6 +10,9 @@ export type StageRecord={clears:number;bestTime:number|null;bestScore:number|nul
 export type Records=Record<string,StageRecord>;
 export const RECORDS_KEY='yukyo-records-v1';
 export const MODE_MULTIPLIER:Record<PlayMode,number>={gallery:0,normal:1,hard:1.2,nightmare:1.5};
+/** Surplus beads after the unlock: blue and red (gold counts as red) up to a cap per run. */
+export const SURPLUS_POINTS={blue:200,red:500,cap:1200} as const;
+export const surplusPoints=(s:{blue:number;red:number})=>Math.min(SURPLUS_POINTS.cap,Math.max(0,Math.floor(s.blue))*SURPLUS_POINTS.blue+Math.max(0,Math.floor(s.red))*SURPLUS_POINTS.red);
 export const RANK_FLOORS:readonly [Rank,number][]=[['S',6000],['A',4500],['B',3000],['C',1500],['D',-Infinity]];
 const RANK_ORDER:Rank[]=['S','A','B','C','D'];
 const clock=(seconds:number)=>Math.floor(seconds/60).toString().padStart(2,'0')+':'+Math.floor(seconds%60).toString().padStart(2,'0');
@@ -30,7 +33,7 @@ export function scoreRun(r:RunSummary):ScoreResult{
  const hunts=Math.max(0,Math.floor(r.hunts??0)||0),blue=Math.max(0,Math.floor(r.surplus?.blue??0)||0),red=Math.max(0,Math.floor(r.surplus?.red??0)||0);
  if(hunts>0)lines.push({label:'鐘を凌いだ',detail:hunts+'回',points:Math.min(5,hunts)*150});
  if(r.clearPhase!==undefined&&PHASE_NAMES[r.clearPhase])lines.push({label:'刻',detail:PHASE_NAMES[r.clearPhase]+'に封門',points:[600,250,0][r.clearPhase]});
- if(blue+red>0)lines.push({label:'余剰奉納',detail:'青'+blue+'・赤'+red,points:Math.min(1200,blue*200+red*500)});
+ if(blue+red>0)lines.push({label:'余剰奉納',detail:'青'+blue+'・赤'+red,points:surplusPoints({blue,red})});
  const omen=r.omen&&Number.isFinite(r.omen.multiplier)&&r.omen.multiplier>0?r.omen.multiplier:1;
  const score=Math.max(0,Math.round(lines.reduce((sum,l)=>sum+l.points,0)*multiplier*omen));
  return {score,rank:RANK_FLOORS.find(([,floor])=>score>=floor)![0],multiplier,...r.omen?{omenMultiplier:omen}:{},lines};

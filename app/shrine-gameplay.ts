@@ -56,7 +56,7 @@ export class Doors {
 }
 export const STUN_SECONDS=9;
 /** Sleepers wake to running or a bell within this distance; a toll never wakes one near or in view of the visitor. */
-export const WAKE_HEAR=10,WAKE_CONTACT=1,TOLL_WAKE_DISTANCE=20,HUNT_RADIUS=12;
+export const WAKE_TURN_SECONDS=1,WAKE_HEAR=10,WAKE_CONTACT=1,TOLL_WAKE_DISTANCE=20,HUNT_RADIUS=12;
 export type HearOptions={radius?:(e:Enemy,rawHearing:number)=>number;scale?:number;limit?:number;search?:(e:Enemy,distance:number)=>number;branches?:number;sameFloor?:boolean};
 export const LOSE_SIGHT_SECONDS=.65;
 export class EnemyBrain {
@@ -80,7 +80,7 @@ export class EnemyBrain {
 export const ENEMY_PROFILES={...EXTRA_ENEMY_PROFILES,normal:{sight:25,nearSight:4,cone:.05,chase:8.1,patrol:3.5,hearing:88},danger:{sight:56,nearSight:7,cone:-.3,chase:9.1,patrol:4,hearing:150},listener:{sight:16,nearSight:2.5,cone:.2,chase:7.7,patrol:2.9,hearing:145},watcher:{sight:44,nearSight:3.8,cone:.6,chase:7.9,patrol:2.5,hearing:72},stalker:{sight:22,nearSight:4.8,cone:-.15,chase:8.95,patrol:3.8,hearing:65}};
 export type EnemyKind=keyof typeof ENEMY_PROFILES;
 type PatrolTarget={id:string;point:Position;floor:number;visits:number;lastVisited?:number};
-export type Enemy={alert?:number;suspect?:Position|null;hunting?:number;dormant?:boolean;wakeIn?:number;riftWindup?:number;traitTime:number;flankPoint:Position|null;id:number;kind:EnemyKind;position:Position;home:Position;homeFloor:number;searchBranches:number;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number;patrol:PatrolTarget|null};
+export type Enemy={alert?:number;alertSource?:'dark'|'lit';suspect?:Position|null;hunting?:number;dormant?:boolean;wakeIn?:number;wakeTurn?:number;riftWindup?:number;traitTime:number;flankPoint:Position|null;id:number;kind:EnemyKind;position:Position;home:Position;homeFloor:number;searchBranches:number;facing:number;brain:EnemyBrain;waypoint:Position|null;planIn:number;step:number;route:Position[];investigate:Position|null;searchTime:number;lastNode:string|null;visits:Map<string,number>;doorWait:number;floor:number;destinationFloor:number;lastSeenFloor:number;patrol:PatrolTarget|null};
 /** movePlayer caps each delta at .05. Small spatial steps preserve a boss's
  * authored speed while checking the same radius-expanded collision every time.
  * The callback updates ramp height and capture at each actual travelled point.
@@ -258,9 +258,10 @@ export class Enemies {
   }
   /** Sleepers stand at home with their backs to the corridor until something wakes them. */
   setDormant(ids:readonly number[]){this.dormantIds.clear();for(const id of ids)this.dormantIds.add(id);this.applyDormant();}
-  private applyDormant(){for(const e of this.actors){e.dormant=!isFinale(e.kind)&&this.dormantIds.has(e.id);if(e.dormant){e.position={...e.home};e.floor=e.homeFloor;e.facing=this.dormantFacing(e);e.route=[];e.waypoint=null;e.investigate=null;e.searchTime=0;e.searchBranches=0;e.patrol=null;e.hunting=0;e.alert=0;e.suspect=null;}}}
+  private applyDormant(){for(const e of this.actors){e.dormant=!isFinale(e.kind)&&this.dormantIds.has(e.id);if(e.dormant){e.position={...e.home};e.floor=e.homeFloor;e.facing=this.dormantFacing(e);e.route=[];e.waypoint=null;e.investigate=null;e.searchTime=0;e.searchBranches=0;e.patrol=null;e.hunting=0;e.alert=0;e.suspect=null;e.wakeTurn=0;}}}
   private dormantFacing(e:Enemy){let best:Position|null=null,bestDistance=Infinity;for(const p of this.nodesFor(e.homeFloor).values()){const d=Math.hypot(p.x-e.home.x,p.z-e.home.z);if(d>.5&&d<bestDistance){bestDistance=d;best=p;}}return best?Math.atan2(e.home.x-best.x,e.home.z-best.z):e.facing;}
-  wake(e:Enemy){if(!e.dormant)return;e.dormant=false;this.dormantIds.delete(e.id);e.brain.reacquireDelay=Math.max(e.brain.reacquireDelay,1.5);e.planIn=0;}
+  /** A woken sleeper spends its first second turning toward the corridor before it walks. */
+  wake(e:Enemy){if(!e.dormant)return;e.dormant=false;this.dormantIds.delete(e.id);e.brain.reacquireDelay=Math.max(e.brain.reacquireDelay,1.5);e.planIn=0;e.wakeTurn=WAKE_TURN_SECONDS;}
   /** Wake up to `count` sleepers that the visitor cannot see and is not near; returns how many woke. */
   wakeBatch(count:number,player:Position,playerFloor:number,blockers:Obstacle[],force=false){
     const sleepers=this.actors.filter(e=>e.dormant).map(e=>({e,d:Math.hypot(e.position.x-player.x,e.position.z-player.z)})).sort((a,b)=>b.d-a.d);
@@ -273,7 +274,7 @@ export class Enemies {
     return woke;
   }
   /** One stunned enemy: the burst body, shared with wards. */
-  stunActor(e:Enemy,seconds=STUN_SECONDS){if(e.dormant)this.wake(e);e.brain.stun(seconds);e.riftWindup=0;this.rifts.delete(e.id);e.route=[];e.investigate=null;e.searchBranches=0;e.searchTime=0;e.alert=0;e.suspect=null;e.hunting=0;if(isFinale(e.kind)){e.planIn=0;e.waypoint=null;e.flankPoint=null;e.doorWait=0;this.finaleObservation=null;if(e.kind==='wrath')e.traitTime=0;}}
+  stunActor(e:Enemy,seconds=STUN_SECONDS){if(e.dormant)this.wake(e);e.brain.stun(seconds);e.riftWindup=0;this.rifts.delete(e.id);e.route=[];e.investigate=null;e.searchBranches=0;e.searchTime=0;e.alert=0;e.suspect=null;e.hunting=0;e.wakeTurn=0;if(isFinale(e.kind)){e.planIn=0;e.waypoint=null;e.flankPoint=null;e.doorWait=0;this.finaleObservation=null;if(e.kind==='wrath')e.traitTime=0;}}
   burst(player:Position&{y?:number},blockers:Obstacle[],floor=0,yaw=0,pitch=0,terrain?:(z:number)=>number){let count=0;for(const e of this.actors)if(flashHits({x:player.x,z:player.z,y:player.y??floor+1.5},e.position,floor,e.floor,yaw,pitch,blockers,e.kind==='mire'?[.22,.42,.58]:undefined,terrain)){this.stunActor(e);count++;}return count;}
   /** An omen delays the pursuer's first move; `avoid` prefers a spawn on the far side from the altar. Two random draws, as before. */
   beginFinale(player:Position,floor:number,random:()=>number,omenSeconds=0,avoid?:Position){
@@ -288,7 +289,7 @@ export class Enemies {
     const boss:Enemy={...this.actors[0],id:12,kind:this.finalKind,home:{...home},position:{...home},homeFloor:level,floor:level,destinationFloor:level,lastSeenFloor:level,brain:new EnemyBrain(),route:[],waypoint:null,investigate:null,searchTime:0,searchBranches:0,planIn:0,traitTime:0,flankPoint:null,visits:new Map(),patrol:null,doorWait:0,lastNode:null,step:0,facing:Math.atan2(player.x-home.x,player.z-home.z),wakeIn:omenSeconds,alert:0,suspect:null,hunting:0,dormant:false};
     this.finaleObservation=null;this.actors=[boss];this.patrolOwners.clear();this.ownerSignature='';return this.finalKind;
   }
-  reset(){this.rifts.clear();if(this.regularActors){this.actors=this.regularActors;this.regularActors=null;}this.finalKind=null;this.finaleObservation=null;this.squadCooldown=0;this.patrolClock=0;for(const t of this.patrolTargets){t.visits=0;t.lastVisited=0;}for(const e of this.actors){e.position={...e.home};e.riftWindup=0;e.traitTime=0;e.flankPoint=null;e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;e.route=[];e.planIn=0;e.investigate=null;e.searchTime=0;e.doorWait=0;e.floor=e.homeFloor;e.destinationFloor=e.homeFloor;e.searchBranches=0;e.patrol=null;e.alert=0;e.suspect=null;e.hunting=0;e.wakeIn=0;}this.applyDormant();}
+  reset(){this.rifts.clear();if(this.regularActors){this.actors=this.regularActors;this.regularActors=null;}this.finalKind=null;this.finaleObservation=null;this.squadCooldown=0;this.patrolClock=0;for(const t of this.patrolTargets){t.visits=0;t.lastVisited=0;}for(const e of this.actors){e.position={...e.home};e.riftWindup=0;e.traitTime=0;e.flankPoint=null;e.brain=new EnemyBrain();e.brain.reacquireDelay=4;e.waypoint=null;e.route=[];e.planIn=0;e.investigate=null;e.searchTime=0;e.doorWait=0;e.floor=e.homeFloor;e.destinationFloor=e.homeFloor;e.searchBranches=0;e.patrol=null;e.alert=0;e.suspect=null;e.hunting=0;e.wakeIn=0;e.wakeTurn=0;}this.applyDormant();}
   update(dt:number,player:Position,groundBlockers:Obstacle[],playerFloor=0,upperBlockers:Obstacle[]=this.upperWalls,detectable=true,thirdBlockers:Obstacle[]=this.thirdWalls,lightOn=detectable){
     if(!this.difficulty.enemies||!Number.isFinite(dt)||dt<=0)return false;
     if(this.finalKind&&(this.actors[0].wakeIn??0)<=0){
@@ -316,6 +317,7 @@ export class Enemies {
       const dx=player.x-e.position.x,dz=player.z-e.position.z,distance=Math.hypot(dx,dz);
       const facing=(dx*Math.sin(e.facing)+dz*Math.cos(e.facing))/Math.max(.01,distance);
       if(e.dormant){if(Math.abs(playerFloor-e.floor)<1&&this.playerMoving&&(distance<WAKE_CONTACT||(!this.playerCrouching&&distance<this.notice.darkRadius)))this.wake(e);continue;}
+      if((e.wakeTurn??0)>0&&e.brain.mode!=='stunned'){e.wakeTurn=Math.max(0,(e.wakeTurn??0)-dt);const corridor=this.nodesNear(e.position,e.floor,40).filter(p=>Math.hypot(p.x-e.position.x,p.z-e.position.z)>.5).sort((a,b)=>Math.hypot(a.x-e.position.x,a.z-e.position.z)-Math.hypot(b.x-e.position.x,b.z-e.position.z))[0];if(corridor)e.facing=turnToward(e.facing,Math.atan2(corridor.x-e.position.x,corridor.z-e.position.z),dt);continue;}
       if(e.hunting)e.hunting=Math.max(0,e.hunting-dt);
       const base=ENEMY_PROFILES[e.kind],balance=this.balanceAt(e.position,e.floor);
       const dangerScale=this.wingAt(e.position)==='yokocho'?1.3:1,pressureScale=1+Math.max(0,Math.min(1,this.pressure))*.18;
@@ -338,13 +340,14 @@ export class Enemies {
           const rate=darkFillRate(this.notice,e.kind,distance,facing,this.playerMoving,this.playerCrouching,hunting);
           if(rate>0&&!lightBlocked({...e.position,y:e.floor+(this.humanMotion?1.62:e.kind==='mire'?.52:2.05)},{...player,y:playerFloor+(low?CROUCH_TARGET:STAND_TARGET)},sightBlockers)){fill=rate;darkSensed=true;}
         }
-        sensing=fill>0;e.alert=stepAlert(e.alert??0,fill,dt);perceives=e.alert>=1&&(sees||darkSensed);
+        sensing=fill>0;if(sensing)e.alertSource=darkSensed?'dark':'lit';e.alert=stepAlert(e.alert??0,fill,dt);perceives=e.alert>=1&&(sees||darkSensed);
       }
       const previousMode=e.brain.mode,lastSeen=e.brain.lastSeen?{...e.brain.lastSeen}:null,stunAtStart=e.brain.stunRemaining;
       if(omniscient&&stunAtStart>0){if(e.kind==='wrath')e.traitTime=0;e.flankPoint=null;}
       e.brain.update(dt,e.brain.mode==='chase'?(sees||darkSensed):perceives,player);
       if(omniscient&&e.brain.mode!=='stunned'){e.brain.mode='chase';e.brain.lastSeen={...player};e.destinationFloor=playerFloor>7.2?9.6:playerFloor>2.4?UPPER_HEIGHT:0;e.lastSeenFloor=e.destinationFloor;}
-      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.flankPoint=null;e.searchBranches=e.kind==='warden'?5:e.kind==='danger'?3:e.kind==='watcher'?1:2;e.searchTime=14*balance.search*this.difficulty.search;e.waypoint=null;e.route=[];e.planIn=0;}
+      if(e.brain.mode==='chase')e.suspect=null;
+      if(previousMode==='chase'&&e.brain.mode==='patrol'){e.alert=0;e.suspect=null;e.investigate=lastSeen;e.destinationFloor=e.lastSeenFloor;e.flankPoint=null;e.searchBranches=e.kind==='warden'?5:e.kind==='danger'?3:e.kind==='watcher'?1:2;e.searchTime=14*balance.search*this.difficulty.search;e.waypoint=null;e.route=[];e.planIn=0;}
       if((sees||darkSensed)&&e.brain.mode==='chase'){e.searchBranches=0;e.investigate=null;e.searchTime=0;e.lastSeenFloor=playerFloor>7.2?9.6:playerFloor>2.4?UPPER_HEIGHT:0;e.destinationFloor=e.lastSeenFloor;if(!sighting&&this.squadCooldown===0)sighting={source:e,point:{...e.brain.lastSeen!},floor:e.lastSeenFloor};}
       if(e.brain.mode==='stunned')continue;
       const activeDt=omniscient?Math.max(0,dt-stunAtStart):dt;
@@ -372,7 +375,7 @@ export class Enemies {
         const alert=e.alert??0;
         // Suspicion: halt and turn toward the visitor; forgetting costs the area an eight-second search.
         // The suspect point only follows the visitor while something is actually sensed; a hidden visitor is never tracked.
-        if(alert>=SUSPECT_AT&&!(e.hunting??0)){if(sensing||!e.suspect)e.suspect={...player};e.facing=turnToward(e.facing,Math.atan2(e.suspect.x-e.position.x,e.suspect.z-e.position.z),dt);continue;}
+        if(alert>=SUSPECT_AT&&!(e.hunting??0)){if(sensing)e.suspect={...player};if(e.suspect){e.facing=turnToward(e.facing,Math.atan2(e.suspect.x-e.position.x,e.suspect.z-e.position.z),dt);continue;}}
         if(e.suspect&&alert<FORGET_AT){this.attend(e,e.suspect,e.floor,8*balance.search*this.difficulty.search,1);e.suspect=null;}
       }
       let goal=e.brain.mode==='chase'?e.brain.lastSeen:e.investigate??e.patrol?.point??null;

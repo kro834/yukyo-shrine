@@ -21,11 +21,11 @@ export type WorldCue=
  |{kind:'finale';foe:FinaleKind}
  |{kind:'caught'}
  |{kind:'clear'}
- |{kind:'bell';beat:'warning'|'toll'|'end';count:number;survived?:boolean}
+ |{kind:'bell';beat:'warning'|'toll'|'end'|'lull';count:number;survived?:boolean}
  |{kind:'purify'}
  |{kind:'notice'}
  |{kind:'item';action:'throw'|'ring'|'pickup'|'place'|'burn';distance?:number;angle?:number;item?:'bell'|'ward'}
- |{kind:'recover';count:number}
+ |{kind:'recover';count:number;blue:number;red:number;gold:number}
  |{kind:'rite';beat:'start'|'tick'|'complete'};
 /** A ward flares under an enemy's foot, so it may only be heard where the visitor
  * could already perceive it: close by, or within sight. */

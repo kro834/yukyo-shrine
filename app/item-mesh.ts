@@ -48,6 +48,8 @@ export function createItemMeshes(scene:THREE.Scene,pickups:ItemPickup[],glowTex:
   return wardRoots[i];
  };
  const grade=(z:number)=>terrain?Math.atan(terrain(z+.5)-terrain(z-.5)):0;
+ // The ring material has its own program; a hidden ward built now lets the first-frame warm-up compile it instead of the first chase.
+ wardRoot(0).root.visible=false;
  return {
   update(time:number,bells:ThrownBells,wards:Wards){
    pickupRoots.forEach((m,i)=>{m.visible=!pickups[i].collected;if(m.visible){m.rotation.y=time*.0005+i*1.3;m.position.y=pickups[i].floor+.95+Math.sin(time*.0016+i)*.05;}});

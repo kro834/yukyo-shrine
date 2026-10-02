@@ -85,7 +85,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies,human=false)
     if(e.kind==='stalker'){const rig=specialEnemyRig(root,'mire',{cloth:tailoredCloth,paleCloth:cloth,sculpt,skin,mask,black,cord},mergeFixed),echo=echoRig(root);return {root,...echo,animate:rig.animate};}
     const tall=e.kind==='watcher',large=e.kind==='danger';
     root.scale.set(large?1.13:1,tall?1.17:large?1.1:1,1);
-    const body=new THREE.Group();root.add(body);body.rotation.x=e.kind==='normal'?.13:large?.2:0;
+    const body=new THREE.Group();root.add(body);const bodyLean=e.kind==='normal'?.13:large?.2:0;body.rotation.x=bodyLean;
     part(body,robe(.24,.43,1.35),cloth,0,.94,0);
     const feet:THREE.Group[]=[];
     for(const side of [-1,1]){
@@ -116,7 +116,7 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies,human=false)
     return {root,...echo,animate(e:Enemy,time:number){const stunned=e.brain.mode==='stunned',gait=motion.sample(e,time),swing=Math.sin(gait.phase)*gait.weight;
       feet.forEach((foot,j)=>{const step=footCycle(gait.phase,j),travel=step.travel*gait.weight*(.085+.03*gait.run);foot.position.y=step.lift*gait.weight*(.045+.025*gait.run);foot.position.z=.05+travel*gait.forward;});
       arms.forEach((arm,j)=>arm.rotation.x=stunned?.08:Math.sin(gait.phase+j*Math.PI)*gait.weight*(.11+.06*gait.run));
-      head.rotation.z=tilt+(stunned?.25:Math.sin(time*.0009+i)*.035)+(e.alert??0)*.32;body.rotation.z=stunned?.08:swing*.008;
+      head.rotation.z=tilt+(stunned?.25:Math.sin(time*.0009+i)*.035)+(e.alert??0)*.32;body.rotation.z=stunned?.08:swing*.008;body.rotation.x=bodyLean-((e.alert??0)>=.35?.06:0);
       body.rotation.y=-swing*.028;body.position.y=baseY+(1-Math.cos(gait.phase*2))*gait.weight*.010;
     }};
   };

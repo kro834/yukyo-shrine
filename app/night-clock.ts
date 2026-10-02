@@ -67,6 +67,8 @@ export class NightClock{
  }
  captured(){if(this.stopped)return;this.fraction=Math.min(CAPTURE_CEILING,this.fraction+this.config.capture);this.calmHold=this.config.calmAfterCapture;if(this.state==='hunt')this.huntBroken=true;this.revision++;}
  stop(){if(this.stopped)return;this.stopped=true;this.calm();this.revision++;}
+ /** A finale cleared by a capture with the gate still locked hands the night back to the clock. */
+ resume(){if(!this.stopped)return;this.stopped=false;this.revision++;}
  snapshot(){const phase=this.phase;return {phase,name:PHASE_NAMES[phase] as string,fraction:this.fraction,state:this.state,left:this.left,tolls:this.tolls,revision:this.revision};}
 }
 /** Seeded shuffle of eligible actors; one is skipped if it would leave its storey with nobody awake. */

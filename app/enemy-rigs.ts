@@ -341,6 +341,8 @@ export function specialEnemyRig(root:THREE.Group,kind:string,m:Materials,merge:(
     // Wrath has a readable three-beat threat: gather back, lunge, then settle.
     if(isWrath&&chasing)lean=phase==='windup'?-.055:phase==='rush'?.12:.022;
     if(stunned)lean=0;
+    // Suspicion reads as a small lean back before the head turns.
+    if(!stunned&&!chasing&&(e.alert??0)>=.35)lean-=.06;
     const pivot=isMire?.29:waist+.055;
     upper.rotation.x=lean;upper.rotation.z=(isFox&&e.flankPoint?.026:0)+swing*(isMire?.005:.003);
     upper.rotation.y=-swing*(isMire?.016:.028);

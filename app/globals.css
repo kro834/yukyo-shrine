@@ -32,6 +32,8 @@ html[data-shrine-playing=true],html[data-shrine-playing=true] *{cursor:none!impo
 .collection-status .blue-bead{color:#79bded}.altar-compass>span{font-size:12px}@media(max-width:600px){.altar-compass{top:158px;left:16px}.clear-screen h1{margin:10px 0}.clear-screen p{margin:8px 0}}@media(max-height:510px){.play-state{bottom:18px}.altar-compass{top:112px}.run-results{gap:8px 20px;margin-bottom:12px}.clear-screen>span{font-size:30px}.clear-screen h1{font-size:26px}.clear-screen strong{margin:6px 0 12px}.clear-screen small{margin-top:8px}}
 
 .enemy-bearing{display:flex;flex-direction:column;align-items:center;gap:5px}.enemy-bearing>i{display:block;font-style:normal}.enemy-bearing>small{font-family:var(--font-sans);font-size:12px;font-weight:400;letter-spacing:.1em;white-space:nowrap}.enemy-bearing[data-chasing=true]>i{filter:drop-shadow(0 0 6px currentColor)}
+/* A sleeper is drawn hollow: an outline with no glow, so it reads as dormant at a glance. */
+.enemy-bearing[data-dormant=true]{text-shadow:none}.enemy-bearing[data-dormant=true]>i{color:transparent;-webkit-text-stroke:1.5px #9aa3a6;filter:none}
 /* Keep urgent feedback clear of the movement pads and ability controls. */
 .toast{bottom:175px;max-width:min(90vw,560px);font-size:14px;pointer-events:none}.notice{pointer-events:auto}.settings-dialog{display:flex!important;flex-direction:column}.settings-dialog>[data-slot=tabs]{min-height:0;flex:1}.settings-footer,.settings-heading,.settings-tabs{flex-shrink:0}
 @media(max-width:600px){.toast{bottom:265px;font-size:13px}.door-action{bottom:85px}.time-stop-status{bottom:150px}.burst-cooldown{bottom:130px}}
@@ -243,7 +245,7 @@ body{font-family:var(--font-game-ui);font-weight:500;font-synthesis:none;text-re
 .status-objective{display:flex;flex-direction:column;gap:4px;padding:12px 14px;border-left:3px solid var(--shu-dim);background:#0f141266}
 .status-objective small{font-size:11px;letter-spacing:.2em;color:#d38d7f}.status-objective strong{font:600 19px var(--font-game-title);letter-spacing:.1em;color:#efe3cb}.status-objective span{font-size:12px;color:#b9b09c}
 .status-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:0}
-.status-stats div{border:1px solid var(--border);padding:8px 10px}.status-stats dt{font-size:11px;color:#9fa493}.status-stats dd{margin:4px 0 0;font-size:18px;font-variant-numeric:tabular-nums;color:#e5dac3}
+.status-stats div{border:1px solid var(--border);padding:8px 10px}.status-stats dt{font-size:11px;color:#9fa493}.status-stats dd{margin:4px 0 0;font-size:18px;font-variant-numeric:tabular-nums;color:#e5dac3;overflow-wrap:anywhere}
 .menu-actions{display:flex;flex-direction:column;gap:8px}
 .menu-action{display:flex;align-items:center;justify-content:space-between;padding:11px 14px;border:1px solid #9c80513f;background:#1b221f99;color:#dccfb4;font-size:13px;text-align:left}
 .menu-action.primary{border-color:#bca06a66;background:#bba36c17;color:#e8cf9d}
@@ -308,7 +310,6 @@ body{font-family:var(--font-game-ui);font-weight:500;font-synthesis:none;text-re
 .item-button{position:relative}.item-button .item-slot{position:absolute;top:-16px;left:50%;transform:translateX(-50%);padding:1px 7px;border:1px solid #cbb79355;border-radius:9px;background:#141917d9;color:#eadcb8;font-size:10px;letter-spacing:.08em;white-space:nowrap;pointer-events:auto}
 .item-button .item-slot[data-kind=ward]{color:#f3b9a4;border-color:#c3645855}
 .omen-line{margin-top:6px!important;font-size:13px!important;letter-spacing:.14em!important;color:#d9bd84!important}
-.status-stats{grid-template-columns:repeat(4,minmax(0,1fr))}
 .rite-note{display:block;margin-top:6px;color:#f1d9a3;font-size:12px}
 .posture-tag[data-kind=hunt]{color:#f1b48a;border-color:#c4473a66}
 @media(max-width:600px){.touch-actions{grid-template-columns:repeat(3,44px)}.night-row{margin-top:5px;font-size:11px}}

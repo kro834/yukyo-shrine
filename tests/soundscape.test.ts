@@ -42,7 +42,7 @@ test('audio waits for a gesture, then synthesizes every cue and releases finishe
   {kind:'offer',unlocked:false},{kind:'offer',unlocked:true},{kind:'mechanism'},{kind:'burst',hits:2},{kind:'time-stop'},{kind:'time-resume'},{kind:'mirror'},{kind:'chase'},{kind:'escape'},{kind:'finale',foe:'wrath'},{kind:'clear'},
   {kind:'offer',unlocked:true,surplus:true},{kind:'bell',beat:'warning',count:1},{kind:'bell',beat:'toll',count:2},{kind:'bell',beat:'end',count:1,survived:true},{kind:'purify'},{kind:'notice'},
   {kind:'item',action:'throw',item:'bell'},{kind:'item',action:'ring',distance:6,angle:.7,item:'bell'},{kind:'item',action:'pickup',item:'ward'},{kind:'item',action:'place',item:'ward'},{kind:'item',action:'burn',distance:4,angle:-1,item:'ward'},
-  {kind:'recover',count:3},{kind:'rite',beat:'start'},{kind:'rite',beat:'tick'},{kind:'rite',beat:'complete'}];
+  {kind:'recover',count:3,blue:2,red:1,gold:0},{kind:'rite',beat:'start'},{kind:'rite',beat:'tick'},{kind:'rite',beat:'complete'}];
  for(const c of cues){const before=nodes.length;sound.cue(c);assert.ok(nodes.length>before,c.kind);}
  for(const kind of ['move','open','close','confirm'] as const)sound.ui(kind);
  const sources=nodes.slice(bed).filter(n=>n.started);assert.ok(sources.every(n=>n.stopped===1),'every one-shot source is scheduled to stop');
@@ -150,7 +150,7 @@ test('the visitor\'s tools are heard as objects: a whip, a ringing bell fading w
 test('recovered beads ring their own three soft blue bells',()=>{
  const {send,hear}=live();
  for(const count of [1,3,9]){
-  const chime=hear({kind:'recover',count}),b=bells(chime);
+  const chime=hear({kind:'recover',count,blue:count,red:0,gold:0}),b=bells(chime);
   assert.deepEqual(b.map(x=>x.f),[1318.5,1568,1760],'blue rin bells');assert.ok(b.every(x=>close(x.length,.004+1.2)),'decay 1.2 s');
   assert.ok(chime[0].gain.value<=.2,'soft');assert.ok(wetLevel(chime,send)>0);
  }
@@ -188,6 +188,6 @@ test('duck lowers only the ambience bed, and only while audio runs',()=>{
 });
 test('new cues wait for a gesture like every other cue',()=>{
  const {context,nodes}=fake(48000),sound=createSoundscape({context:()=>context as unknown as AudioContext,events:quiet,random:()=>.5});
- for(const c of [{kind:'notice'},{kind:'purify'},{kind:'recover',count:2},{kind:'rite',beat:'tick'},{kind:'item',action:'ring',distance:3}] as WorldCue[])sound.cue(c);
+ for(const c of [{kind:'notice'},{kind:'purify'},{kind:'recover',count:2,blue:1,red:1,gold:0},{kind:'rite',beat:'tick'},{kind:'item',action:'ring',distance:3}] as WorldCue[])sound.cue(c);
  assert.equal(nodes.length,0);
 });
