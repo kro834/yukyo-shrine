@@ -56,6 +56,8 @@ export class Doors {
 }
 export const STUN_SECONDS=9;
 /** Sleepers wake to running or a bell within this distance; a toll never wakes one near or in view of the visitor. */
+/** Runtime node searches look no farther than this; only one-off setup scans the whole map. */
+export const ROUTE_SEARCH=24;
 export const WAKE_TURN_SECONDS=1,WAKE_HEAR=10,WAKE_CONTACT=1,TOLL_WAKE_DISTANCE=20,HUNT_RADIUS=12;
 export type HearOptions={radius?:(e:Enemy,rawHearing:number)=>number;scale?:number;limit?:number;search?:(e:Enemy,distance:number)=>number;branches?:number;sameFloor?:boolean};
 export const LOSE_SIGHT_SECONDS=.65;
@@ -203,17 +205,21 @@ export class Enemies {
     candidates.sort((a,b)=>Math.floor((a.lastVisited??0)/30)-Math.floor((b.lastVisited??0)/30)||(field.get(this.targetKey(a))??Infinity)-(field.get(this.targetKey(b))??Infinity)||a.id.localeCompare(b.id));
     e.patrol=candidates[0];e.destinationFloor=e.patrol.floor;e.route=[];e.waypoint=null;e.planIn=0;
   }
-  private closest(p:Position,upper:boolean|number=false){
+  /** The nearest walkable node in clear line of `p`. With a `within` radius of up to
+   * 8 m only the surrounding 5×5 cells are searched: a whole-map scan behind an
+   * enclosed point costs a full sweep of node×wall tests and must never run per frame. */
+  private closest(p:Position,upper:boolean|number=false,within=Infinity){
     const nodes=typeof upper==='number'&&upper>9?this.thirdNodes:upper?this.upperNodes:this.nodes,cx=Math.round(p.x/4),cz=Math.round(p.z/4),walls=typeof upper==='number'&&upper>9?this.thirdWalls:upper?this.upperWalls:this.walls;
     const local:{key:string;point:Position;distance:number}[]=[];
     for(let dx=-2;dx<=2;dx++)for(let dz=-2;dz<=2;dz++){const key=(cx+dx)+','+(cz+dz),point=nodes.get(key);if(point)local.push({key,point,distance:Math.hypot(point.x-p.x,point.z-p.z)});}
     const clear=(point:Position)=>!segmentBlocked(p,point,walls)&&(!!upper||!segmentBlocked(p,point,this.mechanismWalls));
-    local.sort((a,b)=>a.distance-b.distance);const nearby=local.find(c=>clear(c.point));if(nearby)return nearby;
-    const candidates=Array.from(nodes,([key,point])=>({key,point,distance:Math.hypot(point.x-p.x,point.z-p.z)})).sort((a,b)=>a.distance-b.distance);
+    local.sort((a,b)=>a.distance-b.distance);const nearby=local.find(c=>c.distance<within&&clear(c.point));if(nearby)return nearby;
+    if(within<=8)return null;
+    const candidates=Array.from(nodes,([key,point])=>({key,point,distance:Math.hypot(point.x-p.x,point.z-p.z)})).filter(c=>c.distance<within).sort((a,b)=>a.distance-b.distance);
     return candidates.find(c=>clear(c.point))??null;
   }
-  private path(start:Position,target:Position,upper:boolean|number=false):Position[]{
-    const a=this.closest(start,upper),b=this.closest(target,upper);if(!a||!b)return [];
+  private path(start:Position,target:Position,upper:boolean|number=false,within=Infinity):Position[]{
+    const a=this.closest(start,upper,within),b=this.closest(target,upper,within);if(!a||!b)return [];
     const graph=typeof upper==='number'&&upper>9?this.thirdGraph:upper?this.upperGraph:this.graph,nodes=typeof upper==='number'&&upper>9?this.thirdNodes:upper?this.upperNodes:this.nodes,walls=typeof upper==='number'&&upper>9?this.thirdWalls:upper?this.upperWalls:this.walls;
     const queue=[a.key],parent=new Map<string,string|null>([[a.key,null]]);
     for(let i=0;i<queue.length&&!parent.has(b.key);i++)for(const n of graph.get(queue[i])??[])if(!parent.has(n)&&(!!upper||!segmentBlocked(nodes.get(queue[i])!,nodes.get(n)!,this.mechanismWalls))){parent.set(n,queue[i]);queue.push(n);}
@@ -382,15 +388,15 @@ export class Enemies {
       if(e.kind==='hatred'){
         e.flankPoint=null;
         if(goal&&!onStair&&!targetStair&&Math.abs(playerFloor-e.floor)<.3&&distance>2.5&&this.finaleObservation){
-          const target=hatredIntercept(player,this.finaleObservation.velocity,e.traitTime,distance),node=this.closest(target,upstairs);
-          if(node&&node.distance<2.8&&!segmentBlocked(player,target,blockers)&&(!upstairs?!segmentBlocked(player,target,this.mechanismWalls):true)){
+          const target=hatredIntercept(player,this.finaleObservation.velocity,e.traitTime,distance),node=this.closest(target,upstairs,2.8);
+          if(node&&!segmentBlocked(player,target,blockers)&&(!upstairs?!segmentBlocked(player,target,this.mechanismWalls):true)){
             goal=target;e.flankPoint={...target};
           }
         }
       }
       if(e.kind==='fox'&&distance<=7)e.flankPoint=null;
       if(e.kind==='fox'&&e.brain.mode==='chase'&&sees&&goal&&distance>7){
-        if(!e.flankPoint&&e.planIn<=0){const side=e.id%2?1:-1,target={x:goal.x-dz/Math.max(1,distance)*4*side,z:goal.z+dx/Math.max(1,distance)*4*side};const flank=this.closest(target,upstairs);if(flank&&flank.distance<3)e.flankPoint={...flank.point};e.planIn=1.8;}
+        if(!e.flankPoint&&e.planIn<=0){const side=e.id%2?1:-1,target={x:goal.x-dz/Math.max(1,distance)*4*side,z:goal.z+dx/Math.max(1,distance)*4*side};const flank=this.closest(target,upstairs,3);if(flank)e.flankPoint={...flank.point};e.planIn=1.8;}
         if(e.flankPoint){if(Math.hypot(e.flankPoint.x-e.position.x,e.flankPoint.z-e.position.z)>.65)goal=e.flankPoint;else e.flankPoint=null;}
       }
       let stairTravel=false;
@@ -408,13 +414,13 @@ export class Enemies {
       if(goal){
         e.planIn-=activeDt;
         if(!stairTravel&&(segmentBlocked(e.position,goal,blockers)||!upstairs&&segmentBlocked(e.position,goal,this.mechanismWalls))){
-          if(e.planIn<=0&&(!e.route.length||e.brain.mode==='chase'||e.investigate||!upstairs&&e.route[0]&&segmentBlocked(e.position,e.route[0],this.mechanismWalls))){e.route=this.path(e.position,goal,upstairs);e.planIn=isFinale(e.kind)?FINALE_BALANCE[e.kind].replan:.9+e.id*.017;}
+          if(e.planIn<=0&&(!e.route.length||e.brain.mode==='chase'||e.investigate||!upstairs&&e.route[0]&&segmentBlocked(e.position,e.route[0],this.mechanismWalls))){e.route=this.path(e.position,goal,upstairs,ROUTE_SEARCH);e.planIn=isFinale(e.kind)?FINALE_BALANCE[e.kind].replan:.9+e.id*.017;}
           while(e.route[0]&&Math.hypot(e.route[0].x-e.position.x,e.route[0].z-e.position.z)<.22)e.route.shift();
           goal=e.route[0]??null;
         }else e.route=[];
         if(e.investigate&&Math.abs(e.floor-e.destinationFloor)<.3&&Math.hypot(e.investigate.x-e.position.x,e.investigate.z-e.position.z)<.4){e.investigate=null;goal=null;
           if(e.searchBranches>0&&e.searchTime>0){
-            const current=this.closest(e.position,upstairs),nodes=upstairs>9?this.thirdNodes:upstairs?this.upperNodes:this.nodes,graph=upstairs>9?this.thirdGraph:upstairs?this.upperGraph:this.graph;
+            const current=this.closest(e.position,upstairs,ROUTE_SEARCH),nodes=upstairs>9?this.thirdNodes:upstairs?this.upperNodes:this.nodes,graph=upstairs>9?this.thirdGraph:upstairs?this.upperGraph:this.graph;
             if(current){const options=(graph.get(current.key)??[]).filter(k=>k!==e.lastNode).sort((a,b)=>(e.visits.get(a)??0)-(e.visits.get(b)??0)||((a.charCodeAt(0)+e.id)%7)-((b.charCodeAt(0)+e.id)%7));if(options[0]){e.lastNode=current.key;e.visits.set(current.key,(e.visits.get(current.key)??0)+1);e.investigate={...nodes.get(options[0])!};e.planIn=0;e.route=[];}}
             e.searchBranches--;
           }
@@ -423,7 +429,7 @@ export class Enemies {
       if(!goal){
         e.planIn-=activeDt;
         if(!e.waypoint||Math.hypot(e.waypoint.x-e.position.x,e.waypoint.z-e.position.z)<.15||e.planIn<=0){
-          const current=this.closest(e.position,upstairs);e.planIn=omniscient?.22:3;
+          const current=this.closest(e.position,upstairs,ROUTE_SEARCH);e.planIn=omniscient?.22:3;
           if(current){
             if(current.distance>.35)e.waypoint=current.point;
             else {

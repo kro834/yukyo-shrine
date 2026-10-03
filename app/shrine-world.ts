@@ -19,7 +19,7 @@ import {CircusRuntime} from './circus-runtime.ts';
 import {CIRCUS_MATERIALS,buildCircusCell,buildCircusWall,buildCircusScenery} from './circus-scenery.ts';
 import {createCircusDynamics} from './circus-dynamics.ts';
 import {CIRCUS_AREA_NAMES,circusRoomName,buildCircusRoom} from './circus-rooms.ts';
-import {combineObstacles} from './spatial.ts';
+import {combineObstacles,nearbyObstacles} from './spatial.ts';
 import {BEAD_REQUIREMENTS,collectionReady} from './goal-rules.ts';
 import {HDRLoader} from 'three/addons/loaders/HDRLoader.js';
 import {buildYokochoFront} from './yokocho-front.ts';
@@ -984,7 +984,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
         const finaleCleared=!!enemies.finalKind;
         elevation=0;run.defeated();stamina.reset();mirrorInventory.reset();itemBag.loseCarried();enemies.pressure=0;enemies.reset();if(finaleCleared&&!goal.unlocked)night.resume();night.captured();finaleGrace=12;if(pendingWake>0)pendingWakeFor=60;refreshCollision();collision=groundCollision;
         if(lastCapture.dropped){const guard=enemies.actors.filter(e=>!e.dormant&&!isFinale(e.kind)&&Math.abs(floorBand(e.floor)-bundleFloor)<.3).map(e=>({e,d:Math.hypot(e.position.x-bundlePoint.x,e.position.z-bundlePoint.z)})).filter(g=>g.d<64).sort((a,b)=>a.d-b.d)[0];if(guard)enemies.attend(guard.e,bundlePoint,bundleFloor,40*enemies.difficulty.search,3);}
-        const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!groundCollision.some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
+        const safe=[...enemies.nodes.values()].filter(p=>Math.hypot(p.x-camera.position.x,p.z-camera.position.z)>24&&enemies.actors.every(e=>Math.hypot(p.x-e.home.x,p.z-e.home.z)>24)&&!nearbyObstacles(groundCollision,p.x-.6,p.z-.6,p.x+.6,p.z+.6).some(o=>p.x>o.minX-.6&&p.x<o.maxX+.6&&p.z>o.minZ-.6&&p.z<o.maxZ+.6));
         const spawn=safe[Math.floor(runRandom()*safe.length)]??SPAWN;camera.position.set(spawn.x,1.68,spawn.z);lastMotion={moving:false,running:false};return true;}return false;
     },
     configure(p:Preferences){
