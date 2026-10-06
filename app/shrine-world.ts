@@ -745,7 +745,7 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const burstRecharge=new BurstRecharge(),timeStop=new TimeStop(),stamina=new Stamina(),run=new RunProgress();let environmentTime=0,preferredStamina=false;
   const syncStamina=()=>stamina.setEnabled(preferredStamina||modeAids(playMode).staminaForced);
   // The night clock, its sleepers and the hunt draws use their own seeded streams so magatama, mirror and finale choices are unchanged.
-  let night=new NightClock(nightConfig('normal')),sleeperCount=0,pendingWake=0,pendingWakeFor=0,finaleGrace=0,finales=0,fogBlend=1,lastRenderTime=0,riteWasActive=false,noticedOnce=false,lastReward:'bell'|'ward'|null=null,lastCapture={dropped:0,scattered:0},recovering={blue:0,red:0,gold:0},finaleWard=false;
+  let night=new NightClock(nightConfig('normal')),sleeperCount=0,pendingWake=0,pendingWakeFor=0,finaleGrace=0,finales=0,fogBlend=1,lastRenderTime=0,lastShadowClock=-1,riteWasActive=false,noticedOnce=false,lastReward:'bell'|'ward'|null=null,lastCapture={dropped:0,scattered:0},recovering={blue:0,red:0,gold:0},finaleWard=false;
   const nightRandom=seededRandom(seed^0x7a11),OMEN_SECONDS=6,REARM_OMEN_SECONDS=4;
   // A survived toll pays a tool: a ward while fewer than two are carried, otherwise a bell.
   let grantReward=():'bell'|'ward'|null=>'ward';
@@ -780,6 +780,13 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
   const glowTex=new THREE.CanvasTexture(glowCanvas),glowMat=new THREE.PointsMaterial({map:glowTex,color:'#ffffff',size:1.1,transparent:true,depthWrite:false,blending:THREE.AdditiveBlending});
   lampHaloFinish(glowMat);
   const beadMeshes=createMagatamaMeshes(scene,beads,glowTex);
+  // The fixture's shadow atlas is drawn without the pursuers (the flashlight shadows them), so a figure moving near a
+  // lamp never forces that extra scene pass every other frame. The shadow pass runs inside renderer.render, after the
+  // frame's render lists are built, so hiding the actors here touches only the fixture's map.
+  const shadowPass=renderer.shadowMap as Partial<THREE.WebGLShadowMap>;
+  if(typeof shadowPass.render==='function'){const drawShadows=shadowPass.render.bind(renderer.shadowMap);shadowPass.render=(lights,shadowScene,view)=>{const fixture=fixtureShadow.light;
+    if(lights.includes(fixture)&&fixture.shadow.needsUpdate){enemyMeshes.withoutActors(()=>drawShadows([fixture],shadowScene,view));lights=lights.filter(l=>l!==fixture);}
+    drawShadows(lights,shadowScene,view);};}
   const glowGeometry=new THREE.BufferGeometry().setFromPoints(lanterns.filter(p=>!fixtureColors.has(p)));scene.add(new THREE.Points(glowGeometry,glowMat));
   let warmPursuers=true,lastLight=-Infinity,lastLightFrame=0,disposed=false,configuredQuality:Preferences['quality']|null=null;const direction=new THREE.Vector3(),moodTarget=new THREE.Color('#080c0d');
   let effects:ReturnType<typeof createEffects>|undefined;
@@ -1036,8 +1043,10 @@ export function createWorld(canvas:HTMLCanvasElement,rendererOverride?:THREE.Web
       flashlight.position.copy(camera.position).addScaledVector(flashlightRight,.16);flashlight.position.y-=.20;
       flashlight.target.position.copy(camera.position).addScaledVector(direction,8);
       const lightDt=lastLightFrame?Math.min(.1,(time-lastLightFrame)/1000):.016;fixtureLighting.step(lightDt);lastLightFrame=time;
-      const shadowOrigin=fixtureShadow.light.position;
-      const movingShadow=!!circusRuntime&&(circusRuntime.snapshot().moving||circusRuntime.snapshot().devices.some(d=>d.progress!==d.target))||(playMode!=='gallery'&&enemies.actors.some(e=>Math.abs(e.floor-shadowOrigin.y)<5&&Math.hypot(e.position.x-shadowOrigin.x,e.position.z-shadowOrigin.z)<11))||doors.states.some(d=>d.progress>0&&d.progress<1&&Math.hypot(d.spec.x-shadowOrigin.x,d.spec.z-shadowOrigin.z)<11)||beads.some(b=>!b.collected&&Math.abs(b.floor-shadowOrigin.y)<5&&Math.hypot(b.position.x-shadowOrigin.x,b.position.z-shadowOrigin.z)<11)||(goal.progress>0&&goal.progress<1&&Math.hypot(goal.offset.x-shadowOrigin.x,GOAL.z+goal.offset.z-shadowOrigin.z)<11);
+      const shadowOrigin=fixtureShadow.light.position,clockMoved=environmentTime!==lastShadowClock;lastShadowClock=environmentTime;
+      // Pursuers never enter the fixture's shadow atlas (the flashlight shadows them), so their motion does not
+      // force a second scene pass every other frame; only doors, devices and bobbing beads refresh it.
+      const movingShadow=!!circusRuntime&&(circusRuntime.snapshot().moving||circusRuntime.snapshot().devices.some(d=>d.progress!==d.target))||doors.states.some(d=>d.progress>0&&d.progress<1&&Math.hypot(d.spec.x-shadowOrigin.x,d.spec.z-shadowOrigin.z)<11)||clockMoved&&beads.some(b=>!b.collected&&Math.abs(b.floor-shadowOrigin.y)<5&&Math.hypot(b.position.x-shadowOrigin.x,b.position.z-shadowOrigin.z)<11)||(goal.progress>0&&goal.progress<1&&Math.hypot(goal.offset.x-shadowOrigin.x,GOAL.z+goal.offset.z-shadowOrigin.z)<11);
       fixtureShadow.update(fixtureLighting.slots,camera.position,lightDt,time,movingShadow);
       if(gothic)fixtureShadow.light.intensity*=.55;
       if(hotelAtmosphere)fixtureShadow.light.intensity*=hotelAtmosphere.gain(fixtureShadow.light.position);

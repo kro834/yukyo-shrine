@@ -129,6 +129,8 @@ export function createEnemyMeshes(scene:THREE.Scene,enemies:Enemies,human=false)
   return {setQuality(quality:Preferences['quality']){surfaces.setQuality(quality);},
     /** Compile the pursuers' programs and upload their buffers before they are first seen. */
     warm(renderer:THREE.WebGLRenderer,camera:THREE.Camera){if(typeof renderer.compile!=='function')return;const saved=finale.map(a=>a.root.position.clone());for(const a of finale){a.root.visible=true;a.root.position.copy(camera.position);}try{renderer.compile(scene,camera);}finally{finale.forEach((a,i)=>{a.root.visible=false;a.root.position.copy(saved[i]);});}},
+    /** Run `draw` with every actor hidden, for passes that must not capture a moving figure. */
+    withoutActors(draw:()=>void){const shown=[...actors.values()].map(a=>[a,a.root.visible] as const);for(const [a] of shown)a.root.visible=false;try{draw();}finally{for(const [a,v] of shown)a.root.visible=v;}},
     setEnabled(value:boolean){enabled=value;for(const a of actors.values())a.root.visible=value;},update(time:number,viewer?:{x:number;z:number},range=125,reveal=false){
     for(const a of actors.values())a.root.visible=false;
     for(const e of enemies.actors){const key=e.id+':'+e.kind;let a=actors.get(key);if(!a){a=createActor(e);actors.set(key,a);}
