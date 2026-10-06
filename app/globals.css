@@ -320,3 +320,8 @@ body{font-family:var(--font-game-ui);font-weight:500;font-synthesis:none;text-re
 @media(max-width:600px){.clear-screen .run-results{grid-template-columns:repeat(3,auto)}}
 /* The incense row makes the play state taller; keep it clear of the portrait touch row. */
 @media(max-width:600px) and (min-height:511px){.play-state{bottom:286px}.toast{bottom:420px}.note-card{bottom:380px}}
+
+/* The threat veils pulse for the whole final pursuit: a blurred full-screen inset shadow re-rasterises on every
+   change, so they draw a plain gradient on their own layer and animate opacity only. */
+.threat-veil{box-shadow:none;background:radial-gradient(ellipse 75% 70% at center,#8b261c00 52%,#8b261c40 78%,#8b261c90 100%);will-change:opacity;contain:strict;transform:translateZ(0)}
+.threat-veil[data-gaze=true]{box-shadow:none;background:radial-gradient(ellipse 75% 70% at center,#b4894a00 50%,#b4894a38 80%,#b4894a80 100%)}
